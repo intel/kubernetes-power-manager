@@ -1,0 +1,11 @@
+domain: intel.com
+layout: go.kubebuilder.io/v2
+projectName: power-operator
+repo: gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git
+resources:
+- group: power
+  kind: Profile
+  version: v1alpha1
+version: 3-alpha
+plugins:
+  go.sdk.operatorframework.io/v2-alpha: {}
