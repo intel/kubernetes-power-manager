@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,51 +28,57 @@ import (
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 )
 
-// ProfileReconciler reconciles a Profile object
-type ProfileReconciler struct {
+// ConfigReconciler reconciles a Config object
+type ConfigReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=power.intel.com,resources=profiles,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=power.intel.com,resources=profiles/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=power.intel.com,resources=configs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=power.intel.com,resources=configs/status,verbs=get;update;patch
 
-func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
-	logger := r.Log.WithValues("profile", req.NamespacedName)
-	logger.Info("Reconciling Profile")
+	logger := r.Log.WithValues("config", req.NamespacedName)
 
-	profile := &powerv1alpha1.Profile{}
-	err := r.Client.Get(context.TODO(), req.NamespacedName, profile)
+	config := &powerv1alpha1.Config{}
+	err := r.Client.Get(context.TODO(), req.NamespacedName, config)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			// TODO: everything (will elaborate on this)
-			logger.Info(fmt.Sprintf("Profile %v has been deleted, cleaning up...", req.NamespacedName))
-			// Returning a nil error will stop the requeue
-			return ctrl.Result{}, nil
-		}
-		// Requeue the request
+		logger.Error(err, "failed to get Config instance")
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("Specs for Profile:")
+	logger.Info("Config for this Config")
+	logger.Info(fmt.Sprintf("Profile: %s", config.Spec.Profile))
+
+	logger.Info("Nodes effected:")
+	for _, n := range config.Spec.Nodes {
+		logger.Info(fmt.Sprintf("- %s", n))
+	}
+
+	logger.Info("CPUs effected:")
+	for _, c := range config.Spec.CpuIds {
+		logger.Info(fmt.Sprintf("- %s", c))
+	}
+
+	profile := &powerv1alpha1.Profile{}
+	err = r.Client.Get(context.TODO(), req.NamespacedName, profile)
+	if err != nil {
+		logger.Error(err, "failed to get Profile instance")
+		return ctrl.Result{}, err
+	}
+
+	logger.Info("Profile configuration:")
 	logger.Info(fmt.Sprintf("Name: %s", profile.Spec.Name))
 	logger.Info(fmt.Sprintf("Max: %d", profile.Spec.Max))
 	logger.Info(fmt.Sprintf("Min: %d", profile.Spec.Min))
 
-	if profile.Spec.Name == "Shared" {
-		logger.Info("This Profile has been designated as the Shared Profile...")
-		logger.Info("Creating Config for Shared Profile...")
-	} else {
-		logger.Info("This Profile is exclusive, skipping Config creation...")
-	}
-
 	return ctrl.Result{}, nil
 }
 
-func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&powerv1alpha1.Profile{}).
+		For(&powerv1alpha1.Config{}).
 		Complete(r)
 }

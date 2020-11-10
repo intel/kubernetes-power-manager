@@ -6,20 +6,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
-  name: profiles.power.intel.com
+  name: configs.power.intel.com
 spec:
   group: power.intel.com
   names:
-    kind: Profile
-    listKind: ProfileList
-    plural: profiles
-    singular: profile
+    kind: Config
+    listKind: ConfigList
+    plural: configs
+    singular: config
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
-      description: Profile is the Schema for the profiles API
+      description: Config is the Schema for the configs API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -34,40 +34,30 @@ spec:
         metadata:
           type: object
         spec:
-          description: ProfileSpec defines the desired state of Profile
+          description: ConfigSpec defines the desired state of Config
           properties:
-            cstate:
-              description: 'TODO: determine exactly what cstate is for'
-              type: boolean
-            max:
-              description: Max is the maximum frequency that the core is allowed to
-                go up to
-              type: integer
-            min:
-              description: Min is the minimum frequency that the core is allowed to
-                drop to
-              type: integer
-            name:
-              description: Name is the name identifying the profile
-              type: string
-          required:
-          - cstate
-          - max
-          - min
-          - name
-          type: object
-        status:
-          description: ProfileStatus defines the observed state of Profile
-          properties:
-            nodes:
-              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                of cluster Important: Run "make" to regenerate code after modifying
-                this file'
+            cpuids:
+              description: CpusIds is the list of CPU IDs that are effected by the
+                profile
               items:
                 type: string
               type: array
+            nodes:
+              description: Nodes is the list of nodes effected by the power profile
+              items:
+                type: string
+              type: array
+            profile:
+              description: Profile is the name of the profile that us used in the
+                config
+              type: string
           required:
+          - cpuids
           - nodes
+          - profile
+          type: object
+        status:
+          description: ConfigStatus defines the observed state of Config
           type: object
       type: object
   version: v1alpha1

@@ -23,49 +23,48 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// ProfileSpec defines the desired state of Profile
-type ProfileSpec struct {
-	// Name is the name identifying the profile
-	Name string `json:"name"`
+// ConfigSpec defines the desired state of Config
+type ConfigSpec struct {
+	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
 
-	// Max is the maximum frequency that the core is allowed to go up to
-	Max int `json:"max"`
+	// Nodes is the list of nodes effected by the power profile
+	Nodes []string `json:"nodes"`
 
-	// Min is the minimum frequency that the core is allowed to drop to
-	Min int `json:"min"`
+	// CpusIds is the list of CPU IDs that are effected by the profile
+	CpuIds []string `json:"cpuids"`
 
-	// TODO: determine exactly what cstate is for
-	Cstate bool `json:"cstate"`
+	// Profile is the name of the profile that us used in the config
+	Profile string `json:"profile"`
 }
 
-// ProfileStatus defines the observed state of Profile
-type ProfileStatus struct {
+// ConfigStatus defines the observed state of Config
+type ConfigStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Nodes []string `json:"nodes"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// Profile is the Schema for the profiles API
-type Profile struct {
+// Config is the Schema for the configs API
+type Config struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ProfileSpec   `json:"spec,omitempty"`
-	Status ProfileStatus `json:"status,omitempty"`
+	Spec   ConfigSpec   `json:"spec,omitempty"`
+	Status ConfigStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// ProfileList contains a list of Profile
-type ProfileList struct {
+// ConfigList contains a list of Config
+type ConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Profile `json:"items"`
+	Items           []Config `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Profile{}, &ProfileList{})
+	SchemeBuilder.Register(&Config{}, &ConfigList{})
 }

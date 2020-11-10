@@ -1,0 +1,12 @@
+apiVersion: "power.intel.com/v1alpha1"
+kind: Config
+metadata:
+  name: "fake-config"
+spec:
+  nodes:
+  - "worker1"
+  - "worker2"
+  cpuids:
+  - "0"
+  - "1"
+  profile: "fake-profile"
