@@ -62,7 +62,7 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		logger.Info(fmt.Sprintf("- %s", c))
 	}
 
-	profile := &powerv1alpha1.Profile{}
+	/* profile := &powerv1alpha1.Profile{}
 	err = r.Client.Get(context.TODO(), req.NamespacedName, profile)
 	if err != nil {
 		logger.Error(err, "failed to get Profile instance")
@@ -73,6 +73,7 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	logger.Info(fmt.Sprintf("Name: %s", profile.Spec.Name))
 	logger.Info(fmt.Sprintf("Max: %d", profile.Spec.Max))
 	logger.Info(fmt.Sprintf("Min: %d", profile.Spec.Min))
+	*/
 
 	return ctrl.Result{}, nil
 }

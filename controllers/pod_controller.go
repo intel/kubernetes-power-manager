@@ -26,9 +26,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	// powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
+	cgroupsparser "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
+)
+
+const (
+	powerProfileAnnotation = "PowerProfile"
 )
 
 // PodReconciler reconciles a Pod object
@@ -53,7 +57,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			// Pod has been deleted
 			// For now, simply ignore
 			// TODO: delete Pod Config CR
-			return ctlr.Result{}, nil
+			return ctrl.Result{}, nil
 		}
 		logger.Info("Something went wrong")
 		return ctrl.Result{}, err
@@ -69,15 +73,31 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Get the Containers of the Pod that are requesting exclusive CPUs
 	containersRequestingExclusiveCPUs := getContainersRequestingExclusiveCPUs(pod)
 	if len(containersRequestingExclusiveCPUs) == 0 {
+		logger.Info("No containers are requesting exclusive CPUs")
 		return ctrl.Result{}, nil
 	}
+
+	// DELETE
 	logger.Info("Containers requesting exclusive CPUs:")
 	for _, c := range containersRequestingExclusiveCPUs {
 		logger.Info(fmt.Sprintf("- %s", c))
 	}
+	// END DELETE
 
+	podUID := pod.GetUID()
+	for _, container := range containersRequestingExclusiveCPUs {
+		containerID := getContainerID(pod, container)
+		coreIDs, err := cgroupsparser.ReadCgroupCpuset(string(podUID), containerID)
+		if err != nil {
+			logger.Error(err, "failed to retrieve cpuset form groups")
+			return ctrl.Result{}, err
+		}
+
+		logger.Info(fmt.Sprintf("Core IDs: %s", coreIDs))
+	}
+
+	// Get the PowerProfile requested by the Pod
 	profile := getProfileFromPodAnnotations(pod)
-
 	if profile == "" {
 		logger.Info("No PowerProfile detected, skipping...")
 	} else {
@@ -88,21 +108,15 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 }
 
 func getProfileFromPodAnnotations(pod *corev1.Pod) string {
-	profile := ""
 	annotations := pod.GetAnnotations()
-	for ann_key, ann_value := range annotations {
-		if ann_key == "PowerProfile" {
-			profile = ann_value
-			break
-		}
-	}
+	profile := annotations[powerProfileAnnotation]
 
 	return profile
 }
 
 func getContainersRequestingExclusiveCPUs(pod *corev1.Pod) []string {
 	containersRequestingExclusiveCPUs := make([]string, 0)
-	for _, containers := range append(pod.Spec.InitContainers, pod.Spec.Containers) {
+	for _, container := range append(pod.Spec.InitContainers, pod.Spec.Containers...) {
 		if exclusiveCPUs(pod, &container) {
 			containersRequestingExclusiveCPUs = append(containersRequestingExclusiveCPUs, container.Name)
 		}
@@ -112,11 +126,11 @@ func getContainersRequestingExclusiveCPUs(pod *corev1.Pod) []string {
 }
 
 func exclusiveCPUs(pod *corev1.Pod, container *corev1.Container) bool {
-	if v1qos.GetPodQOS(pod) != corev1.PodQOSGuaranteed() {
+	if pod.Status.QOSClass != corev1.PodQOSGuaranteed {
 		return false
 	}
 
-	cpuQuantity := container.Resources.Requests[corev1.ResourecCPU]
+	cpuQuantity := container.Resources.Requests[corev1.ResourceCPU]
 	if cpuQuantity.Value()*1000 != cpuQuantity.MilliValue() {
 		return false
 	}
@@ -124,7 +138,13 @@ func exclusiveCPUs(pod *corev1.Pod, container *corev1.Container) bool {
 	return true
 }
 
-func getContainerID(pod *corev1.Pod, container *corev1.Container) string {
+func getContainerID(pod *corev1.Pod, containerName string) string {
+	for _, containerStatus := range append(pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...) {
+		if containerStatus.Name == containerName {
+			return containerStatus.ContainerID
+		}
+	}
+
 	return ""
 }
 
