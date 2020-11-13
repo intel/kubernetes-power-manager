@@ -3,4 +3,5 @@ resources:
 - power_v1alpha1_profile.yaml
 - power_v1alpha1_config.yaml
 - power_v1alpha1_pod.yaml
+- power_v1alpha1_powernode.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

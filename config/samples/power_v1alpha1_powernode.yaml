@@ -1,0 +1,7 @@
+apiVersion: power.intel.com/v1alpha1
+kind: PowerNode
+metadata:
+  name: powernode-sample
+spec:
+  # Add fields here
+  foo: bar

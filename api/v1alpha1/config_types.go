@@ -28,14 +28,9 @@ type ConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Nodes is the list of nodes effected by the power profile
-	Nodes []string `json:"nodes"`
-
-	// CpusIds is the list of CPU IDs that are effected by the profile
-	CpuIds []string `json:"cpuids"`
-
-	// Profile is the name of the profile that us used in the config
-	Profile string `json:"profile"`
+	Nodes	[]string 	`json:"nodes,omitempty"`
+	CpuIds	[]string 	`json:"cpuids,omitempty"`
+	Profile 		`json:"profile,omitempty"`
 }
 
 // ConfigStatus defines the observed state of Config

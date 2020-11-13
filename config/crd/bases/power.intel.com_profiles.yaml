@@ -58,16 +58,6 @@ spec:
           type: object
         status:
           description: ProfileStatus defines the observed state of Profile
-          properties:
-            nodes:
-              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                of cluster Important: Run "make" to regenerate code after modifying
-                this file'
-              items:
-                type: string
-              type: array
-          required:
-          - nodes
           type: object
       type: object
   version: v1alpha1

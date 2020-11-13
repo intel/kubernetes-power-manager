@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 )
@@ -74,7 +75,17 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	logger.Info(fmt.Sprintf("Max: %d", profile.Spec.Max))
 	logger.Info(fmt.Sprintf("Min: %d", profile.Spec.Min))
 	*/
-
+	/*
+	profileSpec := &powerv1alpha1.ProfileSpec{"NewProfile", 2800, 2200, true}
+	profile := &powerv1alpha1.Profile{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name: "newprofile",
+		},
+	}
+	profile.Spec = *profileSpec
+	r.Client.Create(context.TODO(), profile)
+	*/
 	return ctrl.Result{}, nil
 }
 

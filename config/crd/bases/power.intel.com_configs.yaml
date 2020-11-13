@@ -37,24 +37,57 @@ spec:
           description: ConfigSpec defines the desired state of Config
           properties:
             cpuids:
-              description: CpusIds is the list of CPU IDs that are effected by the
-                profile
               items:
                 type: string
               type: array
             nodes:
-              description: Nodes is the list of nodes effected by the power profile
               items:
                 type: string
               type: array
             profile:
-              description: Profile is the name of the profile that us used in the
-                config
-              type: string
-          required:
-          - cpuids
-          - nodes
-          - profile
+              description: Profile is the Schema for the profiles API
+              properties:
+                apiVersion:
+                  description: 'APIVersion defines the versioned schema of this representation
+                    of an object. Servers should convert recognized schemas to the
+                    latest internal value, and may reject unrecognized values. More
+                    info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                  type: string
+                kind:
+                  description: 'Kind is a string value representing the REST resource
+                    this object represents. Servers may infer this from the endpoint
+                    the client submits requests to. Cannot be updated. In CamelCase.
+                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                  type: string
+                metadata:
+                  type: object
+                spec:
+                  description: ProfileSpec defines the desired state of Profile
+                  properties:
+                    cstate:
+                      description: 'TODO: determine exactly what cstate is for'
+                      type: boolean
+                    max:
+                      description: Max is the maximum frequency that the core is allowed
+                        to go up to
+                      type: integer
+                    min:
+                      description: Min is the minimum frequency that the core is allowed
+                        to drop to
+                      type: integer
+                    name:
+                      description: Name is the name identifying the profile
+                      type: string
+                  required:
+                  - cstate
+                  - max
+                  - min
+                  - name
+                  type: object
+                status:
+                  description: ProfileStatus defines the observed state of Profile
+                  type: object
+              type: object
           type: object
         status:
           description: ConfigStatus defines the observed state of Config
