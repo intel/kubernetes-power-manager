@@ -27,10 +27,10 @@ import (
 	//cgroupsparser "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -116,7 +116,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		allCores = append(allCores, coreIDs)
 	}
 	guaranteedPod.Containers = make([]powerv1alpha1.Container, 0)
-        guaranteedPod.Containers = powerContainers
+	guaranteedPod.Containers = powerContainers
 
 	// Get the PowerProfile requested by the Pod
 	profileName := getProfileFromPodAnnotations(pod)
@@ -127,18 +127,18 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	profileList := &powerv1alpha1.ProfileList{}
-        err = r.Client.List(context.TODO(), profileList)
-        if err != nil {
-                logger.Info("Something went wrong")
-                return ctrl.Result{}, err
-        }
+	err = r.Client.List(context.TODO(), profileList)
+	if err != nil {
+		logger.Info("Something went wrong")
+		return ctrl.Result{}, err
+	}
 
-        profile, err := getProfileFromProfileList(profileName, profileList)
-        if err != nil {
-                logger.Error(err, "failed to retrieve profile")
-                // Don't keep looping
-                return ctrl.Result{}, nil
-        }
+	profile, err := getProfileFromProfileList(profileName, profileList)
+	if err != nil {
+		logger.Error(err, "failed to retrieve profile")
+		// Don't keep looping
+		return ctrl.Result{}, nil
+	}
 	guaranteedPod.Profile = profile
 
 	logger.Info("Guaranteed Pod Configuration:")
@@ -159,14 +159,14 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	logger.Info("Creating Config based on provided Profile")
 	placeholderNodes := []string{"Placeholder"}
 	configSpec := &powerv1alpha1.ConfigSpec{
-		Nodes: placeholderNodes,
-		CpuIds: allCores,
+		Nodes:   placeholderNodes,
+		CpuIds:  allCores,
 		Profile: guaranteedPod.Profile,
 	}
 	config := &powerv1alpha1.Config{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
-			Name: fmt.Sprintf("%s-config", profileName),
+			Name:      fmt.Sprintf("%s-config", profileName),
 		},
 	}
 	config.Spec = *configSpec

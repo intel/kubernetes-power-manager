@@ -28,9 +28,9 @@ type ConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Nodes	[]string 	`json:"nodes,omitempty"`
-	CpuIds	[]string 	`json:"cpuids,omitempty"`
-	Profile 		`json:"profile,omitempty"`
+	Nodes   []string `json:"nodes,omitempty"`
+	CpuIds  []string `json:"cpuids,omitempty"`
+	Profile `json:"profile,omitempty"`
 }
 
 // ConfigStatus defines the observed state of Config

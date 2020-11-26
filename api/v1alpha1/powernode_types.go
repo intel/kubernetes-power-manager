@@ -39,16 +39,16 @@ type PowerNodeStatus struct {
 }
 
 type GuaranteedPod struct {
-	Name 		string		`json:"name,omitempty"`
-	UID		string		`json:"uid,omitempty"`
-	Containers	[]Container	`json:"containers,omitempty"`
-	Profile		Profile		`json:"profile,omitempty"`
+	Name       string      `json:"name,omitempty"`
+	UID        string      `json:"uid,omitempty"`
+	Containers []Container `json:"containers,omitempty"`
+	Profile    Profile     `json:"profile,omitempty"`
 }
 
 type Container struct {
-	Name		string `json:"name,omitempty"`
-	ID		string `json:"id,omitempty"`
-	ExclusiveCPUs 	string `json:"exclusiveCpus,omitempty"`
+	Name          string `json:"name,omitempty"`
+	ID            string `json:"id,omitempty"`
+	ExclusiveCPUs string `json:"exclusiveCpus,omitempty"`
 }
 
 // +kubebuilder:object:root=true

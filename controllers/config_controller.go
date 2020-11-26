@@ -47,11 +47,11 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err := r.Client.Get(context.TODO(), req.NamespacedName, config)
 	if err != nil {
 		logger.Error(err, "failed to get Config instance")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, nil
 	}
 
 	logger.Info("Config for this Config")
-	logger.Info(fmt.Sprintf("Profile: %s", config.Spec.Profile))
+	logger.Info(fmt.Sprintf("Profile: %v", config.Spec.Profile))
 
 	logger.Info("Nodes effected:")
 	for _, n := range config.Spec.Nodes {
@@ -76,15 +76,15 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	logger.Info(fmt.Sprintf("Min: %d", profile.Spec.Min))
 	*/
 	/*
-	profileSpec := &powerv1alpha1.ProfileSpec{"NewProfile", 2800, 2200, true}
-	profile := &powerv1alpha1.Profile{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name: "newprofile",
-		},
-	}
-	profile.Spec = *profileSpec
-	r.Client.Create(context.TODO(), profile)
+		profileSpec := &powerv1alpha1.ProfileSpec{"NewProfile", 2800, 2200, true}
+		profile := &powerv1alpha1.Profile{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name: "newprofile",
+			},
+		}
+		profile.Spec = *profileSpec
+		r.Client.Create(context.TODO(), profile)
 	*/
 	return ctrl.Result{}, nil
 }
