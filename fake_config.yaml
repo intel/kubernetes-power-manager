@@ -6,6 +6,5 @@ spec:
   nodes:
   - "worker1"
   cpuids:
-  - "0"
-  - "1"
-  profile: "fake-exclusive-profile"
+  - "2"
+  - "5"

@@ -115,17 +115,16 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			// Exclusive Profile, Config creation is left to the Pod controller when the Profile is requested.
 			// The Shared configuration is recognised by having the name "Shared".
 
-			//DELETE
-			// For testing purposes, a profile named 'FakeExclusive' will generate a Config from the Profile controller as well,
-			// DO NOT FORGET TO DELETE IT
-
-			if profile.Spec.Name == "Shared" || profile.Spec.Name == "FakeExclusive" {
+			if profile.Spec.Name == "Shared" {
 				logger.Info("This Profile has been designated as the Shared Profile, creating corresponding Config...")
 
 				// TODO: Update with package that Conor is working on
 				nodes := []string{"Placeholder"}
 				// TODO: Update with package that Conor is working on
-				cpuIDs := []string{"1-32"}
+				cpuIDs := []string{}
+				for i := 0; i < 64; i++ {
+					cpuIDs = append(cpuIDs, fmt.Sprint(i))
+				}
 				configSpec := &powerv1alpha1.ConfigSpec{
 					Nodes:   nodes,
 					CpuIds:  cpuIDs,

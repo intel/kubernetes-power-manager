@@ -72,6 +72,45 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, podNotRunningErr
 	}
 
+	// Get the PowerProfile requested by the Pod
+	profileName := getProfileFromPodAnnotations(pod)
+	if profileName == "" {
+		logger.Info("No PowerProfile detected, skipping...")
+		return ctrl.Result{}, nil
+	} else {
+		logger.Info(fmt.Sprintf("PowerProfile: %s", profileName))
+	}
+
+	/*
+		profileList := &powerv1alpha1.ProfileList{}
+		err = r.Client.List(context.TODO(), profileList)
+		if err != nil {
+			logger.Info("Something went wrong")
+			return ctrl.Result{}, err
+		}
+
+		profile, err := getProfileFromProfileList(profileName, profileList)
+		if err != nil {
+			logger.Error(err, "failed to retrieve profile")
+			// Don't keep looping
+			return ctrl.Result{}, nil
+		}
+	*/
+
+	profile := &powerv1alpha1.Profile{}
+	err = r.Client.Get(context.TODO(), client.ObjectKey{
+		Namespace: pod.GetNamespace(),
+		Name:      profileName,
+	}, profile)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.Error(err, fmt.Sprintf("Could not find Profile %s", profileName))
+			return ctrl.Result{}, nil
+		}
+
+		return ctrl.Result{}, err
+	}
+
 	// Get the Containers of the Pod that are requesting exclusive CPUs
 	containersRequestingExclusiveCPUs := getContainersRequestingExclusiveCPUs(pod)
 	if len(containersRequestingExclusiveCPUs) == 0 {
@@ -80,10 +119,12 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// DELETE
-	logger.Info("Containers requesting exclusive CPUs:")
-	for _, c := range containersRequestingExclusiveCPUs {
-		logger.Info(fmt.Sprintf("- %s", c))
-	}
+	/*
+		logger.Info("Containers requesting exclusive CPUs:")
+		for _, c := range containersRequestingExclusiveCPUs {
+			logger.Info(fmt.Sprintf("- %s", c))
+		}
+	*/
 	// END DELETE
 
 	guaranteedPod := &powerv1alpha1.GuaranteedPod{}
@@ -118,42 +159,23 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	guaranteedPod.Containers = make([]powerv1alpha1.Container, 0)
 	guaranteedPod.Containers = powerContainers
 
-	// Get the PowerProfile requested by the Pod
-	profileName := getProfileFromPodAnnotations(pod)
-	if profileName == "" {
-		logger.Info("No PowerProfile detected, skipping...")
-	} else {
-		logger.Info(fmt.Sprintf("PowerProfile: %s", profileName))
-	}
+	guaranteedPod.Profile = *profile
 
-	profileList := &powerv1alpha1.ProfileList{}
-	err = r.Client.List(context.TODO(), profileList)
-	if err != nil {
-		logger.Info("Something went wrong")
-		return ctrl.Result{}, err
-	}
-
-	profile, err := getProfileFromProfileList(profileName, profileList)
-	if err != nil {
-		logger.Error(err, "failed to retrieve profile")
-		// Don't keep looping
-		return ctrl.Result{}, nil
-	}
-	guaranteedPod.Profile = profile
-
-	logger.Info("Guaranteed Pod Configuration:")
-	logger.Info(fmt.Sprintf("Pod Name: %s", guaranteedPod.Name))
-	logger.Info(fmt.Sprintf("Pod UID: %s", guaranteedPod.UID))
-	for i, container := range guaranteedPod.Containers {
-		logger.Info(fmt.Sprintf("Container %d", i))
-		logger.Info(fmt.Sprintf("- Name: %s", container.Name))
-		logger.Info(fmt.Sprintf("- ID: %s", container.ID))
-		logger.Info(fmt.Sprintf("- Cores: %s", container.ExclusiveCPUs))
-	}
-	logger.Info(fmt.Sprintf("Profile Name: %s", guaranteedPod.Profile.Spec.Name))
-	logger.Info(fmt.Sprintf("Profile Max: %d", guaranteedPod.Profile.Spec.Max))
-	logger.Info(fmt.Sprintf("Profile Min: %d", guaranteedPod.Profile.Spec.Min))
-	logger.Info(fmt.Sprintf("Profile Cstate: %t", guaranteedPod.Profile.Spec.Cstate))
+	/*
+		logger.Info("Guaranteed Pod Configuration:")
+		logger.Info(fmt.Sprintf("Pod Name: %s", guaranteedPod.Name))
+		logger.Info(fmt.Sprintf("Pod UID: %s", guaranteedPod.UID))
+		for i, container := range guaranteedPod.Containers {
+			logger.Info(fmt.Sprintf("Container %d", i))
+			logger.Info(fmt.Sprintf("- Name: %s", container.Name))
+			logger.Info(fmt.Sprintf("- ID: %s", container.ID))
+			logger.Info(fmt.Sprintf("- Cores: %s", container.ExclusiveCPUs))
+		}
+		logger.Info(fmt.Sprintf("Profile Name: %s", guaranteedPod.Profile.Spec.Name))
+		logger.Info(fmt.Sprintf("Profile Max: %d", guaranteedPod.Profile.Spec.Max))
+		logger.Info(fmt.Sprintf("Profile Min: %d", guaranteedPod.Profile.Spec.Min))
+		logger.Info(fmt.Sprintf("Profile Cstate: %t", guaranteedPod.Profile.Spec.Cstate))
+	*/
 
 	// Create the Config associated with the Profile
 	logger.Info("Creating Config based on provided Profile")
@@ -165,7 +187,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	config := &powerv1alpha1.Config{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
+			Namespace: pod.GetNamespace(),
 			Name:      fmt.Sprintf("%s-config", profileName),
 		},
 	}
