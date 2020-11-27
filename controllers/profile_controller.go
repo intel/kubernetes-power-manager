@@ -65,7 +65,7 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err := r.Client.Get(context.TODO(), req.NamespacedName, profile)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Whe na Profile cannot be found, we assume it has been deleted. We need to check if there is a
+			// When a Profile cannot be found, we assume it has been deleted. We need to check if there is a
 			// corresponding Config and, if there is, delete that too. We leave the cleanup of resetting the
 			// frequencies of the effected CPUs to the Config controller.
 
@@ -101,11 +101,6 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("Specs for Profile:")
-	logger.Info(fmt.Sprintf("Name: %s", profile.Spec.Name))
-	logger.Info(fmt.Sprintf("Max: %d", profile.Spec.Max))
-	logger.Info(fmt.Sprintf("Min: %d", profile.Spec.Min))
-
 	config := &powerv1alpha1.Config{}
 	configName := fmt.Sprintf("%s-config", req.NamespacedName.Name)
 	err = r.Client.Get(context.TODO(), client.ObjectKey{
@@ -120,9 +115,13 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			// Exclusive Profile, Config creation is left to the Pod controller when the Profile is requested.
 			// The Shared configuration is recognised by having the name "Shared".
 
-			if profile.Spec.Name == "Shared" {
-				logger.Info("This Profile has been designated as the Shared Profile...")
-				logger.Info("Creating Config for Shared Profile...")
+			//DELETE
+			// For testing purposes, a profile named 'FakeExclusive' will generate a Config from the Profile controller as well,
+			// DO NOT FORGET TO DELETE IT
+
+			if profile.Spec.Name == "Shared" || profile.Spec.Name == "FakeExclusive" {
+				logger.Info("This Profile has been designated as the Shared Profile, creating corresponding Config...")
+
 				// TODO: Update with package that Conor is working on
 				nodes := []string{"Placeholder"}
 				// TODO: Update with package that Conor is working on
@@ -143,9 +142,9 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				if err != nil {
 					logger.Error(err, fmt.Sprintf("Failed to create config for %s Profile", profile.Name))
 				}
-
-				return ctrl.Result{}, nil
 			}
+
+			return ctrl.Result{}, nil
 		} else {
 			logger.Error(err, "Some other error")
 			return ctrl.Result{}, err
@@ -155,6 +154,7 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// If the Config for the supplied Profile already exists, we assume it has been updated and update
 	// the Config. We leave all of the State updating to the Config controller.
 	logger.Info(fmt.Sprintf("%s Config already exists, updating...", configName))
+
 	// TODO: Update with package that Conor is working on
 	nodes := []string{"Placeholder"}
 	// TODO: Update with package that Conor is working on

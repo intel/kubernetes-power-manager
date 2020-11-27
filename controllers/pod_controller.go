@@ -61,7 +61,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			// TODO: delete Pod Config CR
 			return ctrl.Result{}, nil
 		}
-		logger.Info("Something went wrong")
+
 		return ctrl.Result{}, err
 	}
 

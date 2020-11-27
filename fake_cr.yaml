@@ -4,6 +4,6 @@ metadata:
   name: shared
 spec:
   name: "Shared"
-  max: 1400
-  min: 1000
+  max: 1500
+  min: 1100
   cstate: True
