@@ -45,6 +45,7 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	logger := r.Log.WithValues("profile", req.NamespacedName)
 	logger.Info("Reconciling Profile")
 
+	// TODO: Look into this
 	/*
 		// Make sure there is a Shared Profile available
 		profileList := &powerv1alpha1.ProfileList{}
@@ -71,7 +72,7 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 			logger.Info(fmt.Sprintf("Profile %v has been deleted, cleaning up...", req.NamespacedName))
 			config := &powerv1alpha1.Config{}
-			configName := fmt.Sprintf("%s-config", req.NamespacedName.Name)
+			configName := fmt.Sprintf("%s%s", req.NamespacedName.Name, configNameSuffix)
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
 				Namespace: req.NamespacedName.Namespace,
 				Name:      configName,
@@ -82,14 +83,14 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 					return ctrl.Result{}, nil
 				}
 
-				logger.Error(err, "Something went wrong")
+				logger.Error(err, "Error while attempting to retrieve Config")
 				return ctrl.Result{}, err
 			}
 
 			// Config exists so must cleanup
 			err = r.Client.Delete(context.TODO(), config)
 			if err != nil {
-				logger.Error(err, "Deletion failed")
+				logger.Error(err, "Error deleting Config")
 				return ctrl.Result{}, err
 			}
 
@@ -102,7 +103,7 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	config := &powerv1alpha1.Config{}
-	configName := fmt.Sprintf("%s-config", req.NamespacedName.Name)
+	configName := fmt.Sprintf("%s%s", req.NamespacedName.Name, configNameSuffix)
 	err = r.Client.Get(context.TODO(), client.ObjectKey{
 		Namespace: req.NamespacedName.Namespace,
 		Name:      configName,
@@ -145,7 +146,7 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 			return ctrl.Result{}, nil
 		} else {
-			logger.Error(err, "Some other error")
+			logger.Error(err, "Error while attempting to retrieve Config")
 			return ctrl.Result{}, err
 		}
 	}
@@ -154,16 +155,8 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// the Config. We leave all of the State updating to the Config controller.
 	logger.Info(fmt.Sprintf("%s Config already exists, updating...", configName))
 
-	// TODO: Update with package that Conor is working on
-	nodes := []string{"Placeholder"}
-	// TODO: Update with package that Conor is working on
-	cpuIDs := []string{"1-32"}
-	updatedSpec := &powerv1alpha1.ConfigSpec{
-		Nodes:   nodes,
-		CpuIds:  cpuIDs,
-		Profile: *profile,
-	}
-	config.Spec = *updatedSpec
+	// Only the Profile section of the Config can be updated via the Profile controller
+	config.Spec.Profile = *profile
 	err = r.Client.Update(context.TODO(), config)
 	if err != nil {
 		logger.Error(err, "Error while updating config")

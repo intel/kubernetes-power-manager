@@ -42,6 +42,75 @@ spec:
           type: object
         status:
           description: PowerNodeStatus defines the observed state of PowerNode
+          properties:
+            guaranteedPods:
+              items:
+                properties:
+                  containers:
+                    items:
+                      properties:
+                        exclusiveCpus:
+                          items:
+                            type: string
+                          type: array
+                        id:
+                          type: string
+                        name:
+                          type: string
+                      type: object
+                    type: array
+                  name:
+                    type: string
+                  profile:
+                    description: Profile is the Schema for the profiles API
+                    properties:
+                      apiVersion:
+                        description: 'APIVersion defines the versioned schema of this
+                          representation of an object. Servers should convert recognized
+                          schemas to the latest internal value, and may reject unrecognized
+                          values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                        type: string
+                      kind:
+                        description: 'Kind is a string value representing the REST
+                          resource this object represents. Servers may infer this
+                          from the endpoint the client submits requests to. Cannot
+                          be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                        type: string
+                      metadata:
+                        type: object
+                      spec:
+                        description: ProfileSpec defines the desired state of Profile
+                        properties:
+                          cstate:
+                            description: 'TODO: determine exactly what cstate is for'
+                            type: boolean
+                          max:
+                            description: Max is the maximum frequency that the core
+                              is allowed to go up to
+                            type: integer
+                          min:
+                            description: Min is the minimum frequency that the core
+                              is allowed to drop to
+                            type: integer
+                          name:
+                            description: Name is the name identifying the profile
+                            type: string
+                        required:
+                        - cstate
+                        - max
+                        - min
+                        - name
+                        type: object
+                      status:
+                        description: ProfileStatus defines the observed state of Profile
+                        type: object
+                    type: object
+                  uid:
+                    type: string
+                type: object
+              type: array
+            sharedPool:
+              type: string
           type: object
       type: object
   version: v1alpha1

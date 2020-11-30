@@ -1,9 +1,0 @@
-apiVersion: "power.intel.com/v1alpha1"
-kind: Profile
-metadata:
-  name: fake-exclusive
-spec:
-  name: "FakeExclusive"
-  max: 2600
-  min: 2200
-  cstate: True

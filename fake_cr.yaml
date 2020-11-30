@@ -1,9 +1,0 @@
-apiVersion: "power.intel.com/v1alpha1"
-kind: Profile
-metadata:
-  name: shared
-spec:
-  name: "Shared"
-  max: 1500
-  min: 1100
-  cstate: True

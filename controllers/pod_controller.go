@@ -35,7 +35,15 @@ import (
 
 const (
 	powerProfileAnnotation = "PowerProfile"
+	configNameSuffix       = "-config"
 )
+
+type State struct {
+	PowerNodeStatus *powerv1alpha1.PowerNodeStatus
+}
+
+var podConfigState map[string]ConfigState = make(map[string]ConfigState, 0)
+var state = newState()
 
 // PodReconciler reconciles a Pod object
 type PodReconciler struct {
@@ -51,19 +59,79 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerpod", req.NamespacedName)
 
-	logger.Info("Pod creation has been detected...")
 	pod := &corev1.Pod{}
 	err := r.Get(context.TODO(), req.NamespacedName, pod)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Pod has been deleted
-			// For now, simply ignore
-			// TODO: delete Pod Config CR
+			// Pod has not been found, can't do anything
+			// TODO: Determine if you need to do a sanity check to make sure the Pod isn't for some
+			// reason recorded in any State records
+
 			return ctrl.Result{}, nil
 		}
 
 		return ctrl.Result{}, err
 	}
+
+	if !pod.ObjectMeta.DeletionTimestamp.IsZero() {
+		logger.Info("Pod has been deleted, cleaning up...")
+		podState := getPodFromState(pod.GetName())
+		podStateCpus := getCpusFromPodState(podState)
+
+		configName := fmt.Sprintf("%s%s", podState.Profile.Name, configNameSuffix)
+		if oldConfig, exists := podConfigState[configName]; exists {
+			config := &powerv1alpha1.Config{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Namespace: pod.GetNamespace(),
+				Name:      configName,
+			}, config)
+			if err != nil {
+				logger.Error(err, "Error while retrieving Config")
+				return ctrl.Result{}, nil
+			}
+
+			// Remove the CPUs associated with this Pod to determine if this should be a
+			// Config deletion or update
+			updatedConfigCpus := make([]string, 0)
+			for _, oldConfigCpu := range oldConfig.Cpus {
+				if cpuIsStillBeingUsed(oldConfigCpu, podStateCpus) {
+					updatedConfigCpus = append(updatedConfigCpus, oldConfigCpu)
+				}
+			}
+
+			if len(updatedConfigCpus) > 0 {
+				// Update Config as it's still in use
+				logger.Info("Updating Config...")
+				oldConfig.Cpus = updatedConfigCpus
+				podConfigState[configName] = oldConfig
+				config.Spec.CpuIds = oldConfig.Cpus
+
+				err = r.Client.Update(context.TODO(), config)
+				if err != nil {
+					logger.Error(err, "Error while updating config")
+					return ctrl.Result{}, err
+				}
+
+				return ctrl.Result{}, nil
+			} else {
+				// Delete Config as no other Pod is using it
+				logger.Info("Deleting Config...")
+				delete(podConfigState, configName)
+
+				err = r.Client.Delete(context.TODO(), config)
+				if err != nil {
+					logger.Error(err, "Error while deleting Config")
+					return ctrl.Result{}, nil
+				}
+
+				return ctrl.Result{}, nil
+			}
+		}
+
+		return ctrl.Result{}, nil
+	}
+
+	// If the DeletionTimestamp is equal to zero than this Pod has just been created
 
 	// Make sure the Pod is running
 	podNotRunningErr := errors.NewServiceUnavailable("pod not in running phase")
@@ -77,25 +145,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if profileName == "" {
 		logger.Info("No PowerProfile detected, skipping...")
 		return ctrl.Result{}, nil
-	} else {
-		logger.Info(fmt.Sprintf("PowerProfile: %s", profileName))
 	}
-
-	/*
-		profileList := &powerv1alpha1.ProfileList{}
-		err = r.Client.List(context.TODO(), profileList)
-		if err != nil {
-			logger.Info("Something went wrong")
-			return ctrl.Result{}, err
-		}
-
-		profile, err := getProfileFromProfileList(profileName, profileList)
-		if err != nil {
-			logger.Error(err, "failed to retrieve profile")
-			// Don't keep looping
-			return ctrl.Result{}, nil
-		}
-	*/
 
 	profile := &powerv1alpha1.Profile{}
 	err = r.Client.Get(context.TODO(), client.ObjectKey{
@@ -118,16 +168,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	// DELETE
-	/*
-		logger.Info("Containers requesting exclusive CPUs:")
-		for _, c := range containersRequestingExclusiveCPUs {
-			logger.Info(fmt.Sprintf("- %s", c))
-		}
-	*/
-	// END DELETE
-
-	guaranteedPod := &powerv1alpha1.GuaranteedPod{}
+	guaranteedPod := powerv1alpha1.GuaranteedPod{}
 	guaranteedPod.Name = pod.GetName()
 	podUID := pod.GetUID()
 	if podUID == "" {
@@ -144,55 +185,82 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		//coreIDs, err := cgroupsparser.ReadCgroupCpuset(string(podUID), containerID)
 		coreIDs, err := ReadCgroupCpuset(string(podUID), containerID)
 		if err != nil {
-			logger.Error(err, "failed to retrieve cpuset form groups")
+			logger.Error(err, "failed to retrieve cpuset from groups")
 			return ctrl.Result{}, err
 		}
 
 		powerContainer := &powerv1alpha1.Container{}
 		powerContainer.Name = container
 		powerContainer.ID = strings.TrimPrefix(containerID, "docker://")
-		powerContainer.ExclusiveCPUs = coreIDs
+		// TODO: Look into possibility of a cpu list such as "0-12"
+		splitCores := strings.Split(coreIDs, ",")
+		powerContainer.ExclusiveCPUs = splitCores
 
 		powerContainers = append(powerContainers, *powerContainer)
-		allCores = append(allCores, coreIDs)
+		for _, core := range splitCores {
+			allCores = append(allCores, core)
+		}
 	}
 	guaranteedPod.Containers = make([]powerv1alpha1.Container, 0)
 	guaranteedPod.Containers = powerContainers
 
 	guaranteedPod.Profile = *profile
+	updateStateWithGuaranteedPod(guaranteedPod)
 
-	/*
-		logger.Info("Guaranteed Pod Configuration:")
-		logger.Info(fmt.Sprintf("Pod Name: %s", guaranteedPod.Name))
-		logger.Info(fmt.Sprintf("Pod UID: %s", guaranteedPod.UID))
-		for i, container := range guaranteedPod.Containers {
-			logger.Info(fmt.Sprintf("Container %d", i))
-			logger.Info(fmt.Sprintf("- Name: %s", container.Name))
-			logger.Info(fmt.Sprintf("- ID: %s", container.ID))
-			logger.Info(fmt.Sprintf("- Cores: %s", container.ExclusiveCPUs))
+	// Update podConfigState
+	configName := fmt.Sprintf("%s%s", profileName, configNameSuffix)
+	cs := ConfigState{}
+	cs.Cpus = allCores
+	cs.Max = guaranteedPod.Profile.Spec.Max
+	cs.Min = guaranteedPod.Profile.Spec.Min
+	if oldConfig, exists := podConfigState[configName]; exists {
+		for _, cpu := range cs.Cpus {
+			oldConfig.Cpus = append(oldConfig.Cpus, cpu)
 		}
-		logger.Info(fmt.Sprintf("Profile Name: %s", guaranteedPod.Profile.Spec.Name))
-		logger.Info(fmt.Sprintf("Profile Max: %d", guaranteedPod.Profile.Spec.Max))
-		logger.Info(fmt.Sprintf("Profile Min: %d", guaranteedPod.Profile.Spec.Min))
-		logger.Info(fmt.Sprintf("Profile Cstate: %t", guaranteedPod.Profile.Spec.Cstate))
-	*/
+		cs.Cpus = oldConfig.Cpus
+		podConfigState[configName] = cs
+
+		logger.Info(fmt.Sprintf("Config %s already exists, updating allocated CPUs...", configName))
+		config := &powerv1alpha1.Config{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Namespace: pod.GetNamespace(),
+			Name:      configName,
+		}, config)
+
+		config.Spec.CpuIds = cs.Cpus
+		config.Spec.Profile = guaranteedPod.Profile
+
+		err = r.Client.Update(context.TODO(), config)
+		if err != nil {
+			logger.Error(err, "Error while updating config")
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, nil
+	}
+
+	podConfigState[configName] = cs
 
 	// Create the Config associated with the Profile
 	logger.Info("Creating Config based on provided Profile")
 	placeholderNodes := []string{"Placeholder"}
 	configSpec := &powerv1alpha1.ConfigSpec{
 		Nodes:   placeholderNodes,
-		CpuIds:  allCores,
+		CpuIds:  cs.Cpus,
 		Profile: guaranteedPod.Profile,
 	}
 	config := &powerv1alpha1.Config{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: pod.GetNamespace(),
-			Name:      fmt.Sprintf("%s-config", profileName),
+			Name:      configName,
 		},
 	}
 	config.Spec = *configSpec
 	err = r.Client.Create(context.TODO(), config)
+	if err != nil {
+		logger.Error(err, "Error while creating Config")
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -207,6 +275,65 @@ func getProfileFromProfileList(name string, profiles *powerv1alpha1.ProfileList)
 	errorMsg := fmt.Sprintf("Profile %s not found", name)
 	return powerv1alpha1.Profile{}, errors.NewServiceUnavailable(errorMsg)
 }
+
+func cpuIsStillBeingUsed(cpu string, cpuList []string) bool {
+	for _, c := range cpuList {
+		if cpu == c {
+			return false
+		}
+	}
+
+	return true
+}
+
+// DELETE (Only here while import is broken)
+func newState() *State {
+	state := &State{}
+	state.PowerNodeStatus = &powerv1alpha1.PowerNodeStatus{}
+	state.PowerNodeStatus.SharedPool = "0-63"
+
+	return state
+}
+
+func updateStateWithGuaranteedPod(pod powerv1alpha1.GuaranteedPod) error {
+	if len(state.PowerNodeStatus.GuaranteedPods) == 0 {
+		pods := make([]powerv1alpha1.GuaranteedPod, 0)
+		state.PowerNodeStatus.GuaranteedPods = pods
+	}
+
+	for i, existingPod := range state.PowerNodeStatus.GuaranteedPods {
+		if existingPod.Name == pod.Name {
+			state.PowerNodeStatus.GuaranteedPods[i] = pod
+			return nil
+		}
+	}
+
+	state.PowerNodeStatus.GuaranteedPods = append(state.PowerNodeStatus.GuaranteedPods, pod)
+	return nil
+}
+
+func getPodFromState(podName string) powerv1alpha1.GuaranteedPod {
+	for _, existingPod := range state.PowerNodeStatus.GuaranteedPods {
+		if existingPod.Name == podName {
+			return existingPod
+		}
+	}
+
+	return powerv1alpha1.GuaranteedPod{}
+}
+
+func getCpusFromPodState(podState powerv1alpha1.GuaranteedPod) []string {
+	cpus := make([]string, 0)
+	for _, container := range podState.Containers {
+		for _, cpu := range container.ExclusiveCPUs {
+			cpus = append(cpus, cpu)
+		}
+	}
+
+	return cpus
+}
+
+// END DELETE
 
 // DELETE (Only here while import is broken)
 func ReadCgroupCpuset(podUID, containerID string) (string, error) {

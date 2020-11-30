@@ -6,5 +6,5 @@ spec:
   nodes:
   - "worker1"
   cpuids:
-  - "2"
   - "5"
+  - "6"

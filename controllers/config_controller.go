@@ -39,7 +39,9 @@ type ConfigReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-const SHARED_CONFIG_NAME string = "shared-config"
+const (
+	SHARED_CONFIG_NAME string = "shared-config"
+)
 
 //var configState map[string][]string = make(map[string][]string)
 type ConfigState struct {
@@ -66,7 +68,6 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 			logger.Info(fmt.Sprintf("CPUs that were tuned by the deleted Config: %v", effectedCpus))
 			delete(configState, req.NamespacedName.Name)
-			logger.Info(fmt.Sprintf("%v", configState))
 
 			sharedConfig := &powerv1alpha1.Config{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
@@ -98,23 +99,24 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	cpusEffected := config.Spec.CpuIds
+	logger.Info(fmt.Sprintf("CPUs now effected: %v", cpusEffected))
 	maxCpuFrequency := config.Spec.Profile.Spec.Max
 	minCpuFrequency := config.Spec.Profile.Spec.Min
 
 	// Check to see if this is a Creation or Update
 	if oldConfig, exists := configState[req.NamespacedName.Name]; exists {
-		logger.Info("This is an UPDATION")
 		// The Config has been update
 		oldConfigCpusSorted := oldConfig.Cpus
 		newConfigCpusSorted := cpusEffected
 		sort.Strings(oldConfigCpusSorted)
 		sort.Strings(newConfigCpusSorted)
+		changedCpus := make([]string, 0)
 
 		if !reflect.DeepEqual(oldConfigCpusSorted, newConfigCpusSorted) {
-			logger.Info("CPUs for this Config have changed")
-			changedCpus := make([]string, 0)
+			logger.Info("CPUs for this Config have changed, updating...")
 
 			if len(oldConfigCpusSorted) > len(newConfigCpusSorted) {
+				// CPUs have been removed from this Config, need to erevert their frequency back to the shared frequency
 				for _, id := range oldConfigCpusSorted {
 					if !idInConfig(id, newConfigCpusSorted) {
 						changedCpus = append(changedCpus, id)
@@ -124,38 +126,51 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				// Need changed CPUs for frequency resetting
 				oldConfig.Cpus = newConfigCpusSorted
 				logger.Info(fmt.Sprintf("Reverting CPU(s) back to Shared frequency: %v", changedCpus))
+
+				// Set changedCpus to empty so their frequencies don't accidently get reset after this
+				changedCpus = make([]string, 0)
 			} else {
+				// TODO: check if necessary
 				for _, id := range cpusEffected {
 					if !idInConfig(id, oldConfig.Cpus) {
 						changedCpus = append(changedCpus, id)
 					}
 				}
 
-				// Need changed CPUs for frequency resetting
 				oldConfig.Cpus = newConfigCpusSorted
-				logger.Info(fmt.Sprintf("Updating CPU(s) to Config's frequency: %v", changedCpus))
 			}
 
 			configState[req.NamespacedName.Name] = oldConfig
-		} else {
-			logger.Info("CPUs have not changed")
 		}
+
+		// If the max/min frequencies of the Config have changed, we need to alter every CPU's frequency
+		// If not, only the changed CPUs need to be altered
+
+		if maxCpuFrequency != oldConfig.Max {
+			logger.Info(fmt.Sprintf("Updating maximum frequency of every CPU in Config: %v", configState[req.NamespacedName.Name]))
+		} else {
+			logger.Info(fmt.Sprintf("Updating maximum frequency of changed CPUs: %v", changedCpus))
+		}
+
+		if minCpuFrequency != oldConfig.Min {
+			logger.Info(fmt.Sprintf("Updating minimum frequency of every CPU in Config: %v", configState[req.NamespacedName.Name]))
+		} else {
+			logger.Info(fmt.Sprintf("Updating minimum frequency of changed CPUs: %v", changedCpus))
+		}
+
 		return ctrl.Result{}, nil
 	}
-	logger.Info("This is a CREATION")
 
 	// For now just log that the CPU of the group of CPUs is being updating.
 	// When frequency tuning is implemented, may need to update them individually.
 	logger.Info(fmt.Sprintf("Updating max frequency of CPUs %v to %dMHz", cpusEffected, maxCpuFrequency))
 	logger.Info(fmt.Sprintf("Updating min frequency of CPUs %v to %dMHz", cpusEffected, minCpuFrequency))
-	//configState[req.NamespacedName.Name] = cpusEffected
+
 	cs := ConfigState{}
 	cs.Cpus = cpusEffected
 	cs.Max = maxCpuFrequency
 	cs.Min = minCpuFrequency
 	configState[req.NamespacedName.Name] = cs
-
-	logger.Info(fmt.Sprintf("%v", configState))
 
 	return ctrl.Result{}, nil
 }
