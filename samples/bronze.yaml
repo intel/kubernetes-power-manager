@@ -1,0 +1,9 @@
+apiVersion: "power.intel.com/v1alpha1"
+kind: Profile
+metadata:
+  name: bronze
+spec:
+  name: "Bronze"
+  max: 2000
+  min: 1600
+  cstate: True
