@@ -40,6 +40,7 @@ type ProfileReconciler struct {
 // +kubebuilder:rbac:groups=power.intel.com,resources=profiles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=power.intel.com,resources=profiles/status,verbs=get;update;patch
 
+// Reconcile method that implements the reconcile loop
 func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("profile", req.NamespacedName)
@@ -145,10 +146,9 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			}
 
 			return ctrl.Result{}, nil
-		} else {
-			logger.Error(err, "Error while attempting to retrieve Config")
-			return ctrl.Result{}, err
 		}
+		logger.Error(err, "Error while attempting to retrieve Config")
+		return ctrl.Result{}, err
 	}
 
 	// If the Config for the supplied Profile already exists, we assume it has been updated and update
@@ -166,6 +166,7 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager specifies how the controller is built and watch a CR and other resources that are owned and managed by the controller
 func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&powerv1alpha1.Profile{}).
