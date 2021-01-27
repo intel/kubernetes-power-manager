@@ -12,8 +12,8 @@ const (
 	MIN_FREQ_PATH = "/cpufreq/scaling_min_freq"
 )
 
-func AdjustCpuMaxFrequency(coreID string, freq int) error {
-	maxFreqPath := fmt.Sprintf("%s%s%s", BASE_PATH, coreID, MAX_FREQ_PATH)
+func AdjustCpuFrequency(coreID string, freq int, freqPath string) error {
+	maxFreqPath := fmt.Sprintf("%s%s%s", BASE_PATH, coreID, freqPath)
 	realFreqValue := freq * 1000
 	realFreqValueStr := strconv.Itoa(realFreqValue)
 

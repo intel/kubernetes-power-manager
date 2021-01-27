@@ -19,10 +19,10 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	//"io/ioutil"
 	"reflect"
 	"sort"
-	"strconv"
+	//"strconv"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -32,7 +32,7 @@ import (
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	//freq "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/frequency"
+	freq "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/frequency"
 )
 
 // ConfigReconciler reconciles a Config object
@@ -44,10 +44,6 @@ type ConfigReconciler struct {
 
 const (
 	SHARED_CONFIG_NAME string = "shared-config"
-	// DELETE when moved into separate package
-	BASE_PATH     = "/sys/devices/system/cpu/cpu"
-	MAX_FREQ_PATH = "/cpufreq/scaling_max_freq"
-	MIN_FREQ_PATH = "/cpufreq/scaling_min_freq"
 )
 
 //var configState map[string][]string = make(map[string][]string)
@@ -123,7 +119,7 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			logger.Info("CPUs for this Config have changed, updating...")
 
 			if len(oldConfigCpusSorted) > len(newConfigCpusSorted) {
-				// CPUs have been removed from this Config, need to erevert their frequency back to the shared frequency
+				// CPUs have been removed from this Config, need to revert their frequency back to the shared frequency
 				for _, id := range oldConfigCpusSorted {
 					if !idInConfig(id, newConfigCpusSorted) {
 						changedCpus = append(changedCpus, id)
@@ -173,13 +169,13 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	logger.Info(fmt.Sprintf("Updating max frequency of CPUs %v to %dMHz", cpusEffected, maxCpuFrequency))
 	logger.Info(fmt.Sprintf("Updating min frequency of CPUs %v to %dMHz", cpusEffected, minCpuFrequency))
 	for _, cpu := range cpusEffected {
-		err = AdjustCpuMaxFrequency(cpu, maxCpuFrequency)
+		err = freq.AdjustCpuFrequency(cpu, maxCpuFrequency, freq.MAX_FREQ_PATH)
 		if err != nil {
 			logger.Error(err, "Error occured while updating Max frequency")
 			return ctrl.Result{}, nil
 		}
 
-		err = AdjustCpuMinFrequency(cpu, minCpuFrequency)
+		err = freq.AdjustCpuFrequency(cpu, minCpuFrequency, freq.MIN_FREQ_PATH)
 		if err != nil {
 			logger.Error(err, "Error occured while updating Min frequency")
 			return ctrl.Result{}, nil
@@ -203,32 +199,6 @@ func idInConfig(newId string, config []string) bool {
 	}
 
 	return false
-}
-
-func AdjustCpuMaxFrequency(coreID string, freq int) error {
-	maxFreqPath := fmt.Sprintf("%s%s%s", BASE_PATH, coreID, MAX_FREQ_PATH)
-	realFreqValue := freq * 1000
-	realFreqValueStr := strconv.Itoa(realFreqValue)
-
-	err := ioutil.WriteFile(maxFreqPath, []byte(realFreqValueStr), 0064)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func AdjustCpuMinFrequency(coreID string, freq int) error {
-	minFreqPath := fmt.Sprintf("%s%s%s", BASE_PATH, coreID, MIN_FREQ_PATH)
-	realFreqValue := freq * 1000
-	realFreqValueStr := strconv.Itoa(realFreqValue)
-
-	err := ioutil.WriteFile(minFreqPath, []byte(realFreqValueStr), 0064)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (r *ConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
