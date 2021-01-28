@@ -19,10 +19,8 @@ package controllers
 import (
 	"context"
 	"fmt"
-	//"io/ioutil"
 	"reflect"
 	"sort"
-	//"strconv"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -33,6 +31,7 @@ import (
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 	freq "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/frequency"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/configstate"
 )
 
 // ConfigReconciler reconciles a Config object
@@ -40,20 +39,12 @@ type ConfigReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	ConfigState configstate.Configs
 }
 
 const (
 	SHARED_CONFIG_NAME string = "shared-config"
 )
-
-//var configState map[string][]string = make(map[string][]string)
-type ConfigState struct {
-	Cpus []string
-	Max  int
-	Min  int
-}
-
-var configState map[string]ConfigState = make(map[string]ConfigState, 0)
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=configs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=power.intel.com,resources=configs/status,verbs=get;update;patch
@@ -67,10 +58,11 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info(fmt.Sprintf("Config deleted: %s; cleaning up...", req.NamespacedName.Name))
-			effectedCpus := configState[req.NamespacedName.Name]
+		//	effectedCpus := configState[req.NamespacedName.Name]
+			effectedCPUs := r.ConfigState.RemoveCPUFromState(req.NamespacedName.Name)
 
-			logger.Info(fmt.Sprintf("CPUs that were tuned by the deleted Config: %v", effectedCpus))
-			delete(configState, req.NamespacedName.Name)
+			logger.Info(fmt.Sprintf("CPUs that were tuned by the deleted Config: %v", effectedCPUs))
+		//	delete(configState, req.NamespacedName.Name)
 
 			sharedConfig := &powerv1alpha1.Config{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
@@ -79,7 +71,7 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			}, sharedConfig)
 			if err != nil {
 				if errors.IsNotFound(err) {
-					logger.Info(fmt.Sprintf("Shared Config could not be found, cannot reset frequency of CPUs %v", effectedCpus))
+					logger.Info(fmt.Sprintf("Shared Config could not be found, cannot reset frequency of CPUs %v", effectedCPUs))
 					return ctrl.Result{}, nil
 				}
 
@@ -91,8 +83,8 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 			// For now just log that the CPU of the group of CPUs is being updating.
 			// When frequency tuning is implemented, may need to update them individually.
-			logger.Info(fmt.Sprintf("Updating max frequency of CPUs %v to %dMHz", effectedCpus, maxCpuFrequency))
-			logger.Info(fmt.Sprintf("Updating min frequency of CPUs %v to %dMHz", effectedCpus, minCpuFrequency))
+			logger.Info(fmt.Sprintf("Updating max frequency of CPUs %v to %dMHz", effectedCPUs, maxCpuFrequency))
+			logger.Info(fmt.Sprintf("Updating min frequency of CPUs %v to %dMHz", effectedCPUs, minCpuFrequency))
 
 			return ctrl.Result{}, nil
 		}
@@ -107,9 +99,9 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	minCpuFrequency := config.Spec.Profile.Spec.Min
 
 	// Check to see if this is a Creation or Update
-	if oldConfig, exists := configState[req.NamespacedName.Name]; exists {
+	if oldConfig, exists := r.ConfigState.Configs[req.NamespacedName.Name]; exists {
 		// The Config has been update
-		oldConfigCpusSorted := oldConfig.Cpus
+		oldConfigCpusSorted := oldConfig.CPUs
 		newConfigCpusSorted := cpusEffected
 		sort.Strings(oldConfigCpusSorted)
 		sort.Strings(newConfigCpusSorted)
@@ -127,7 +119,7 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				}
 
 				// Need changed CPUs for frequency resetting
-				oldConfig.Cpus = newConfigCpusSorted
+				oldConfig.CPUs = newConfigCpusSorted
 				logger.Info(fmt.Sprintf("Reverting CPU(s) back to Shared frequency: %v", changedCpus))
 
 				// Set changedCpus to empty so their frequencies don't accidently get reset after this
@@ -135,28 +127,29 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			} else {
 				// TODO: check if necessary
 				for _, id := range cpusEffected {
-					if !idInConfig(id, oldConfig.Cpus) {
+					if !idInConfig(id, oldConfig.CPUs) {
 						changedCpus = append(changedCpus, id)
 					}
 				}
 
-				oldConfig.Cpus = newConfigCpusSorted
+				oldConfig.CPUs = newConfigCpusSorted
 			}
 
-			configState[req.NamespacedName.Name] = oldConfig
+			r.ConfigState.UpdateConfigState(req.NamespacedName.Name, oldConfig)
+			//configState[req.NamespacedName.Name] = oldConfig
 		}
 
 		// If the max/min frequencies of the Config have changed, we need to alter every CPU's frequency
 		// If not, only the changed CPUs need to be altered
 
 		if maxCpuFrequency != oldConfig.Max {
-			logger.Info(fmt.Sprintf("Updating maximum frequency of every CPU in Config: %v", configState[req.NamespacedName.Name]))
+			logger.Info(fmt.Sprintf("Updating maximum frequency of every CPU in Config: %v", r.ConfigState.Configs[req.NamespacedName.Name]))
 		} else {
 			logger.Info(fmt.Sprintf("Updating maximum frequency of changed CPUs: %v", changedCpus))
 		}
 
 		if minCpuFrequency != oldConfig.Min {
-			logger.Info(fmt.Sprintf("Updating minimum frequency of every CPU in Config: %v", configState[req.NamespacedName.Name]))
+			logger.Info(fmt.Sprintf("Updating minimum frequency of every CPU in Config: %v", r.ConfigState.Configs[req.NamespacedName.Name]))
 		} else {
 			logger.Info(fmt.Sprintf("Updating minimum frequency of changed CPUs: %v", changedCpus))
 		}
@@ -164,10 +157,19 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	// For now just log that the CPU of the group of CPUs is being updating.
-	// When frequency tuning is implemented, may need to update them individually.
-	logger.Info(fmt.Sprintf("Updating max frequency of CPUs %v to %dMHz", cpusEffected, maxCpuFrequency))
-	logger.Info(fmt.Sprintf("Updating min frequency of CPUs %v to %dMHz", cpusEffected, minCpuFrequency))
+	// Update the frequency of the cores
+	err = freq.AdjustCpuFrequency(cpusEffected, maxCpuFrequency, freq.MAX_FREQ_PATH)
+	if err != nil {
+		logger.Error(err, "Error occured while updating Max frequency")
+		return ctrl.Result{}, nil
+	}
+
+	err = freq.AdjustCpuFrequency(cpusEffected, minCpuFrequency, freq.MIN_FREQ_PATH)
+	if err != nil {
+		logger.Error(err, "Error occured while updating Min frequency")
+                return ctrl.Result{}, nil
+	}
+	/*
 	for _, cpu := range cpusEffected {
 		err = freq.AdjustCpuFrequency(cpu, maxCpuFrequency, freq.MAX_FREQ_PATH)
 		if err != nil {
@@ -180,13 +182,14 @@ func (r *ConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			logger.Error(err, "Error occured while updating Min frequency")
 			return ctrl.Result{}, nil
 		}
-	}
+	}*/
 
-	cs := ConfigState{}
-	cs.Cpus = cpusEffected
+	cs := configstate.ConfigState{}
+	cs.CPUs = cpusEffected
 	cs.Max = maxCpuFrequency
 	cs.Min = minCpuFrequency
-	configState[req.NamespacedName.Name] = cs
+	r.ConfigState.UpdateConfigState(req.NamespacedName.Name, cs)
+	//configState[req.NamespacedName.Name] = cs
 
 	return ctrl.Result{}, nil
 }

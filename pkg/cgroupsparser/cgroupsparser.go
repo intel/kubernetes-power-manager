@@ -6,6 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	//"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
 	"strings"
+	"strconv"
 )
 
 const (
@@ -20,18 +21,44 @@ var (
 	hybridCgroupPath  = "/sys/fs/cgroup/unified/"
 )
 
-func GetSharedPool() (string, error) {
+func GetSharedPool() ([]string, error) {
 	kubepodsCgroup, err := findKubepodsCgroup()
 	if err != nil {
-		return "", err
+		return []string{}, err
 	}
 
 	cpuStr, err := cpusetFileToString(kubepodsCgroup)
 	if err != nil {
-		return "", err
+		return []string{}, err
 	}
 
-	return cpuStr, nil
+	sharedPoolList := convertSharedStringToList(cpuStr)
+	return sharedPoolList, nil
+}
+
+func convertSharedStringToList(sharedPoolStr string) []string {
+	var sharedPoolList []string = make([]string, 0)
+        split_comma := strings.Split(sharedPoolStr, ",")
+        for _, cpuRange := range split_comma {
+                split_hyphen := strings.Split(cpuRange, "-")
+                if len(split_hyphen) == 1 {
+                        sharedPoolList = append(sharedPoolList, split_hyphen[0])
+                } else if len(split_hyphen) == 2 {
+                        startCPU, _ := strconv.Atoi(split_hyphen[0])
+                        endCPU, _ := strconv.Atoi(split_hyphen[1])
+                        for i := startCPU; i <= endCPU; i++ {
+                                stringVal := strconv.Itoa(i)
+                                sharedPoolList = append(sharedPoolList, stringVal)
+                        }
+                }
+        }
+
+        return sharedPoolList
+}
+
+func GetTest() string {
+	kubepodsCgroup, _ := findKubepodsCgroup()
+	return kubepodsCgroup
 }
 
 func findKubepodsCgroup() (string, error) {

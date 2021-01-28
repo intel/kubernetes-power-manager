@@ -19,12 +19,15 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	//"io/ioutil"
 	"strings"
 
 	"github.com/go-logr/logr"
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	//cgroupsparser "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
+	cgp "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/configstate"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,14 +45,16 @@ type State struct {
 	PowerNodeStatus *powerv1alpha1.PowerNodeStatus
 }
 
-var podConfigState map[string]ConfigState = make(map[string]ConfigState, 0)
-var state = newState()
+var podConfigState map[string]configstate.ConfigState = make(map[string]configstate.ConfigState, 0)
+//var state = newState()
 
 // PodReconciler reconciles a Pod object
 type PodReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	State state.State
+	ConfigState configstate.Configs
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=pods,verbs=get;list;watch;create;update;patch;delete
@@ -58,6 +63,11 @@ type PodReconciler struct {
 func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerpod", req.NamespacedName)
+
+	logger.Info("*******************************")
+	logger.Info(fmt.Sprintf("%v", r.State.PowerNodeStatus))//.SharedPool))
+	logger.Info(fmt.Sprintf("%v", r.State.PowerNodeStatus))//.GuaranteedPods))
+	logger.Info("*******************************")
 
 	pod := &corev1.Pod{}
 	err := r.Get(context.TODO(), req.NamespacedName, pod)
@@ -75,8 +85,8 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if !pod.ObjectMeta.DeletionTimestamp.IsZero() {
 		logger.Info("Pod has been deleted, cleaning up...")
-		podState := getPodFromState(pod.GetName())
-		podStateCpus := getCpusFromPodState(podState)
+		podState := r.State.GetPodFromState(pod.GetName())
+		podStateCPUs := r.State.GetCPUsFromPodState(podState)
 
 		configName := fmt.Sprintf("%s%s", podState.Profile.Name, configNameSuffix)
 		if oldConfig, exists := podConfigState[configName]; exists {
@@ -92,19 +102,19 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 			// Remove the CPUs associated with this Pod to determine if this should be a
 			// Config deletion or update
-			updatedConfigCpus := make([]string, 0)
-			for _, oldConfigCpu := range oldConfig.Cpus {
-				if cpuIsStillBeingUsed(oldConfigCpu, podStateCpus) {
-					updatedConfigCpus = append(updatedConfigCpus, oldConfigCpu)
+			updatedConfigCPUs := make([]string, 0)
+			for _, oldConfigCPU := range oldConfig.CPUs {
+				if cpuIsStillBeingUsed(oldConfigCPU, podStateCPUs) {
+					updatedConfigCPUs = append(updatedConfigCPUs, oldConfigCPU)
 				}
 			}
 
-			if len(updatedConfigCpus) > 0 {
+			if len(updatedConfigCPUs) > 0 {
 				// Update Config as it's still in use
 				logger.Info("Updating Config...")
-				oldConfig.Cpus = updatedConfigCpus
+				oldConfig.CPUs = updatedConfigCPUs
 				podConfigState[configName] = oldConfig
-				config.Spec.CpuIds = oldConfig.Cpus
+				config.Spec.CpuIds = oldConfig.CPUs
 
 				err = r.Client.Update(context.TODO(), config)
 				if err != nil {
@@ -183,7 +193,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	for _, container := range containersRequestingExclusiveCPUs {
 		containerID := getContainerID(pod, container)
 		//coreIDs, err := cgroupsparser.ReadCgroupCpuset(string(podUID), containerID)
-		coreIDs, err := ReadCgroupCpuset(string(podUID), containerID)
+		coreIDs, err := cgp.ReadCgroupCpuset(string(podUID), containerID)
 		if err != nil {
 			logger.Error(err, "failed to retrieve cpuset from groups")
 			return ctrl.Result{}, err
@@ -205,19 +215,23 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	guaranteedPod.Containers = powerContainers
 
 	guaranteedPod.Profile = *profile
-	updateStateWithGuaranteedPod(guaranteedPod)
+	err = r.State.UpdateStateGuaranteedPods(guaranteedPod)
+	if err != nil {
+		logger.Error(err, "error updating internal state")
+		return ctrl.Result{}, err
+	}
 
 	// Update podConfigState
 	configName := fmt.Sprintf("%s%s", profileName, configNameSuffix)
-	cs := ConfigState{}
-	cs.Cpus = allCores
+	cs := configstate.ConfigState{}
+	cs.CPUs = allCores
 	cs.Max = guaranteedPod.Profile.Spec.Max
 	cs.Min = guaranteedPod.Profile.Spec.Min
 	if oldConfig, exists := podConfigState[configName]; exists {
-		for _, cpu := range cs.Cpus {
-			oldConfig.Cpus = append(oldConfig.Cpus, cpu)
+		for _, cpu := range cs.CPUs {
+			oldConfig.CPUs = append(oldConfig.CPUs, cpu)
 		}
-		cs.Cpus = oldConfig.Cpus
+		cs.CPUs = oldConfig.CPUs
 		podConfigState[configName] = cs
 
 		logger.Info(fmt.Sprintf("Config %s already exists, updating allocated CPUs...", configName))
@@ -227,7 +241,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			Name:      configName,
 		}, config)
 
-		config.Spec.CpuIds = cs.Cpus
+		config.Spec.CpuIds = cs.CPUs
 		config.Spec.Profile = guaranteedPod.Profile
 
 		err = r.Client.Update(context.TODO(), config)
@@ -246,7 +260,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	placeholderNodes := []string{"Placeholder"}
 	configSpec := &powerv1alpha1.ConfigSpec{
 		Nodes:   placeholderNodes,
-		CpuIds:  cs.Cpus,
+		CpuIds:  cs.CPUs,
 		Profile: guaranteedPod.Profile,
 	}
 	config := &powerv1alpha1.Config{
@@ -286,6 +300,7 @@ func cpuIsStillBeingUsed(cpu string, cpuList []string) bool {
 	return true
 }
 
+/*
 // DELETE (Only here while import is broken)
 func newState() *State {
 	state := &State{}
@@ -334,7 +349,9 @@ func getCpusFromPodState(podState powerv1alpha1.GuaranteedPod) []string {
 }
 
 // END DELETE
+*/
 
+/*
 // DELETE (Only here while import is broken)
 func ReadCgroupCpuset(podUID, containerID string) (string, error) {
 	containerID = strings.TrimPrefix(containerID, "docker://")
@@ -430,6 +447,7 @@ func cpusetFileToString(path string) (string, error) {
 }
 
 //END DELETE
+*/
 
 func getProfileFromPodAnnotations(pod *corev1.Pod) string {
 	annotations := pod.GetAnnotations()

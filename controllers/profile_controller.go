@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
+	cgp "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -123,10 +124,10 @@ func (r *ProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				// TODO: Update with package that Conor is working on
 				nodes := []string{"Placeholder"}
 				// TODO: Update with package that Conor is working on
-				cpuIDs := []string{}
-				for i := 0; i < 64; i++ {
-					cpuIDs = append(cpuIDs, fmt.Sprint(i))
-				}
+				cpuIDs, _ := cgp.GetSharedPool()
+				//for i := 0; i < 64; i++ {
+				//	cpuIDs = append(cpuIDs, fmt.Sprint(i))
+				//}
 				configSpec := &powerv1alpha1.ConfigSpec{
 					Nodes:   nodes,
 					CpuIds:  cpuIDs,
