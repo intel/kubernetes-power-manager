@@ -109,6 +109,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				}
 			}
 
+			// TODO: update this so the Pod controller isn't updating the ConfigState at all, only reading from it.
 			if len(updatedConfigCPUs) > 0 {
 				// Update Config as it's still in use
 				logger.Info("Updating Config...")
@@ -192,7 +193,6 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	for _, container := range containersRequestingExclusiveCPUs {
 		containerID := getContainerID(pod, container)
-		//coreIDs, err := cgroupsparser.ReadCgroupCpuset(string(podUID), containerID)
 		coreIDs, err := cgp.ReadCgroupCpuset(string(podUID), containerID)
 		if err != nil {
 			logger.Error(err, "failed to retrieve cpuset from groups")
