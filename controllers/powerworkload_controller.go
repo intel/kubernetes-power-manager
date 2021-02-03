@@ -160,13 +160,13 @@ func checkWorkloadCPUDifference(oldCPUList []string, updatedCPUList []string) ([
 	removedCPUs := make([]string, 0)
 
 	for _, cpuID := range updatedCPUList {
-		if idInCPUList(cpuID, oldCPUList) {
+		if IdInCPUList(cpuID, oldCPUList) {
 			addedCPUs = append(addedCPUs, cpuID)
 		}
 	}
 
 	for _, cpuID := range oldCPUList {
-		if idInCPUList(cpuID, updatedCPUList) {
+		if IdInCPUList(cpuID, updatedCPUList) {
 			removedCPUs = append(removedCPUs, cpuID)
 		}
 	}
@@ -174,7 +174,7 @@ func checkWorkloadCPUDifference(oldCPUList []string, updatedCPUList []string) ([
 	return addedCPUs, removedCPUs
 }
 
-func idInCPUList(id string, cpuList []string) bool {
+func IdInCPUList(id string, cpuList []string) bool {
 	for _, cpuListID := range cpuList {
 		if id == cpuListID {
 			return true

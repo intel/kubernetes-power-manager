@@ -56,6 +56,7 @@ func convertSharedStringToList(sharedPoolStr string) []string {
 	return sharedPoolList
 }
 
+// TODO: remove
 func GetTest() string {
 	kubepodsCgroup, _ := findKubepodsCgroup()
 	return kubepodsCgroup
@@ -105,11 +106,14 @@ func ReadCgroupCpuset(podUID, containerID string) (string, error) {
 		return "", errors.NewServiceUnavailable("kubepods cgroup file not found")
 	}
 
+	podUIDUnderscores := strings.ReplaceAll(podUID, "-", "_")
+	podCgroupPath := fmt.Sprintf("/sys/fs/cgroup/cpuset/kubepods.slice/kubepods-pod%s.slice/", podUIDUnderscores)
+	/*
 	podCgroupPath, err := findPodCgroup(kubepodsCgroupPath, podUID)
 	if err != nil {
 		return "", err
 	}
-
+	*/
 	if podCgroupPath == "" {
 		return "", errors.NewServiceUnavailable(fmt.Sprintf("podUID %s not found in kubepods cgroup %s", podUID, kubepodsCgroupPath))
 	}
