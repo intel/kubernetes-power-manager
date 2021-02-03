@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/api/errors"
 	//"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -38,22 +38,22 @@ func GetSharedPool() ([]string, error) {
 
 func convertSharedStringToList(sharedPoolStr string) []string {
 	var sharedPoolList []string = make([]string, 0)
-        split_comma := strings.Split(sharedPoolStr, ",")
-        for _, cpuRange := range split_comma {
-                split_hyphen := strings.Split(cpuRange, "-")
-                if len(split_hyphen) == 1 {
-                        sharedPoolList = append(sharedPoolList, split_hyphen[0])
-                } else if len(split_hyphen) == 2 {
-                        startCPU, _ := strconv.Atoi(split_hyphen[0])
-                        endCPU, _ := strconv.Atoi(split_hyphen[1])
-                        for i := startCPU; i <= endCPU; i++ {
-                                stringVal := strconv.Itoa(i)
-                                sharedPoolList = append(sharedPoolList, stringVal)
-                        }
-                }
-        }
+	split_comma := strings.Split(sharedPoolStr, ",")
+	for _, cpuRange := range split_comma {
+		split_hyphen := strings.Split(cpuRange, "-")
+		if len(split_hyphen) == 1 {
+			sharedPoolList = append(sharedPoolList, split_hyphen[0])
+		} else if len(split_hyphen) == 2 {
+			startCPU, _ := strconv.Atoi(split_hyphen[0])
+			endCPU, _ := strconv.Atoi(split_hyphen[1])
+			for i := startCPU; i <= endCPU; i++ {
+				stringVal := strconv.Itoa(i)
+				sharedPoolList = append(sharedPoolList, stringVal)
+			}
+		}
+	}
 
-        return sharedPoolList
+	return sharedPoolList
 }
 
 func GetTest() string {

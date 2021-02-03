@@ -23,18 +23,23 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// ConfigSpec defines the desired state of Config
-type ConfigSpec struct {
+// PowerProfileSpec defines the desired state of PowerProfile
+type PowerProfileSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Nodes   []string `json:"nodes,omitempty"`
-	CpuIds  []string `json:"cpuids,omitempty"`
-	Profile `json:"profile,omitempty"`
+	// Name is the name identifying the PowerProfile
+	Name string `json:"name"`
+
+	// Max indicates the maximum frequency the core is allowed go
+	Max int `json:"max"`
+
+	// Min indicates the minimum frequency the core is allowed go
+	Min int `json:"min"`
 }
 
-// ConfigStatus defines the observed state of Config
-type ConfigStatus struct {
+// PowerProfileStatus defines the observed state of PowerProfile
+type PowerProfileStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
@@ -42,24 +47,24 @@ type ConfigStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// Config is the Schema for the configs API
-type Config struct {
+// PowerProfile is the Schema for the powerprofiles API
+type PowerProfile struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ConfigSpec   `json:"spec,omitempty"`
-	Status ConfigStatus `json:"status,omitempty"`
+	Spec   PowerProfileSpec   `json:"spec,omitempty"`
+	Status PowerProfileStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// ConfigList contains a list of Config
-type ConfigList struct {
+// PowerProfileList contains a list of PowerProfile
+type PowerProfileList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Config `json:"items"`
+	Items           []PowerProfile `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Config{}, &ConfigList{})
+	SchemeBuilder.Register(&PowerProfile{}, &PowerProfileList{})
 }

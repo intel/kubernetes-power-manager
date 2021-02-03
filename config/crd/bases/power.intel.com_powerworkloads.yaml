@@ -1,0 +1,106 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.3.0
+  creationTimestamp: null
+  name: powerworkloads.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: PowerWorkload
+    listKind: PowerWorkloadList
+    plural: powerworkloads
+    singular: powerworkload
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      description: PowerWorkload is the Schema for the powerworkloads API
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: PowerWorkloadSpec defines the desired state of PowerWorkload
+          properties:
+            cpuids:
+              description: CpuIds indicates the CPUs affected by this PowerWorload,
+                across all nodes
+              items:
+                type: string
+              type: array
+            nodes:
+              description: Nodes indicates the nodes with Pods using this PowerWorload
+              items:
+                type: string
+              type: array
+            powerprofile:
+              description: PowerProfile is the Profile that this PowerWorkload is
+                based on
+              properties:
+                apiVersion:
+                  description: 'APIVersion defines the versioned schema of this representation
+                    of an object. Servers should convert recognized schemas to the
+                    latest internal value, and may reject unrecognized values. More
+                    info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                  type: string
+                kind:
+                  description: 'Kind is a string value representing the REST resource
+                    this object represents. Servers may infer this from the endpoint
+                    the client submits requests to. Cannot be updated. In CamelCase.
+                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                  type: string
+                metadata:
+                  type: object
+                spec:
+                  description: PowerProfileSpec defines the desired state of PowerProfile
+                  properties:
+                    max:
+                      description: Max indicates the maximum frequency the core is
+                        allowed go
+                      type: integer
+                    min:
+                      description: Min indicates the minimum frequency the core is
+                        allowed go
+                      type: integer
+                    name:
+                      description: Name is the name identifying the PowerProfile
+                      type: string
+                  required:
+                  - max
+                  - min
+                  - name
+                  type: object
+                status:
+                  description: PowerProfileStatus defines the observed state of PowerProfile
+                  type: object
+              type: object
+          type: object
+        status:
+          description: PowerWorkloadStatus defines the observed state of PowerWorkload
+          type: object
+      type: object
+  version: v1alpha1
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

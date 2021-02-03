@@ -1,0 +1,24 @@
+# permissions for end users to edit powerpods.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: powerpod-editor-role
+rules:
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerpods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerpods/status
+  verbs:
+  - get

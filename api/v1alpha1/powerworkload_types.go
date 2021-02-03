@@ -23,17 +23,23 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// PodSpec defines the desired state of Pod
-type PodSpec struct {
+// PowerWorkloadSpec defines the desired state of PowerWorkload
+type PowerWorkloadSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Pod. Edit Pod_types.go to remove/update
-	// Foo string `json:"foo,omitempty"`
+	// Nodes indicates the nodes with Pods using this PowerWorload
+	Nodes []string `json:"nodes,omitempty"`
+
+	// CpuIds indicates the CPUs affected by this PowerWorload, across all nodes
+	CpuIds []string `json:"cpuids,omitempty"`
+
+	// PowerProfile is the Profile that this PowerWorkload is based on
+	PowerProfile `json:"powerprofile,omitempty"`
 }
 
-// PodStatus defines the observed state of Pod
-type PodStatus struct {
+// PowerWorkloadStatus defines the observed state of PowerWorkload
+type PowerWorkloadStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
@@ -41,24 +47,24 @@ type PodStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// Pod is the Schema for the pods API
-type Pod struct {
+// PowerWorkload is the Schema for the powerworkloads API
+type PowerWorkload struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   PodSpec   `json:"spec,omitempty"`
-	Status PodStatus `json:"status,omitempty"`
+	Spec   PowerWorkloadSpec   `json:"spec,omitempty"`
+	Status PowerWorkloadStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// PodList contains a list of Pod
-type PodList struct {
+// PowerWorkloadList contains a list of PowerWorkload
+type PowerWorkloadList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Pod `json:"items"`
+	Items           []PowerWorkload `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Pod{}, &PodList{})
+	SchemeBuilder.Register(&PowerWorkload{}, &PowerWorkloadList{})
 }

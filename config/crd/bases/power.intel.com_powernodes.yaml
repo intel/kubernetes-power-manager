@@ -61,8 +61,9 @@ spec:
                     type: array
                   name:
                     type: string
-                  profile:
-                    description: Profile is the Schema for the profiles API
+                  powerprofile:
+                    description: PowerProfile is the Schema for the powerprofiles
+                      API
                     properties:
                       apiVersion:
                         description: 'APIVersion defines the versioned schema of this
@@ -79,30 +80,28 @@ spec:
                       metadata:
                         type: object
                       spec:
-                        description: ProfileSpec defines the desired state of Profile
+                        description: PowerProfileSpec defines the desired state of
+                          PowerProfile
                         properties:
-                          cstate:
-                            description: 'TODO: determine exactly what cstate is for'
-                            type: boolean
                           max:
-                            description: Max is the maximum frequency that the core
-                              is allowed to go up to
+                            description: Max indicates the maximum frequency the core
+                              is allowed go
                             type: integer
                           min:
-                            description: Min is the minimum frequency that the core
-                              is allowed to drop to
+                            description: Min indicates the minimum frequency the core
+                              is allowed go
                             type: integer
                           name:
-                            description: Name is the name identifying the profile
+                            description: Name is the name identifying the PowerProfile
                             type: string
                         required:
-                        - cstate
                         - max
                         - min
                         - name
                         type: object
                       status:
-                        description: ProfileStatus defines the observed state of Profile
+                        description: PowerProfileStatus defines the observed state
+                          of PowerProfile
                         type: object
                     type: object
                   uid:
@@ -110,7 +109,9 @@ spec:
                 type: object
               type: array
             sharedPool:
-              type: string
+              items:
+                type: string
+              type: array
           type: object
       type: object
   version: v1alpha1

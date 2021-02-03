@@ -1,0 +1,20 @@
+# permissions for end users to view powerworkloads.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: powerworkload-viewer-role
+rules:
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerworkloads
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerworkloads/status
+  verbs:
+  - get

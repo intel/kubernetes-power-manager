@@ -1,0 +1,20 @@
+# permissions for end users to view powerprofiles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: powerprofile-viewer-role
+rules:
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerprofiles
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerprofiles/status
+  verbs:
+  - get

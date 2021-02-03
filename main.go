@@ -28,8 +28,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/workloadstate"
+
 	//"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/configstate"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	// +kubebuilder:scaffold:imports
 )
@@ -71,51 +72,47 @@ func main() {
 	}
 
 	//powerNodeState, err := state.NewState()
-	if err != nil {
-		setupLog.Error(err, "unable to create internal state")
-		os.Exit(1)
-	}
+	//if err != nil {
+	//	setupLog.Error(err, "unable to create internal state")
+	//	os.Exit(1)
+	//}
 
-	configState, err := configstate.NewConfigs()
+	workloadState, err := workloadstate.NewWorkloads()
 	if err != nil {
 		setupLog.Error(err, "unable to create internal cpu state")
 	}
 
-	if err = (&controllers.ProfileReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Profile"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Profile")
-		os.Exit(1)
-	}
-	if err = (&controllers.ConfigReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Config"),
-		Scheme: mgr.GetScheme(),
-		ConfigState: *configState,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Config")
-		os.Exit(1)
-	}
-	/*
-	if err = (&controllers.PodReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Pod"),
-		Scheme: mgr.GetScheme(),
-		State: *powerNodeState,
-		CPUState: *cpuState,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Pod")
-		os.Exit(1)
-	}
-	*/
 	if err = (&controllers.PowerNodeReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("PowerNode"),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerNode")
+		os.Exit(1)
+	}
+	if err = (&controllers.PowerProfileReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("PowerProfile"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
+		os.Exit(1)
+	}
+	if err = (&controllers.PowerWorkloadReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("PowerWorkload"),
+		Scheme: mgr.GetScheme(),
+		State:  workloadState,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PowerWorkload")
+		os.Exit(1)
+	}
+	if err = (&controllers.PowerPodReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("PowerPod"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PowerPod")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

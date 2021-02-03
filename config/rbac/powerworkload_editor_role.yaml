@@ -1,0 +1,24 @@
+# permissions for end users to edit powerworkloads.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: powerworkload-editor-role
+rules:
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerworkloads
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerworkloads/status
+  verbs:
+  - get

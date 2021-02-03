@@ -14,7 +14,7 @@ const (
 
 func AdjustCpuFrequency(coreList []string, freq int, freqPath string) error {
 	realFreqValue := freq * 1000
-        realFreqValueStr := strconv.Itoa(realFreqValue)
+	realFreqValueStr := strconv.Itoa(realFreqValue)
 	for _, coreID := range coreList {
 		maxFreqPath := fmt.Sprintf("%s%s%s", BASE_PATH, coreID, freqPath)
 

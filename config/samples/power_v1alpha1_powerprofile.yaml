@@ -1,7 +1,7 @@
 apiVersion: power.intel.com/v1alpha1
-kind: Config
+kind: PowerProfile
 metadata:
-  name: config-sample
+  name: powerprofile-sample
 spec:
   # Add fields here
   foo: bar

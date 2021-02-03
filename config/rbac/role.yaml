@@ -9,46 +9,6 @@ rules:
 - apiGroups:
   - power.intel.com
   resources:
-  - configs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - power.intel.com
-  resources:
-  - configs/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - power.intel.com
-  resources:
-  - pods
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - power.intel.com
-  resources:
-  - pods/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - power.intel.com
-  resources:
   - powernodes
   verbs:
   - create
@@ -69,7 +29,7 @@ rules:
 - apiGroups:
   - power.intel.com
   resources:
-  - profiles
+  - powerpods
   verbs:
   - create
   - delete
@@ -81,7 +41,47 @@ rules:
 - apiGroups:
   - power.intel.com
   resources:
-  - profiles/status
+  - powerpods/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerprofiles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerprofiles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerworkloads
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerworkloads/status
   verbs:
   - get
   - patch

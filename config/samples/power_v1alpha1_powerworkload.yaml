@@ -1,7 +1,7 @@
 apiVersion: power.intel.com/v1alpha1
-kind: Pod
+kind: PowerWorkload
 metadata:
-  name: pod-sample
+  name: powerworkload-sample
 spec:
   # Add fields here
   foo: bar
