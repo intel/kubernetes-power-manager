@@ -51,14 +51,12 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
 
-	logger.Info(fmt.Sprintf("%v", r.State))
-
 	workload := &powerv1alpha1.PowerWorkload{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, workload)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			effectedCPUs := r.State.RemoveCPUFromState(req.NamespacedName.Name)
-			logger.Info(fmt.Sprintf("CPUs tuned by deleted PowerWorkload: %v", effectedCPUs))
+			logger.Info(fmt.Sprintf("CPUs tuned by deleted PowerWorkload: %v", effectedCPUs.CPUs))
 
 			sharedWorkload := &powerv1alpha1.PowerWorkload{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
@@ -68,18 +66,31 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			if err != nil {
 				if errors.IsNotFound(err) {
 					// TODO: Make call to AppQoS for the default values for Shared CPUs
-					logger.Info(fmt.Sprintf("Shared PowerWorkload not found, cannot retune CPUs: %v", effectedCPUs))
+					logger.Info(fmt.Sprintf("Shared PowerWorkload not found, tuning CPUs to default values: %v", effectedCPUs))
+					logger.Info(fmt.Sprintf("MAKING HTTP CALL TO AppQoS INSTANCE FOR DEFAULT MAX FREQUENCY ON CPUS %v", effectedCPUs.CPUs))
+					logger.Info(fmt.Sprintf("MAKING HTTP CALL TO AppQoS INSTANCE FOR DEFAULT MIN FREQUENCY ON CPUS %v", effectedCPUs.CPUs))
 					return ctrl.Result{}, nil
 				}
 
 				return ctrl.Result{}, err
 			}
 
-			maxCPUFreq := sharedWorkload.Spec.PowerProfile.Spec.Max
-			minCPUFreq := sharedWorkload.Spec.PowerProfile.Spec.Min
+			// If the Shared PowerWorkload exists, we add the CPUs that were part of this non-shared workload back into it. The call to the
+			// client for the Update will set the frequency of the CPUs so we don't have to here
 
-			logger.Info(fmt.Sprintf("MAKING HTTP CALL TO AppQoS INSTANCE FOR MAX FREQUENCY %v ON CPUS %v", maxCPUFreq, effectedCPUs))
-			logger.Info(fmt.Sprintf("MAKING HTTP CALL TO AppQoS INSTANCE FOR MIN FREQUENCY %v ON CPUS %v", minCPUFreq, effectedCPUs))
+			//maxCPUFreq := sharedWorkload.Spec.PowerProfile.Spec.Max
+			//minCPUFreq := sharedWorkload.Spec.PowerProfile.Spec.Min
+			//logger.Info(fmt.Sprintf("MAKING HTTP CALL TO AppQoS INSTANCE FOR MAX FREQUENCY %v ON CPUS %v", maxCPUFreq, effectedCPUs.CPUs))
+			//logger.Info(fmt.Sprintf("MAKING HTTP CALL TO AppQoS INSTANCE FOR MIN FREQUENCY %v ON CPUS %v", minCPUFreq, effectedCPUs.CPUs))
+
+			sharedWorkload.Spec.CpuIds = append(sharedWorkload.Spec.CpuIds, effectedCPUs.CPUs...)
+			err = r.Client.Update(context.TODO(), sharedWorkload)
+			if err != nil {
+				logger.Error(err, "error while trying to update Shared PowerWorkload")
+				return ctrl.Result{}, err
+			}
+
+			return ctrl.Result{}, nil
 		}
 
 		logger.Error(err, "error while trying to retrieve PowerWorkload object")
@@ -87,7 +98,17 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 
 	cpusEffected := workload.Spec.CpuIds
-	logger.Info(fmt.Sprintf("CPUs to be tuned: %v", cpusEffected))
+	// If the number of CPUs is zero, the PowerWorkload needs to be delete
+	if len(cpusEffected) == 0 {
+		err = r.Client.Delete(context.TODO(), workload)
+		if err != nil {
+			logger.Error(err, "errorwhile trying to delete PowerWorkload")
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, nil
+	}
+
 	maxCPUFreq := workload.Spec.PowerProfile.Spec.Max
 	minCPUFreq := workload.Spec.PowerProfile.Spec.Min
 
@@ -109,7 +130,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				logger.Info(fmt.Sprintf("MAKING HTTP CALL TO AppQoS INSTANCE FOR MIN FREQUENCY %v ON CPUS %v", minCPUFreq, workload.Spec.CpuIds))
 				// TODO: same as above
 			}
-		} else {
+		} else if len(addedCPUs) > 0 {
 			// TODO: depending on AppQoS implementation, might need a for loop here
 			logger.Info(fmt.Sprintf("MAKING HTTP CALL TO AppQoS INSTANCE FOR MAX FREQUENCY %v ON CPUS %v", maxCPUFreq, addedCPUs))
 			logger.Info(fmt.Sprintf("MAKING HTTP CALL TO AppQoS INSTANCE FOR MIN FREQUENCY %v ON CPUS %v", minCPUFreq, addedCPUs))
@@ -117,7 +138,8 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 		r.State.UpdateWorkloadState(req.NamespacedName.Name, cpusEffected, maxCPUFreq, minCPUFreq)
 
-		if len(removedCPUs) > 0 {
+		// Only update the removed CPUs if this is a non-shared PowerWorkload
+		if len(removedCPUs) > 0 && req.NamespacedName.Name != SharedWorkloadName {
 			// Must return the removed CPUs to Shared Workload frequencies
 
 			sharedWorkload := &powerv1alpha1.PowerWorkload{}
@@ -142,6 +164,36 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			logger.Info(fmt.Sprintf("MAKING HTTP CALL TO AppQoS INSTANCE FOR MIN FREQUENCY %v ON CPUS %v", minCPUFreq, removedCPUs))
 		}
 
+		if req.NamespacedName.Name != SharedWorkloadName {
+			// Need to update the Shared PowerWorkload
+			sharedWorkload := &powerv1alpha1.PowerWorkload{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Namespace: req.NamespacedName.Namespace,
+				Name: SharedWorkloadName,
+			}, sharedWorkload)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					// No Shared PowerWorkload so no updating needed
+					return ctrl.Result{}, nil
+				}
+	
+				logger.Error(err, "error while trying to retrieve Shared PowerWorkload")
+				return ctrl.Result{}, err
+			}
+	
+			// Remove the CPUs that were added to this non-shared PowerWorkload
+			updatedCPUList := removeSubsetFromWorkload(addedCPUs, sharedWorkload.Spec.CpuIds)
+			// Add back the CPUs that were removed from this non-shared PowerWorkload
+			updatedCPUList = append(updatedCPUList, removedCPUs...)
+			sharedWorkload.Spec.CpuIds = updatedCPUList
+
+			err = r.Client.Update(context.TODO(), sharedWorkload)
+			if err != nil {
+				logger.Error(err, "error while trying to update Shared PowerWrokload")
+				return ctrl.Result{}, err
+			}
+		}
+
 		return ctrl.Result{}, nil
 	}
 
@@ -152,6 +204,31 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	r.State.UpdateWorkloadState(req.NamespacedName.Name, cpusEffected, maxCPUFreq, minCPUFreq)
 
+	if req.NamespacedName.Name != SharedWorkloadName {
+		sharedWorkload := &powerv1alpha1.PowerWorkload{}
+	        err = r.Client.Get(context.TODO(), client.ObjectKey{
+        		Namespace: req.NamespacedName.Namespace,
+        		Name:      SharedWorkloadName,
+        	}, sharedWorkload)
+        	if err != nil {
+        		if errors.IsNotFound(err) {
+        			// No Shared PowerWorkload on the node, nothing to update
+				return ctrl.Result{}, nil
+	        	}
+
+			return ctrl.Result{}, err
+        	}
+
+		updatedCPUList := removeSubsetFromWorkload(cpusEffected, sharedWorkload.Spec.CpuIds)
+		sharedWorkload.Spec.CpuIds = updatedCPUList
+
+		err = r.Client.Update(context.TODO(), sharedWorkload)
+		if err != nil {
+			logger.Error(err, "error while trying to update Shared PowerWorkload")
+			return ctrl.Result{}, err
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -160,13 +237,13 @@ func checkWorkloadCPUDifference(oldCPUList []string, updatedCPUList []string) ([
 	removedCPUs := make([]string, 0)
 
 	for _, cpuID := range updatedCPUList {
-		if IdInCPUList(cpuID, oldCPUList) {
+		if !IdInCPUList(cpuID, oldCPUList) {
 			addedCPUs = append(addedCPUs, cpuID)
 		}
 	}
 
 	for _, cpuID := range oldCPUList {
-		if IdInCPUList(cpuID, updatedCPUList) {
+		if !IdInCPUList(cpuID, updatedCPUList) {
 			removedCPUs = append(removedCPUs, cpuID)
 		}
 	}
@@ -182,6 +259,18 @@ func IdInCPUList(id string, cpuList []string) bool {
 	}
 
 	return false
+}
+
+func removeSubsetFromWorkload(toRemove []string, cpuList []string) []string {
+	updatedCPUList := make([]string, 0)
+
+	for _, cpuID := range cpuList {
+		if !IdInCPUList(cpuID, toRemove) {
+			updatedCPUList = append(updatedCPUList, cpuID)
+		}
+	}
+
+	return updatedCPUList
 }
 
 func (r *PowerWorkloadReconciler) SetupWithManager(mgr ctrl.Manager) error {

@@ -172,14 +172,8 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	guaranteedPod.Containers = make([]powerv1alpha1.Container, 0)
 	guaranteedPod.Containers = powerContainers
-
-	logger.Info("*********************************")
-	logger.Info(fmt.Sprintf("%v", *profile))
-	logger.Info("=================================")
 	guaranteedPod.PowerProfile = *profile
-	logger.Info("*********************************")
-	logger.Info(fmt.Sprintf("%v", guaranteedPod))
-	logger.Info("*********************************")
+
 	err = r.State.UpdateStateGuaranteedPods(guaranteedPod)
 	if err != nil {
 		logger.Error(err, "error updating internal state")
@@ -188,7 +182,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	workloadName := fmt.Sprintf("%s%s", profileName, WorkloadNameSuffix)
 	workload := &powerv1alpha1.PowerWorkload{}
-	r.Client.Get(context.TODO(), client.ObjectKey{
+	err = r.Client.Get(context.TODO(), client.ObjectKey{
 		Namespace: req.NamespacedName.Namespace,
 		Name: workloadName,
 	}, workload)
@@ -238,8 +232,8 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func getNewWorkloadCPUList(powerPodCPUs []string, workloadCPUs []string) []string {
 	updatedWorkloadCPUList := make([]string, 0)
 
-	for _, cpu := range powerPodCPUs {
-		if !IdInCPUList(cpu, workloadCPUs) {
+	for _, cpu := range workloadCPUs {
+		if !IdInCPUList(cpu, powerPodCPUs) {
 			updatedWorkloadCPUList = append(updatedWorkloadCPUList, cpu)
 		}
 	}

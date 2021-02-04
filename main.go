@@ -30,7 +30,7 @@ import (
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/workloadstate"
 
-	//"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	// +kubebuilder:scaffold:imports
 )
@@ -71,11 +71,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	//powerNodeState, err := state.NewState()
-	//if err != nil {
-	//	setupLog.Error(err, "unable to create internal state")
-	//	os.Exit(1)
-	//}
+	powerNodeState, err := state.NewState()
+	if err != nil {
+		setupLog.Error(err, "unable to create internal state")
+		os.Exit(1)
+	}
 
 	workloadState, err := workloadstate.NewWorkloads()
 	if err != nil {
@@ -111,6 +111,7 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("PowerPod"),
 		Scheme: mgr.GetScheme(),
+		State: *powerNodeState,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerPod")
 		os.Exit(1)
