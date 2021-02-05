@@ -19,8 +19,8 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"strings"
 	"strconv"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -45,7 +45,7 @@ type PowerPodReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
-	State state.State
+	State  state.State
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerpods,verbs=get;list;watch;create;update;patch;delete
@@ -78,7 +78,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		workload := &powerv1alpha1.PowerWorkload{}
 		err = r.Get(context.TODO(), client.ObjectKey{
 			Namespace: req.NamespacedName.Namespace,
-			Name: workloadName,
+			Name:      workloadName,
 		}, workload)
 		if err != nil {
 			if errors.IsNotFound(err) {
@@ -122,7 +122,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	profile := &powerv1alpha1.PowerProfile{}
 	err = r.Client.Get(context.TODO(), client.ObjectKey{
 		Namespace: req.NamespacedName.Namespace,
-		Name: profileName,
+		Name:      profileName,
 	}, profile)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -184,7 +184,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	workload := &powerv1alpha1.PowerWorkload{}
 	err = r.Client.Get(context.TODO(), client.ObjectKey{
 		Namespace: req.NamespacedName.Namespace,
-		Name: workloadName,
+		Name:      workloadName,
 	}, workload)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -194,14 +194,14 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			// TODO: Replace this
 			placeholderName := []string{"placeholders"}
 			workloadSpec := &powerv1alpha1.PowerWorkloadSpec{
-				Nodes: placeholderName,
-				CpuIds: allCores,
+				Nodes:        placeholderName,
+				CpuIds:       allCores,
 				PowerProfile: guaranteedPod.PowerProfile,
 			}
 			workload = &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: req.NamespacedName.Namespace,
-					Name: workloadName,
+					Name:      workloadName,
 				},
 			}
 			workload.Spec = *workloadSpec
@@ -274,7 +274,7 @@ func exclusiveCPUs(pod *corev1.Pod, container *corev1.Container) bool {
 
 func getContainerID(pod *corev1.Pod, containerName string) string {
 	for _, containerStatus := range append(pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...) {
-		if containerStatus.Name == containerName {	
+		if containerStatus.Name == containerName {
 			return containerStatus.ContainerID
 		}
 	}

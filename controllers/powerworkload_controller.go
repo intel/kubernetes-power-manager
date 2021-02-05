@@ -169,18 +169,18 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			sharedWorkload := &powerv1alpha1.PowerWorkload{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
 				Namespace: req.NamespacedName.Namespace,
-				Name: SharedWorkloadName,
+				Name:      SharedWorkloadName,
 			}, sharedWorkload)
 			if err != nil {
 				if errors.IsNotFound(err) {
 					// No Shared PowerWorkload so no updating needed
 					return ctrl.Result{}, nil
 				}
-	
+
 				logger.Error(err, "error while trying to retrieve Shared PowerWorkload")
 				return ctrl.Result{}, err
 			}
-	
+
 			// Remove the CPUs that were added to this non-shared PowerWorkload
 			updatedCPUList := removeSubsetFromWorkload(addedCPUs, sharedWorkload.Spec.CpuIds)
 			// Add back the CPUs that were removed from this non-shared PowerWorkload
@@ -206,18 +206,18 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	if req.NamespacedName.Name != SharedWorkloadName {
 		sharedWorkload := &powerv1alpha1.PowerWorkload{}
-	        err = r.Client.Get(context.TODO(), client.ObjectKey{
-        		Namespace: req.NamespacedName.Namespace,
-        		Name:      SharedWorkloadName,
-        	}, sharedWorkload)
-        	if err != nil {
-        		if errors.IsNotFound(err) {
-        			// No Shared PowerWorkload on the node, nothing to update
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Namespace: req.NamespacedName.Namespace,
+			Name:      SharedWorkloadName,
+		}, sharedWorkload)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				// No Shared PowerWorkload on the node, nothing to update
 				return ctrl.Result{}, nil
-	        	}
+			}
 
 			return ctrl.Result{}, err
-        	}
+		}
 
 		updatedCPUList := removeSubsetFromWorkload(cpusEffected, sharedWorkload.Spec.CpuIds)
 		sharedWorkload.Spec.CpuIds = updatedCPUList

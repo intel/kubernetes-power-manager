@@ -109,10 +109,10 @@ func ReadCgroupCpuset(podUID, containerID string) (string, error) {
 	podUIDUnderscores := strings.ReplaceAll(podUID, "-", "_")
 	podCgroupPath := fmt.Sprintf("/sys/fs/cgroup/cpuset/kubepods.slice/kubepods-pod%s.slice/", podUIDUnderscores)
 	/*
-	podCgroupPath, err := findPodCgroup(kubepodsCgroupPath, podUID)
-	if err != nil {
-		return "", err
-	}
+		podCgroupPath, err := findPodCgroup(kubepodsCgroupPath, podUID)
+		if err != nil {
+			return "", err
+		}
 	*/
 	if podCgroupPath == "" {
 		return "", errors.NewServiceUnavailable(fmt.Sprintf("podUID %s not found in kubepods cgroup %s", podUID, kubepodsCgroupPath))
