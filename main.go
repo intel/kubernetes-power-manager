@@ -29,6 +29,7 @@ import (
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/workloadstate"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podresourcesclient"
 
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
@@ -94,6 +95,12 @@ func main() {
 	newstate := newstate.NewPowerNodeData()
 	newstate.UpdatePowerNodeData("worker")
 
+	podResourcesClient, err := podresourcesclient.NewPodResourcesClient()
+	if err != nil {
+		setupLog.Error(err, "unable to create internal client")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.PowerNodeReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("PowerNode"),
@@ -126,6 +133,7 @@ func main() {
 		Log:    ctrl.Log.WithName("controllers").WithName("PowerPod"),
 		Scheme: mgr.GetScheme(),
 		State:  *powerNodeState,
+		PodResourcesClient: *podResourcesClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerPod")
 		os.Exit(1)
