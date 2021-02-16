@@ -32,6 +32,7 @@ import (
 
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -80,7 +81,15 @@ func main() {
 	workloadState, err := workloadstate.NewWorkloads()
 	if err != nil {
 		setupLog.Error(err, "unable to create internal cpu state")
+		os.Exit(1)
 	}
+
+	appQoSClient := appqos.NewDefaultAppQoSClient()
+	//if err != nil {
+	//	setupLog.Error(err, "unable to create internal AppQoS client")
+	//	os.Exit(1)
+	//}
+
 
 	if err = (&controllers.PowerNodeReconciler{
 		Client: mgr.GetClient(),
@@ -94,6 +103,7 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("PowerProfile"),
 		Scheme: mgr.GetScheme(),
+		AppQoSClient: appQoSClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
 		os.Exit(1)

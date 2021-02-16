@@ -27,15 +27,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	cgp "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	//cgp "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
+	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // PowerProfileReconciler reconciles a PowerProfile object
 type PowerProfileReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log    		logr.Logger
+	Scheme 		*runtime.Scheme
+	AppQoSClient 	*appqos.AppQoSClient
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerprofiles,verbs=get;list;watch;create;update;patch;delete
@@ -47,6 +49,35 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 	logger.Info("Reconciling PowerProfile")
 
+
+	/*app, e := r.AppQoSClient.GetApps("https://localhoste:5000")
+	if e != nil {
+		logger.Error(e, "Error retrieving App")
+		return ctrl.Result{}, nil
+	}
+	logger.Info(fmt.Sprintf("Apps: %v", app))
+	if 1 == 1 {
+		return ctrl.Result{}, nil
+	}*/
+	/*
+	pools, er := r.AppQoSClient.GetPools("https://localhost:5000")
+	if er != nil {
+		logger.Error(er, "Error retreiving pools")
+		return ctrl.Result{}, nil
+	}
+
+	for _, pool := range pools {
+		if *pool.Name == "Default" {
+			logger.Info(fmt.Sprintf("Cores: %v", *pool.Cores))
+		}
+	}
+	//logger.Info(fmt.Sprintf("POOLS: %v", pools))
+
+	if 1 == 1 {
+		return ctrl.Result{}, nil
+	}
+	*/
+
 	profile := &powerv1alpha1.PowerProfile{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, profile)
 	if err != nil {
@@ -55,6 +86,22 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			// corresponding PowerWorkload and, if there is, delete that too. We leave the cleanup of requesting the
 			// frequency resets of the effected CPUs to the PowerWorkload controller.
 
+			powerProfileFromAppqos, err := GetPowerProfileByName(profile.Spec.Name, "https://localhost:5000", r.AppQoSClient)
+			fmt.Printf("Profile: %s--%v\n", profile.Spec.Name, powerProfileFromAppqos)
+			if err != nil {
+				logger.Error(err, "Error retreiving PowerProfile")
+				return ctrl.Result{}, nil
+			}
+
+			if powerProfileFromAppqos != nil {
+				err = r.AppQoSClient.DeleteApp("https://localhost:5000", *powerProfileFromAppqos.ID)
+				if err != nil {
+					logger.Error(err, "Error deleting PowerProfile")
+					return ctrl.Result{}, nil
+				}
+			}
+
+			/*
 			logger.Info(fmt.Sprintf("PowerProfile %v has been deleted, cleaning up...", req.NamespacedName))
 			workload := &powerv1alpha1.PowerWorkload{}
 			workloadName := fmt.Sprintf("%s%s", req.NamespacedName.Name, WorkloadNameSuffix)
@@ -78,6 +125,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 				logger.Error(err, "error while trying to delete PowerWorkload")
 				return ctrl.Result{}, err
 			}
+			*/
 
 			return ctrl.Result{}, nil
 		}
@@ -86,6 +134,42 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
+	// Check if the PowerProfile exists in the AppQoS instance
+	profileFromAppQoS, err := GetPowerProfileByName(profile.Spec.Name, "https://localhost:5000", r.AppQoSClient)
+	if err != nil {
+		logger.Error(err, "Error retreiving PowerProfile")
+		return ctrl.Result{}, nil
+	}
+
+	if profileFromAppQoS != nil {
+		// Updating PowerProfile
+		logger.Info("Updating")
+		updatedProfile := &appqos.App{}
+		updatedProfile.Name = profileFromAppQoS.Name
+		updatedProfile.Cores = &[]int{3,4,5}
+		updatedProfile.Pids = profileFromAppQoS.Pids
+		updatedProfile.PoolID = profileFromAppQoS.PoolID
+		appqosPutString, err := r.AppQoSClient.PutApp(updatedProfile, "https://localhost:5000", *profileFromAppQoS.ID)
+		if err != nil {
+			logger.Error(err, appqosPutString)
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, nil
+	}
+
+	logger.Info("Creating")
+	// CHANGE TO POWER PROFILE STUFF
+	app := &appqos.App{}
+	app.Name = &profile.Spec.Name
+	app.Cores = &[]int{1,2,3}
+	app.Pids = &[]int{64855}
+	appqosPostString, err := r.AppQoSClient.PostApp(app, "https://localhost:5000")
+	if err != nil {
+		logger.Error(err, appqosPostString)
+		return ctrl.Result{}, nil
+	}
+
+	/*
 	// Check if a PowerWorkload already exists for this PowerProfile, meaning we just need to update it
 	workload := &powerv1alpha1.PowerWorkload{}
 	workloadName := fmt.Sprintf("%s%s", req.NamespacedName.Name, WorkloadNameSuffix)
@@ -95,12 +179,24 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}, workload)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			// TODO: change this comment
 			// This is a new PowerProfile, so we may need to create the corresponding PowerWorkload.
 			// If the PowerProfile is the designated Shared configuration for all of the shared-pool cores,
 			// this controller is responsible for creating the associated PowerWorkload. If it's an
 			// Exclusive PowerProfile, PowerWorkload creation is left to the PowerPod controller when the PowerProfile is requested.
 			// The Shared configuration is recognised by having the name "Shared".
+	
+			app := &appqos.App{}
+			app.Name = &profile.Spec.Name
+			app.Cores = &[]int{1,2,3,4}
+			app.Pids = &[]int{38893}
+			postStr, err := r.AppQoSClient.PostApp(app, "https://localhost:5000")
+			if err != nil {
+				logger.Error(err, postStr)
+				return ctrl.Result{}, nil
+			}
 
+			/*
 			if profile.Spec.Name == "Shared" {
 				logger.Info("Shared PowerProfile detected, creating corresponding PowerWorkload")
 				// TODO: Update with correct value when pakcage has been developed
@@ -124,6 +220,9 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 					return ctrl.Result{}, err
 				}
 			}
+			/
+
+			
 
 			return ctrl.Result{}, nil
 		}
@@ -131,15 +230,33 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		logger.Error(err, "error while trying to retrieve PowerWorkload")
 		return ctrl.Result{}, err
 	}
+	*/
 
+	/*
 	workload.Spec.PowerProfile = *profile
 	err = r.Client.Update(context.TODO(), workload)
 	if err != nil {
 		logger.Error(err, "error while trying to update PowerWorkload")
 		return ctrl.Result{}, err
 	}
+	*/
 
 	return ctrl.Result{}, nil
+}
+
+func GetPowerProfileByName(name string, address string, ac *appqos.AppQoSClient) (*appqos.App, error) {
+	apps, err := ac.GetApps(address)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, app := range apps {
+		if *app.Name == name {
+			return &app, nil
+		}
+	}
+
+	return nil, nil
 }
 
 // SetupWithManager specifies how the controller is built and watch a CR and other resources that are owned and managed by the controller
