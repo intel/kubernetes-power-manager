@@ -1,0 +1,7 @@
+apiVersion: power.intel.com/v1alpha1
+kind: PowerConfig
+metadata:
+  name: powerconfig-sample
+spec:
+  # Add fields here
+  foo: bar

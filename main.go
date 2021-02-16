@@ -31,8 +31,9 @@ import (
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/workloadstate"
 
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/newstate"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -90,6 +91,8 @@ func main() {
 	//	os.Exit(1)
 	//}
 
+	newstate := newstate.NewPowerNodeData()
+	newstate.UpdatePowerNodeData("worker")
 
 	if err = (&controllers.PowerNodeReconciler{
 		Client: mgr.GetClient(),
@@ -100,10 +103,11 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.PowerProfileReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("PowerProfile"),
-		Scheme: mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName("controllers").WithName("PowerProfile"),
+		Scheme:       mgr.GetScheme(),
 		AppQoSClient: appQoSClient,
+		State: newstate,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
 		os.Exit(1)
@@ -124,6 +128,14 @@ func main() {
 		State:  *powerNodeState,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerPod")
+		os.Exit(1)
+	}
+	if err = (&controllers.PowerConfigReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("PowerConfig"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PowerConfig")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

@@ -13,11 +13,11 @@ import (
 )
 
 const (
-	PoolsEndpoint =		"/pools"
-	AppsEndpoint =		"/apps"
+	PoolsEndpoint         = "/pools"
+	AppsEndpoint          = "/apps"
 	PowerProfilesEndpoint = "/power_profiles"
-	Username =		"admin"
-	Passwd =		"password"
+	Username              = "admin"
+	Passwd                = "password"
 )
 
 // GetPools /pools
@@ -100,7 +100,7 @@ func (ac *AppQoSClient) PostPool(pool *Pool, address string) (string, error) {
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return "Failed to set header for  HTTP POST request", err
-	}	
+	}
 
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(resp.Body)
@@ -118,7 +118,7 @@ func (ac *AppQoSClient) PostPool(pool *Pool, address string) (string, error) {
 }
 
 // PutPool /pools/{id}
-func(ac *AppQoSClient) PutPool(pool *Pool, address string, id int) (string, error) {
+func (ac *AppQoSClient) PutPool(pool *Pool, address string, id int) (string, error) {
 	patchFailedErr := errors.NewServiceUnavailable("Response status code error")
 
 	payloadBytes, err := json.Marshal(pool)
@@ -137,7 +137,7 @@ func(ac *AppQoSClient) PutPool(pool *Pool, address string, id int) (string, erro
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return "Failed to set header for  HTTP PATCH request", err
-	}	
+	}
 
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(resp.Body)
@@ -167,7 +167,7 @@ func (ac *AppQoSClient) DeletePool(address string, id int) error {
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return err
-	}	
+	}
 
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(resp.Body)
@@ -245,7 +245,7 @@ func (ac *AppQoSClient) GetPowerProfile(address string, id int) (*PowerProfile, 
 // PutPowerProfile /power_profiles/{id}
 func (ac *AppQoSClient) PutPowerProfile(powerProfile *PowerProfile, address string, id int) (string, error) {
 	patchFailedErr := errors.NewServiceUnavailable("Response status code error")
-	
+
 	payloadBytes, err := json.Marshal(powerProfile)
 	if err != nil {
 		return "Failed to marshal payload data", err
@@ -262,7 +262,7 @@ func (ac *AppQoSClient) PutPowerProfile(powerProfile *PowerProfile, address stri
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return "Failed to set header for  HTTP PATCH request", err
-	}	
+	}
 
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(resp.Body)
@@ -292,7 +292,7 @@ func (ac *AppQoSClient) DeletePowerProfile(address string, id int) error {
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return err
-	}	
+	}
 
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(resp.Body)
@@ -385,66 +385,76 @@ func (ac *AppQoSClient) GetApps(address string) ([]App, error) {
 }
 
 // This will be deleted after we get the hardware working with sst
-func(ac *AppQoSClient) PutApp(app *App, address string, id int) (string, error) {
-        patchFailedErr := errors.NewServiceUnavailable("Response status code error")
+func (ac *AppQoSClient) PutApp(app *App, address string, id int) (string, error) {
+	patchFailedErr := errors.NewServiceUnavailable("Response status code error")
 
-        payloadBytes, err := json.Marshal(app)
-        if err != nil {
-                return "Failed to marshal payload data", err
-        }
-        body := bytes.NewReader(payloadBytes)
+	payloadBytes, err := json.Marshal(app)
+	if err != nil {
+		return "Failed to marshal payload data", err
+	}
+	body := bytes.NewReader(payloadBytes)
 
-        httpString := fmt.Sprintf("%s%s%s%s", address, AppsEndpoint, "/", strconv.Itoa(id))
-        req, err := http.NewRequest("PUT", httpString, body)
-        if err != nil {
-                return "Failed to create new HTTP PATCH request", err
-        }
-        req.Header.Set("Content-Type", "application/json")
-        req.SetBasicAuth(Username, Passwd)
-        resp, err := ac.client.Do(req)
-        if err != nil {
-                return "Failed to set header for  HTTP PATCH request", err
-        }
+	httpString := fmt.Sprintf("%s%s%s%s", address, AppsEndpoint, "/", strconv.Itoa(id))
+	req, err := http.NewRequest("PUT", httpString, body)
+	if err != nil {
+		return "Failed to create new HTTP PATCH request", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(Username, Passwd)
+	resp, err := ac.client.Do(req)
+	if err != nil {
+		return "Failed to set header for  HTTP PATCH request", err
+	}
 
-        buf := new(bytes.Buffer)
-        buf.ReadFrom(resp.Body)
-        respStr := buf.String()
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(resp.Body)
+	respStr := buf.String()
 
-        if resp.StatusCode != 200 {
-                errStr := fmt.Sprintf("%s%v", "Fail: ", respStr)
-                return errStr, patchFailedErr
-        }
+	if resp.StatusCode != 200 {
+		errStr := fmt.Sprintf("%s%v", "Fail: ", respStr)
+		return errStr, patchFailedErr
+	}
 
-        defer resp.Body.Close()
-        successStr := fmt.Sprintf("%s%v", "Success: ", resp.StatusCode)
+	defer resp.Body.Close()
+	successStr := fmt.Sprintf("%s%v", "Success: ", resp.StatusCode)
 
-        return successStr, nil
+	return successStr, nil
 }
 
 // This will be deleted after we get the hardware working with sst
 func (ac *AppQoSClient) DeleteApp(address string, id int) error {
-        httpString := fmt.Sprintf("%s%s%s%s", address, AppsEndpoint, "/", strconv.Itoa(id))
+	httpString := fmt.Sprintf("%s%s%s%s", address, AppsEndpoint, "/", strconv.Itoa(id))
 
-        req, err := http.NewRequest("DELETE", httpString, nil)
-        if err != nil {
-                return err
-        }
-        req.Header.Set("Content-Type", "application/json")
-        req.SetBasicAuth(Username, Passwd)
-        resp, err := ac.client.Do(req)
-        if err != nil {
-                return err
-        }
+	req, err := http.NewRequest("DELETE", httpString, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(Username, Passwd)
+	resp, err := ac.client.Do(req)
+	if err != nil {
+		return err
+	}
 
-        buf := new(bytes.Buffer)
-        buf.ReadFrom(resp.Body)
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(resp.Body)
 
-        if resp.StatusCode != 200 {
-                deleteFailedErr := errors.NewServiceUnavailable(buf.String())
-                return deleteFailedErr
-        }
+	if resp.StatusCode != 200 {
+		deleteFailedErr := errors.NewServiceUnavailable(buf.String())
+		return deleteFailedErr
+	}
 
-        defer resp.Body.Close()
+	defer resp.Body.Close()
 
-        return nil
+	return nil
+}
+
+func FindProfileByName(profiles []*PowerProfile, profileName string) *PowerProfile {
+	for _, profile := range profiles {
+		if profile.Name == profileName) {
+			return profile
+		}
+	}
+
+	return &PowerProfile{}
 }
