@@ -32,8 +32,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	cgp "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podresourcesclient"
 )
 
 const (
@@ -46,6 +46,7 @@ type PowerPodReconciler struct {
 	Log    logr.Logger
 	Scheme *runtime.Scheme
 	State  state.State
+	PodResourcesClient podresourcesclient.PodResourcesClient
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerpods,verbs=get;list;watch;create;update;patch;delete
@@ -155,7 +156,18 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	for _, container := range containersRequestingExclusiveCPUs {
 		containerID := getContainerID(pod, container)
-		coreIDs, err := cgp.ReadCgroupCpuset(string(podUID), containerID)
+		coreIDs, err := r.PodResourcesClient.GetContainerCPUs(guaranteedPod.Name, container)
+		/*
+		if err != nil {
+			logger.Error(err, "error call to PodResourcesClient")
+			return ctrl.Result{}, nil
+		}
+		logger.Info("********************************")
+		logger.Info(fmt.Sprintf("CoreIDs: %v", coreIDs))
+		if 1 == 1 {
+			return ctrl.Result{}, nil
+		}
+		*/
 		if err != nil {
 			logger.Error(err, "failed to retrieve cpuset from groups")
 			return ctrl.Result{}, err
