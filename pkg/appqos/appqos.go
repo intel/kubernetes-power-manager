@@ -10,14 +10,18 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
 	"strconv"
+	"reflect"
 )
 
 const (
-	PoolsEndpoint         = "/pools"
-	AppsEndpoint          = "/apps"
-	PowerProfilesEndpoint = "/power_profiles"
-	Username              = "admin"
-	Passwd                = "password"
+	PoolsEndpoint         	= "/pools"
+	AppsEndpoint          	= "/apps"
+	PowerProfilesEndpoint 	= "/power_profiles"
+	Username              	= "admin"
+	Passwd                	= "password"
+
+	HttpPrefix		= "http://"
+	HttpsPrefix		= "https://"
 )
 
 // GetPools /pools
@@ -449,12 +453,30 @@ func (ac *AppQoSClient) DeleteApp(address string, id int) error {
 	return nil
 }
 
+func (ac *AppQoSClient) GetAddressPrefix() string {
+	if reflect.DeepEqual(ac.client, http.DefaultClient) {
+		return HttpPrefix
+	}
+
+	return HttpsPrefix
+}
+
 func FindProfileByName(profiles []*PowerProfile, profileName string) *PowerProfile {
 	for _, profile := range profiles {
-		if profile.Name == profileName) {
+		if *profile.Name == profileName {
 			return profile
 		}
 	}
 
 	return &PowerProfile{}
+}
+
+func FindAppByName(apps []App, appName string) *App {
+	for _, app := range apps {
+		if *app.Name == appName {
+			return &app
+		}
+	}
+
+	return &App{}
 }

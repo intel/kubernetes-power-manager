@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -27,10 +28,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	//cgp "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/newstate"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
+)
+
+const (
+	PowerPodNameConst = "PowerPod"
 )
 
 // PowerProfileReconciler reconciles a PowerProfile object
@@ -51,10 +58,10 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 	logger.Info("Reconciling PowerProfile")
 
-	logger.Info(fmt.Sprintf("State: %v", r.State.PowerNodeList))
-	if 1 == 1 {
-		return ctrl.Result{}, nil
-	}
+	//logger.Info(fmt.Sprintf("State: %v", r.State.PowerNodeList))
+	//if 1 == 1 {
+	//	return ctrl.Result{}, nil
+	//}
 
 	/*app, e := r.AppQoSClient.GetApps("https://localhoste:5000")
 	if e != nil {
@@ -92,7 +99,24 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			// corresponding PowerWorkload and, if there is, delete that too. We leave the cleanup of requesting the
 			// frequency resets of the effected CPUs to the PowerWorkload controller.
 
-			powerProfileFromAppqos, err := GetPowerProfileByName(profile.Spec.Name, "https://localhost:5000", r.AppQoSClient)
+			obseleteProfiles, err := r.findObseleteProfiles(req)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+
+			for address, profileName := range obseleteProfiles {
+				// TODO: CHANGE TO POWERPROFILES
+				err = r.AppQoSClient.DeleteApp(address, profileName)
+				if err != nil {
+					logger.Error(err, "Failed to delete profile from AppQoS")
+					return ctrl.Result{}, err
+				}
+			}
+
+			/*
+			//powerProfileFromAppqos, err := GetPowerProfileByName(profile.Spec.Name, "https://localhost:5000", r.AppQoSClient)
+			profiles, err := r.AppQoSClient.GetApps(address)
+			powerProfileFromAppqos := appqos.FindProfileByName(activeProfiles, req.NamespacedName.Name)
 			fmt.Printf("Profile: %s--%v\n", profile.Spec.Name, powerProfileFromAppqos)
 			if err != nil {
 				logger.Error(err, "Error retreiving PowerProfile")
@@ -106,6 +130,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 					return ctrl.Result{}, nil
 				}
 			}
+			*/
 
 			/*
 				logger.Info(fmt.Sprintf("PowerProfile %v has been deleted, cleaning up...", req.NamespacedName))
@@ -141,21 +166,24 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	// Check if the PowerProfile exists in the AppQoS instance
-	profileFromAppQoS, err := GetPowerProfileByName(profile.Spec.Name, "https://localhost:5000", r.AppQoSClient)
+	allApps, err := r.AppQoSClient.GetApps("https://localhost:5000")
 	if err != nil {
-		logger.Error(err, "Error retreiving PowerProfile")
+		logger.Error(err, "Error retreiving PowerProfiles from AppQoS")
 		return ctrl.Result{}, nil
 	}
+	//powerProfileFromAppqos := appqos.FindProfileByName(allApps, req.NamespacedName.Name)
+	powerProfileFromAppQos := appqos.FindAppByName(allApps, req.NamespacedName.Name)
+	//profileFromAppQoS, err := GetPowerProfileByName(profile.Spec.Name, "https://localhost:5000", r.AppQoSClient)
 
-	if profileFromAppQoS != nil {
+	if !reflect.DeepEqual(powerProfileFromAppQos, &appqos.App{}) {
 		// Updating PowerProfile
 		logger.Info("Updating")
 		updatedProfile := &appqos.App{}
-		updatedProfile.Name = profileFromAppQoS.Name
+		updatedProfile.Name = powerProfileFromAppQos.Name
 		updatedProfile.Cores = &[]int{3, 4, 5}
-		updatedProfile.Pids = profileFromAppQoS.Pids
-		updatedProfile.PoolID = profileFromAppQoS.PoolID
-		appqosPutString, err := r.AppQoSClient.PutApp(updatedProfile, "https://localhost:5000", *profileFromAppQoS.ID)
+		updatedProfile.Pids = powerProfileFromAppQos.Pids
+		updatedProfile.PoolID = powerProfileFromAppQos.PoolID
+		appqosPutString, err := r.AppQoSClient.PutApp(updatedProfile, "https://localhost:5000", *powerProfileFromAppQos.ID)
 		if err != nil {
 			logger.Error(err, appqosPutString)
 			return ctrl.Result{}, nil
@@ -166,9 +194,9 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	logger.Info("Creating")
 	// CHANGE TO POWER PROFILE STUFF
 	app := &appqos.App{}
-	app.Name = &profile.Spec.Name
+	app.Name = &req.NamespacedName.Name
 	app.Cores = &[]int{1, 2, 3}
-	app.Pids = &[]int{64855}
+	app.Pids = &[]int{7030}
 	appqosPostString, err := r.AppQoSClient.PostApp(app, "https://localhost:5000")
 	if err != nil {
 		logger.Error(err, appqosPostString)
@@ -281,14 +309,15 @@ func (r *PowerProfileReconciler) findObceleteProfiles(req ctrl.Request) (map[str
 */
 
 // TODO: DELETE WHEN HARDWARE COMES THROUGH
-func (r *PowerProfileReconciler) findObceleteProfiles(req ctrl.Request) (map[string]string, error) {
+func (r *PowerProfileReconciler) findObseleteProfiles(req ctrl.Request) (map[string]int, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 
-	obsleteProfiles := make(map[string]string, 0)
+	//obseleteProfiles := make(map[string]string, 0)
+	obseleteProfiles := make(map[string]int, 0)
 
-	for _, name := range r.PowerNodeData.PowerNodeList {
-		address, err := r.getPodAddress(nodeName)
+	for _, nodeName := range r.State.PowerNodeList {
+		address, err := r.getPodAddress(nodeName, req)
 		if err != nil {
 			return nil, err
 		}
@@ -299,17 +328,20 @@ func (r *PowerProfileReconciler) findObceleteProfiles(req ctrl.Request) (map[str
 			return nil, err
 		}
 
-		profile := appqos.FindProfileByName(activeProfiles, req.NamespacedName.Name)
-		if profile.Name == "" {
+		//profile := appqos.FindProfileByName(activeProfiles, req.NamespacedName.Name)
+		profile := appqos.FindAppByName(activeProfiles, req.NamespacedName.Name)
+		if *profile.Name == "" {
 			logger.Info("PowerProfile not found on AppQoS instance")
 			continue
 		}
 
-		obseleteProfiles[address] = profile.ID
+		obseleteProfiles[address] = *profile.ID
 	}
+
+	return obseleteProfiles, nil
 }
 
-func (r *PowerProfileReconciler) getPodAddress(nodeName string) (string, error) {
+func (r *PowerProfileReconciler) getPodAddress(nodeName string, req ctrl.Request) (string, error) {
 	_ = context.Background()
         logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 
@@ -318,13 +350,50 @@ func (r *PowerProfileReconciler) getPodAddress(nodeName string) (string, error) 
 	}
 
 	pods := &corev1.PodList{}
-	err := r.Client.List(context.TODO(), pods, client.MatchingLabels(client.MatchLabels{"name": PowerPodNameConst}))
+	err := r.Client.List(context.TODO(), pods, client.MatchingLabels(client.MatchingLabels{"name": PowerPodNameConst}))
 	if err != nil {
 		logger.Error(err, "Failed to list AppQoS pods")
 		return "", nil
 	}
 
-	//appqosPod, err := 
+	appqosPod, err := util.GetPodFromNodeName(pods, nodeName)
+	if err != nil {
+		appqosNode := &corev1.Node{}
+		err := r.Client.Get(context.TODO(), client.ObjectKey{
+			Name: nodeName,
+		}, appqosNode)
+		if err != nil {
+			logger.Error(err, "Error getting AppQoS node")
+			return "", err
+		}
+
+		appqosPod, err = util.GetPodFromNodeAddresses(pods, appqosNode)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	var podIP string
+	notFoundError := errors.NewServiceUnavailable("pod address not available")
+	if appqosPod.Status.PodIP != "" {
+		podIP = appqosPod.Status.PodIP
+	} else if len(appqosPod.Status.PodIPs) != 0 {
+		podIP = appqosPod.Status.PodIPs[0].IP
+	} else {
+		return "", notFoundError
+	}
+
+	if len(appqosPod.Spec.Containers) == 0 {
+		return "", notFoundError
+	}
+
+	if len(appqosPod.Spec.Containers[0].Ports) == 0 {
+		return "", notFoundError
+	}
+
+	addressPrefix := r.AppQoSClient.GetAddressPrefix()
+	address := fmt.Sprintf("%s%s%s%d", addressPrefix, podIP, ":", appqosPod.Spec.Containers[0].Ports[0].ContainerPort)
+	return address, nil
 }
 
 // SetupWithManager specifies how the controller is built and watch a CR and other resources that are owned and managed by the controller
