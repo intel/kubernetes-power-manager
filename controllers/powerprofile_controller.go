@@ -58,10 +58,10 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 	logger.Info("Reconciling PowerProfile")
 
-	//logger.Info(fmt.Sprintf("State: %v", r.State.PowerNodeList))
-	//if 1 == 1 {
-	//	return ctrl.Result{}, nil
-	//}
+	logger.Info(fmt.Sprintf("State: %v", r.State.PowerNodeList))
+	if 1 == 1 {
+		return ctrl.Result{}, nil
+	}
 
 	/*app, e := r.AppQoSClient.GetApps("https://localhoste:5000")
 	if e != nil {

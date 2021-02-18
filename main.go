@@ -93,7 +93,7 @@ func main() {
 	//}
 
 	newstate := newstate.NewPowerNodeData()
-	newstate.UpdatePowerNodeData("worker")
+	//newstate.UpdatePowerNodeData("worker")
 
 	podResourcesClient, err := podresourcesclient.NewPodResourcesClient()
 	if err != nil {
@@ -142,6 +142,7 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("PowerConfig"),
 		Scheme: mgr.GetScheme(),
+		State: newstate,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerConfig")
 		os.Exit(1)
