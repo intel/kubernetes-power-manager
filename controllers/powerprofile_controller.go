@@ -165,119 +165,95 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
-	// Check if the PowerProfile exists in the AppQoS instance
-	allApps, err := r.AppQoSClient.GetApps("https://localhost:5000")
-	if err != nil {
-		logger.Error(err, "Error retreiving PowerProfiles from AppQoS")
-		return ctrl.Result{}, nil
-	}
-	//powerProfileFromAppqos := appqos.FindProfileByName(allApps, req.NamespacedName.Name)
-	powerProfileFromAppQos := appqos.FindAppByName(allApps, req.NamespacedName.Name)
-	//profileFromAppQoS, err := GetPowerProfileByName(profile.Spec.Name, "https://localhost:5000", r.AppQoSClient)
+	// Loop through Power Nodes to check which AppQos instances have this PowerProfile already
+	// If an instance has it, update it, otherwise create it
 
-	if !reflect.DeepEqual(powerProfileFromAppQos, &appqos.App{}) {
-		// Updating PowerProfile
-		logger.Info("Updating")
-		updatedProfile := &appqos.App{}
-		updatedProfile.Name = powerProfileFromAppQos.Name
-		updatedProfile.Cores = &[]int{3, 4, 5}
-		updatedProfile.Pids = powerProfileFromAppQos.Pids
-		updatedProfile.PoolID = powerProfileFromAppQos.PoolID
-		appqosPutString, err := r.AppQoSClient.PutApp(updatedProfile, "https://localhost:5000", *powerProfileFromAppQos.ID)
+	for _, targetNode := range r.State.PowerNodeList {
+		nodeAddress, err := r.getPodAddress(targetNode, req)
 		if err != nil {
-			logger.Error(err, appqosPutString)
-			return ctrl.Result{}, nil
+			// Continue with other Nodes if there's a failure on one
+			logger.Error(err, "Failed to get IP address for node: ", targetNode)
+			continue
 		}
-		return ctrl.Result{}, nil
-	}
-
-	logger.Info("Creating")
-	// CHANGE TO POWER PROFILE STUFF
-	app := &appqos.App{}
-	app.Name = &req.NamespacedName.Name
-	app.Cores = &[]int{1, 2, 3}
-	app.Pids = &[]int{7030}
-	appqosPostString, err := r.AppQoSClient.PostApp(app, "https://localhost:5000")
-	if err != nil {
-		logger.Error(err, appqosPostString)
-		return ctrl.Result{}, nil
-	}
-
-	/*
-		// Check if a PowerWorkload already exists for this PowerProfile, meaning we just need to update it
-		workload := &powerv1alpha1.PowerWorkload{}
-		workloadName := fmt.Sprintf("%s%s", req.NamespacedName.Name, WorkloadNameSuffix)
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Namespace: req.NamespacedName.Namespace,
-			Name:      workloadName,
-		}, workload)
+		/*
+		allProfilesOnNode, err := r.AppQoSClient.GetPowerProfiles(nodeAddress)
 		if err != nil {
-			if errors.IsNotFound(err) {
-				// TODO: change this comment
-				// This is a new PowerProfile, so we may need to create the corresponding PowerWorkload.
-				// If the PowerProfile is the designated Shared configuration for all of the shared-pool cores,
-				// this controller is responsible for creating the associated PowerWorkload. If it's an
-				// Exclusive PowerProfile, PowerWorkload creation is left to the PowerPod controller when the PowerProfile is requested.
-				// The Shared configuration is recognised by having the name "Shared".
+			logger.Error(err, "Failed to list PowerProfiles on node: ", targetNode)
+			continue
+		}
+		*/
+		allProfilesOnNode, err := r.AppQoSClient.GetApps(nodeAddress)
+		if err != nil {
+			logger.Error(err, "Failed to list Apps on node: ", targetNode)
+			continue
+		}
+		// TODO: UNCOMMENT WHEN HARDWARE COMES THROUGH
+		//powerProfileFromAppqos := appqos.FindProfileByName(allProfilesOnNode, req.NamespacedName.Name)
+		powerProfileFromAppQos := appqos.FindAppByName(allProfilesOnNode, req.NamespacedName.Name)
 
-				app := &appqos.App{}
-				app.Name = &profile.Spec.Name
-				app.Cores = &[]int{1,2,3,4}
-				app.Pids = &[]int{38893}
-				postStr, err := r.AppQoSClient.PostApp(app, "https://localhost:5000")
-				if err != nil {
-					logger.Error(err, postStr)
-					return ctrl.Result{}, nil
-				}
-
-				/*
-				if profile.Spec.Name == "Shared" {
-					logger.Info("Shared PowerProfile detected, creating corresponding PowerWorkload")
-					// TODO: Update with correct value when pakcage has been developed
-					nodes := []string{"Placeholder"}
-					cpuIDs, _ := cgp.GetSharedPool()
-					workloadSpec := &powerv1alpha1.PowerWorkloadSpec{
-						Nodes:        nodes,
-						CpuIds:       cpuIDs,
-						PowerProfile: *profile,
-					}
-					workload := &powerv1alpha1.PowerWorkload{
-						ObjectMeta: metav1.ObjectMeta{
-							Namespace: req.NamespacedName.Namespace,
-							Name:      workloadName,
-						},
-					}
-					workload.Spec = *workloadSpec
-					err = r.Client.Create(context.TODO(), workload)
-					if err != nil {
-						logger.Error(err, "error while trying to create PowerWorkload for PowerProfile 'Shared'")
-						return ctrl.Result{}, err
-					}
-				}
-				/
-
-
-
-				return ctrl.Result{}, nil
+		// TODO: UNCOMMENT WHEN HARDWARE COMES THROUGH
+		/*
+		if !reflect.DeepEqual(powerProfileFromAppQoS, &appqos.PowerProfile{}) {
+			// Update PowerProfile
+			updatedProfile := &appqos.PowerProfile{}
+			updateProfile.Name = powerProfileFromAppQos.Name
+			updateProfile.MinFreq = powerProfileFromAppQos.MinFreq
+			updateProfile.MaxFreq = powerProfileFromAppQos.MaxFreq
+			updateProfile.Epp = powerProfileFromAppQos.Epp
+			appqosPutResp, err := r.AppQoSClient.PutPowerProfile(updateProfile, nodeAddress, *powerProfileFromAppQos.ID)
+			if err != nil {
+				logger.Error(err, appqosPutResp)
+				continue
 			}
-
-			logger.Error(err, "error while trying to retrieve PowerWorkload")
-			return ctrl.Result{}, err
 		}
-	*/
+		*/
 
-	/*
-		workload.Spec.PowerProfile = *profile
-		err = r.Client.Update(context.TODO(), workload)
-		if err != nil {
-			logger.Error(err, "error while trying to update PowerWorkload")
-			return ctrl.Result{}, err
+		if !reflect.DeepEqual(powerProfileFromAppQos, &appqos.App{}) {
+			// Updating PowerProfile
+			logger.Info("Updating")
+			updatedProfile := &appqos.App{}
+			updatedProfile.Name = powerProfileFromAppQos.Name
+			updatedProfile.Cores = &[]int{3, 4, 5}
+			updatedProfile.Pids = powerProfileFromAppQos.Pids
+			updatedProfile.PoolID = powerProfileFromAppQos.PoolID
+			appqosPutString, err := r.AppQoSClient.PutApp(updatedProfile, nodeAddress, *powerProfileFromAppQos.ID)
+			if err != nil {
+				logger.Error(err, appqosPutString)
+				continue
+			}
+			//return ctrl.Result{}, nil
+		} else {
+			// Creating PowerProfile
+			// TODO: UNCOMMENT WHEN HARDWARE COMES THROUGH
+			/*
+			powerProfile := &appqos.PowerProfile{}
+        	        powerProfile.Name = &req.NamespacedName.Name
+        	        powerProfile.MinFreq = &profile.Spec.Min
+	                powerProfile.MaxFreq = &profile.Spec.Max
+        	        powerProfile.Epp = &profile.Spec.Epp
+			appqosPostResp, err := r.AppQoSClient.PostPowerProfile(powerProfile, nodeAddress)
+			if err != nil {
+                        	logger.Error(err, appqosPostResp)
+                        	continue
+                	}
+			*/
+
+			app := &appqos.App{}
+	                app.Name = &req.NamespacedName.Name
+        	        app.Cores = &[]int{1, 2, 3}
+                	app.Pids = &[]int{7876}
+			appqosPostResp, err := r.AppQoSClient.PostApp(app, nodeAddress)
+	                if err != nil {
+        	                logger.Error(err, appqosPostResp)
+				continue
+                	}
 		}
-	*/
+	}
 
 	return ctrl.Result{}, nil
 }
 
+// TODO: UNCOMMENT WHEN HARDWARE COMES THROUGH
 /*
 func (r *PowerProfileReconciler) findObceleteProfiles(req ctrl.Request) (map[string]string, error) {
 	_ = context.Background()
@@ -345,6 +321,7 @@ func (r *PowerProfileReconciler) getPodAddress(nodeName string, req ctrl.Request
 	_ = context.Background()
         logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 
+	// TODO: DELETE WHEN APPQOS CONTAINERIZED
 	if 1 == 1 {
 		return "https://localhost:5000", nil
 	}
