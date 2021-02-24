@@ -9,19 +9,19 @@ import (
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
-	"strconv"
 	"reflect"
+	"strconv"
 )
 
 const (
-	PoolsEndpoint         	= "/pools"
-	AppsEndpoint          	= "/apps"
-	PowerProfilesEndpoint 	= "/power_profiles"
-	Username              	= "admin"
-	Passwd                	= "password"
+	PoolsEndpoint         = "/pools"
+	AppsEndpoint          = "/apps"
+	PowerProfilesEndpoint = "/power_profiles"
+	Username              = "admin"
+	Passwd                = "password"
 
-	HttpPrefix		= "http://"
-	HttpsPrefix		= "https://"
+	HttpPrefix  = "http://"
+	HttpsPrefix = "https://"
 )
 
 // GetPools /pools
@@ -82,6 +82,21 @@ func (ac *AppQoSClient) GetPool(address string, id int) (*Pool, error) {
 	resp.Body.Close()
 
 	return pool, nil
+}
+
+func (ac *AppQoSClient) GetPoolByName(address string, name string) (*Pool, error) {
+	allPools, err := ac.GetPools(address)
+	if err != nil {
+		return &Pool{}, err
+	}
+
+	for _, pool := range allPools {
+		if *pool.Name == name {
+			return &pool, nil
+		}
+	}
+
+	return &Pool{}, nil
 }
 
 // PostPool /pools

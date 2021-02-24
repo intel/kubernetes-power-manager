@@ -43,10 +43,10 @@ const (
 // PowerProfileReconciler reconciles a PowerProfile object
 type PowerProfileReconciler struct {
 	client.Client
-	Log          	logr.Logger
-	Scheme       	*runtime.Scheme
-	AppQoSClient 	*appqos.AppQoSClient
-	State		*newstate.PowerNodeData
+	Log          logr.Logger
+	Scheme       *runtime.Scheme
+	AppQoSClient *appqos.AppQoSClient
+	State        *newstate.PowerNodeData
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerprofiles,verbs=get;list;watch;create;update;patch;delete
@@ -58,7 +58,8 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 	logger.Info("Reconciling PowerProfile")
 
-	logger.Info(fmt.Sprintf("State: %v", r.State.PowerNodeList))
+	r.State.AddProfile("NewProfile")
+	logger.Info(fmt.Sprintf("State: %v", r.State.ProfileAssociation))
 	if 1 == 1 {
 		return ctrl.Result{}, nil
 	}
@@ -114,22 +115,22 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			}
 
 			/*
-			//powerProfileFromAppqos, err := GetPowerProfileByName(profile.Spec.Name, "https://localhost:5000", r.AppQoSClient)
-			profiles, err := r.AppQoSClient.GetApps(address)
-			powerProfileFromAppqos := appqos.FindProfileByName(activeProfiles, req.NamespacedName.Name)
-			fmt.Printf("Profile: %s--%v\n", profile.Spec.Name, powerProfileFromAppqos)
-			if err != nil {
-				logger.Error(err, "Error retreiving PowerProfile")
-				return ctrl.Result{}, nil
-			}
-
-			if powerProfileFromAppqos != nil {
-				err = r.AppQoSClient.DeleteApp("https://localhost:5000", *powerProfileFromAppqos.ID)
+				//powerProfileFromAppqos, err := GetPowerProfileByName(profile.Spec.Name, "https://localhost:5000", r.AppQoSClient)
+				profiles, err := r.AppQoSClient.GetApps(address)
+				powerProfileFromAppqos := appqos.FindProfileByName(activeProfiles, req.NamespacedName.Name)
+				fmt.Printf("Profile: %s--%v\n", profile.Spec.Name, powerProfileFromAppqos)
 				if err != nil {
-					logger.Error(err, "Error deleting PowerProfile")
+					logger.Error(err, "Error retreiving PowerProfile")
 					return ctrl.Result{}, nil
 				}
-			}
+
+				if powerProfileFromAppqos != nil {
+					err = r.AppQoSClient.DeleteApp("https://localhost:5000", *powerProfileFromAppqos.ID)
+					if err != nil {
+						logger.Error(err, "Error deleting PowerProfile")
+						return ctrl.Result{}, nil
+					}
+				}
 			*/
 
 			/*
@@ -176,11 +177,11 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			continue
 		}
 		/*
-		allProfilesOnNode, err := r.AppQoSClient.GetPowerProfiles(nodeAddress)
-		if err != nil {
-			logger.Error(err, "Failed to list PowerProfiles on node: ", targetNode)
-			continue
-		}
+			allProfilesOnNode, err := r.AppQoSClient.GetPowerProfiles(nodeAddress)
+			if err != nil {
+				logger.Error(err, "Failed to list PowerProfiles on node: ", targetNode)
+				continue
+			}
 		*/
 		allProfilesOnNode, err := r.AppQoSClient.GetApps(nodeAddress)
 		if err != nil {
@@ -193,19 +194,19 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 		// TODO: UNCOMMENT WHEN HARDWARE COMES THROUGH
 		/*
-		if !reflect.DeepEqual(powerProfileFromAppQoS, &appqos.PowerProfile{}) {
-			// Update PowerProfile
-			updatedProfile := &appqos.PowerProfile{}
-			updateProfile.Name = powerProfileFromAppQos.Name
-			updateProfile.MinFreq = powerProfileFromAppQos.MinFreq
-			updateProfile.MaxFreq = powerProfileFromAppQos.MaxFreq
-			updateProfile.Epp = powerProfileFromAppQos.Epp
-			appqosPutResp, err := r.AppQoSClient.PutPowerProfile(updateProfile, nodeAddress, *powerProfileFromAppQos.ID)
-			if err != nil {
-				logger.Error(err, appqosPutResp)
-				continue
+			if !reflect.DeepEqual(powerProfileFromAppQoS, &appqos.PowerProfile{}) {
+				// Update PowerProfile
+				updatedProfile := &appqos.PowerProfile{}
+				updateProfile.Name = powerProfileFromAppQos.Name
+				updateProfile.MinFreq = powerProfileFromAppQos.MinFreq
+				updateProfile.MaxFreq = powerProfileFromAppQos.MaxFreq
+				updateProfile.Epp = powerProfileFromAppQos.Epp
+				appqosPutResp, err := r.AppQoSClient.PutPowerProfile(updateProfile, nodeAddress, *powerProfileFromAppQos.ID)
+				if err != nil {
+					logger.Error(err, appqosPutResp)
+					continue
+				}
 			}
-		}
 		*/
 
 		if !reflect.DeepEqual(powerProfileFromAppQos, &appqos.App{}) {
@@ -226,27 +227,27 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			// Creating PowerProfile
 			// TODO: UNCOMMENT WHEN HARDWARE COMES THROUGH
 			/*
-			powerProfile := &appqos.PowerProfile{}
-        	        powerProfile.Name = &req.NamespacedName.Name
-        	        powerProfile.MinFreq = &profile.Spec.Min
-	                powerProfile.MaxFreq = &profile.Spec.Max
-        	        powerProfile.Epp = &profile.Spec.Epp
-			appqosPostResp, err := r.AppQoSClient.PostPowerProfile(powerProfile, nodeAddress)
-			if err != nil {
-                        	logger.Error(err, appqosPostResp)
-                        	continue
-                	}
+						powerProfile := &appqos.PowerProfile{}
+			        	        powerProfile.Name = &req.NamespacedName.Name
+			        	        powerProfile.MinFreq = &profile.Spec.Min
+				                powerProfile.MaxFreq = &profile.Spec.Max
+			        	        powerProfile.Epp = &profile.Spec.Epp
+						appqosPostResp, err := r.AppQoSClient.PostPowerProfile(powerProfile, nodeAddress)
+						if err != nil {
+			                        	logger.Error(err, appqosPostResp)
+			                        	continue
+			                	}
 			*/
 
 			app := &appqos.App{}
-	                app.Name = &req.NamespacedName.Name
-        	        app.Cores = &[]int{1, 2, 3}
-                	app.Pids = &[]int{7876}
+			app.Name = &req.NamespacedName.Name
+			app.Cores = &[]int{1, 2, 3}
+			app.Pids = &[]int{7876}
 			appqosPostResp, err := r.AppQoSClient.PostApp(app, nodeAddress)
-	                if err != nil {
-        	                logger.Error(err, appqosPostResp)
+			if err != nil {
+				logger.Error(err, appqosPostResp)
 				continue
-                	}
+			}
 		}
 	}
 
@@ -319,7 +320,7 @@ func (r *PowerProfileReconciler) findObseleteProfiles(req ctrl.Request) (map[str
 
 func (r *PowerProfileReconciler) getPodAddress(nodeName string, req ctrl.Request) (string, error) {
 	_ = context.Background()
-        logger := r.Log.WithValues("powerprofile", req.NamespacedName)
+	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 
 	// TODO: DELETE WHEN APPQOS CONTAINERIZED
 	if 1 == 1 {

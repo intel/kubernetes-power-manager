@@ -21,14 +21,14 @@ import (
 	//"fmt"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"k8s.io/apimachinery/pkg/api/errors"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/newstate"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // PowerConfigReconciler reconciles a PowerConfig object
@@ -36,7 +36,7 @@ type PowerConfigReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
-	State	*newstate.PowerNodeData
+	State  *newstate.PowerNodeData
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerconfigs,verbs=get;list;watch;create;update;patch;delete

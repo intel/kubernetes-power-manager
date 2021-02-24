@@ -28,14 +28,22 @@ type PowerWorkloadSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// AllCores determines if the Workload is to be applied to all cores (i.e. use the Default Workload)
+	AllCores bool `json:"allCores,omitempty"`
+
+	ReservedCPUs []int `json:"reservedCPUs,omitempty"`
+
+	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
+
 	// Nodes indicates the nodes with Pods using this PowerWorload
 	Nodes []string `json:"nodes,omitempty"`
 
 	// CpuIds indicates the CPUs affected by this PowerWorload, across all nodes
-	CpuIds []string `json:"cpuids,omitempty"`
+	CpuIds []int `json:"cpuids,omitempty"`
 
 	// PowerProfile is the Profile that this PowerWorkload is based on
-	PowerProfile `json:"powerprofile,omitempty"`
+	//PowerProfile `json:"powerprofile,omitempty"`
+	PowerProfile int `json:"powerProfile,omitempty"`
 }
 
 // PowerWorkloadStatus defines the observed state of PowerWorkload

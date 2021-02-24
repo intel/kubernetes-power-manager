@@ -28,8 +28,8 @@ type PowerConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	PowerImage		string			`json:"powerImage,omitempty"`
-	PowerNodeSelector	map[string]string	`json:"powerNodeSelector,omitempty"`
+	PowerImage        string            `json:"powerImage,omitempty"`
+	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
 }
 
 // PowerConfigStatus defines the observed state of PowerConfig
