@@ -23,6 +23,11 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type NodeInfo struct {
+	Name 	string 	`json:"name,omitempty"`
+	CpuIds 	[]int 	`json:"cpuIds,omitempty"`
+}
+
 // PowerWorkloadSpec defines the desired state of PowerWorkload
 type PowerWorkloadSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -35,8 +40,12 @@ type PowerWorkloadSpec struct {
 
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
 
+	Nodes []NodeInfo `json:"nodes,omitempty"`
+
+	/*
 	// Nodes indicates the nodes with Pods using this PowerWorload
 	Nodes []string `json:"nodes,omitempty"`
+	*/
 
 	// CpuIds indicates the CPUs affected by this PowerWorload, across all nodes
 	CpuIds []int `json:"cpuids,omitempty"`
@@ -71,6 +80,15 @@ type PowerWorkloadList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []PowerWorkload `json:"items"`
+}
+
+func (pw *PowerWorkload) GetNodeList() []string {
+	nodeList := make([]string, 0)
+	for _, nodeInfo := range pw.Spec.Nodes {
+		nodeList = append(nodeList, nodeInfo.Name)
+	}
+
+	return nodeList
 }
 
 func init() {

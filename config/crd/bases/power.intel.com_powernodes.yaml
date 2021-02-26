@@ -51,7 +51,7 @@ spec:
                       properties:
                         exclusiveCpus:
                           items:
-                            type: string
+                            type: integer
                           type: array
                         id:
                           type: string

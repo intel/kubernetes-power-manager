@@ -47,9 +47,15 @@ spec:
                 type: integer
               type: array
             nodes:
-              description: Nodes indicates the nodes with Pods using this PowerWorload
               items:
-                type: string
+                properties:
+                  cpuIds:
+                    items:
+                      type: integer
+                    type: array
+                  name:
+                    type: string
+                type: object
               type: array
             powerNodeSelector:
               additionalProperties:

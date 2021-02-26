@@ -57,7 +57,7 @@ const (
 func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
-
+	
 	workload := &powerv1alpha1.PowerWorkload{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, workload)
 	if err != nil {
@@ -112,13 +112,11 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	// Loop through all Power Nodes requested with this PowerWorkload
 
-	targetNodes := workload.Spec.Nodes
-
-	for _, targetNode := range targetNodes {
-		nodeAddress, err := r.getPodAddress(targetNode, req)
+	for _, targetNode := range workload.Spec.Nodes {
+		nodeAddress, err := r.getPodAddress(targetNode.Name, req)
 		if err != nil {
 			// Continue with other nodes if there's a failure with this one
-			logger.Error(err, "Failed to get IP address for node: ", targetNode)
+			logger.Error(err, "Failed to get IP address for node: ", targetNode.Name)
 			continue
 		}
 
@@ -143,8 +141,8 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 			// Check if CPUs were removed from PowerWorkload and need to be added back to Default
 			// and update the Default pool in AppQoS instance
-			returnedCPUs := cpusRemovedFromWorkload(*poolFromAppQos.Cores, workload.Spec.CpuIds)
-			updatedDefaultPool := updateDefaultPool(workload.Spec.CpuIds, defaultPool)
+			returnedCPUs := cpusRemovedFromWorkload(*poolFromAppQos.Cores, targetNode.CpuIds)
+			updatedDefaultPool := updateDefaultPool(targetNode.CpuIds, defaultPool)
 			appqosPutResponse, err := r.AppQoSClient.PutPool(updatedDefaultPool, nodeAddress, *defaultPool.ID)
 			if err != nil {
 				logger.Error(err, appqosPutResponse)
@@ -154,7 +152,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			// Update the Workload
 			updatedPool := &appqos.Pool{}
 			updatedPool.Name = poolFromAppQos.Name
-			updatedPool.Cores = &workload.Spec.CpuIds
+			updatedPool.Cores = &targetNode.CpuIds
 			updatedPool.PowerProfile = &workload.Spec.PowerProfile
 			appqosPutResponse, err = r.AppQoSClient.PutPool(updatedPool, nodeAddress, *poolFromAppQos.ID)
 			if err != nil {
@@ -172,7 +170,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				return ctrl.Result{}, nil
 			}
 		} else {
-			updatedDefaultPool := updateDefaultPool(workload.Spec.CpuIds, defaultPool)
+			updatedDefaultPool := updateDefaultPool(targetNode.CpuIds, defaultPool)
 			appqosPutResponse, err := r.AppQoSClient.PutPool(updatedDefaultPool, nodeAddress, *defaultPool.ID)
 			if err != nil {
 				logger.Error(err, appqosPutResponse)
@@ -181,12 +179,12 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 			pool := &appqos.Pool{}
 			pool.Name = &req.NamespacedName.Name
-			pool.Cores = &workload.Spec.CpuIds
+			pool.Cores = &targetNode.CpuIds
 			pool.PowerProfile = &workload.Spec.PowerProfile
 			cbmDefault := 1
 			pool.Cbm = &cbmDefault
 
-			appqosPostResponse, err := r.AppQoSClient.PostPool(pool, "https://localhost:5000")
+			appqosPostResponse, err := r.AppQoSClient.PostPool(pool, nodeAddress)
 			if err != nil {
 				logger.Error(err, appqosPostResponse)
 				continue
@@ -230,7 +228,17 @@ func (r *PowerWorkloadReconciler) getPodAddress(nodeName string, req ctrl.Reques
 
 	// TODO: DELETE WHEN APPQOS CONTAINERIZED
 	if 1 == 1 {
-		return "https://localhost:5000", nil
+		node := &corev1.Node{}
+		err := r.Client.Get(context.TODO(), client.ObjectKey{
+			Name: nodeName,
+		}, node)
+		if err != nil {
+			return "", err
+		}
+		address := fmt.Sprintf("%s%s%s", "https://", node.Status.Addresses[0].Address, ":5000")
+		return address, nil
+		//logger.Info(fmt.Sprintf("Node address: %v", node.Status.Addresses[0].Address))
+		//return "https://localhost:5000", nil
 	}
 
 	pods := &corev1.PodList{}
