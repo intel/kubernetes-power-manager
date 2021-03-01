@@ -40,12 +40,6 @@ spec:
               description: AllCores determines if the Workload is to be applied to
                 all cores (i.e. use the Default Workload)
               type: boolean
-            cpuids:
-              description: CpuIds indicates the CPUs affected by this PowerWorload,
-                across all nodes
-              items:
-                type: integer
-              type: array
             nodes:
               items:
                 properties:

@@ -227,16 +227,16 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			// Creating PowerProfile
 			// TODO: UNCOMMENT WHEN HARDWARE COMES THROUGH
 			/*
-						powerProfile := &appqos.PowerProfile{}
-			        	        powerProfile.Name = &req.NamespacedName.Name
-			        	        powerProfile.MinFreq = &profile.Spec.Min
-				                powerProfile.MaxFreq = &profile.Spec.Max
-			        	        powerProfile.Epp = &profile.Spec.Epp
-						appqosPostResp, err := r.AppQoSClient.PostPowerProfile(powerProfile, nodeAddress)
-						if err != nil {
-			                        	logger.Error(err, appqosPostResp)
-			                        	continue
-			                	}
+							powerProfile := &appqos.PowerProfile{}
+				        	        powerProfile.Name = &req.NamespacedName.Name
+				        	        powerProfile.MinFreq = &profile.Spec.Min
+					                powerProfile.MaxFreq = &profile.Spec.Max
+				        	        powerProfile.Epp = &profile.Spec.Epp
+							appqosPostResp, err := r.AppQoSClient.PostPowerProfile(powerProfile, nodeAddress)
+							if err != nil {
+				                        	logger.Error(err, appqosPostResp)
+				                        	continue
+				                	}
 			*/
 
 			app := &appqos.App{}

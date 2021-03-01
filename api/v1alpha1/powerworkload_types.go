@@ -24,8 +24,8 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type NodeInfo struct {
-	Name 	string 	`json:"name,omitempty"`
-	CpuIds 	[]int 	`json:"cpuIds,omitempty"`
+	Name   string `json:"name,omitempty"`
+	CpuIds []int  `json:"cpuIds,omitempty"`
 }
 
 // PowerWorkloadSpec defines the desired state of PowerWorkload
@@ -41,14 +41,6 @@ type PowerWorkloadSpec struct {
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
 
 	Nodes []NodeInfo `json:"nodes,omitempty"`
-
-	/*
-	// Nodes indicates the nodes with Pods using this PowerWorload
-	Nodes []string `json:"nodes,omitempty"`
-	*/
-
-	// CpuIds indicates the CPUs affected by this PowerWorload, across all nodes
-	CpuIds []int `json:"cpuids,omitempty"`
 
 	// PowerProfile is the Profile that this PowerWorkload is based on
 	//PowerProfile `json:"powerprofile,omitempty"`

@@ -57,7 +57,7 @@ const (
 func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
-	
+
 	workload := &powerv1alpha1.PowerWorkload{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, workload)
 	if err != nil {
@@ -142,14 +142,15 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			// Check if CPUs were removed from PowerWorkload and need to be added back to Default
 			// and update the Default pool in AppQoS instance
 			returnedCPUs := cpusRemovedFromWorkload(*poolFromAppQos.Cores, targetNode.CpuIds)
+			logger.Info(fmt.Sprintf("Returned CPUs: %v", returnedCPUs))
 			updatedDefaultPool := updateDefaultPool(targetNode.CpuIds, defaultPool)
 			appqosPutResponse, err := r.AppQoSClient.PutPool(updatedDefaultPool, nodeAddress, *defaultPool.ID)
 			if err != nil {
 				logger.Error(err, appqosPutResponse)
-				return ctrl.Result{}, nil
+				continue
 			}
 
-			// Update the Workload
+			// Update the Workload (length of Core List in a Pool cannot be zero)
 			updatedPool := &appqos.Pool{}
 			updatedPool.Name = poolFromAppQos.Name
 			updatedPool.Cores = &targetNode.CpuIds
@@ -159,22 +160,42 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				logger.Error(err, appqosPutResponse)
 				continue
 			}
+			/*
+				// Update or delete the Workload
+				if len(targetNode.CpuIds) > 0 {
+					updatedPool := &appqos.Pool{}
+					updatedPool.Name = poolFromAppQos.Name
+					updatedPool.Cores = &targetNode.CpuIds
+					updatedPool.PowerProfile = &workload.Spec.PowerProfile
+					appqosPutResponse, err = r.AppQoSClient.PutPool(updatedPool, nodeAddress, *poolFromAppQos.ID)
+					if err != nil {
+						logger.Error(err, appqosPutResponse)
+						continue
+					}
+				} else {
+					err = r.AppQoSClient.DeletePool(nodeAddress, *poolFromAppQos.ID)
+					if err != nil {
+						logger.Error(err, "Failed deleting pool from AppQoS")
+						continue
+					}
+				}
 
-			// Return the CPUs that were removed from the Workload to the Default pool
-			updatedDefaultCPUList := append(*updatedDefaultPool.Cores, returnedCPUs...)
-			sort.Ints(updatedDefaultCPUList)
-			updatedDefaultPool.Cores = &updatedDefaultCPUList
-			appqosPutResponse, err = r.AppQoSClient.PutPool(updatedDefaultPool, nodeAddress, *defaultPool.ID)
-			if err != nil {
-				logger.Error(err, appqosPutResponse)
-				return ctrl.Result{}, nil
-			}
+				// Return the CPUs that were removed from the Workload to the Default pool
+				updatedDefaultCPUList := append(*updatedDefaultPool.Cores, returnedCPUs...)
+				sort.Ints(updatedDefaultCPUList)
+				updatedDefaultPool.Cores = &updatedDefaultCPUList
+				appqosPutResponse, err = r.AppQoSClient.PutPool(updatedDefaultPool, nodeAddress, *defaultPool.ID)
+				if err != nil {
+					logger.Error(err, appqosPutResponse)
+					continue
+				}
+			*/
 		} else {
 			updatedDefaultPool := updateDefaultPool(targetNode.CpuIds, defaultPool)
 			appqosPutResponse, err := r.AppQoSClient.PutPool(updatedDefaultPool, nodeAddress, *defaultPool.ID)
 			if err != nil {
 				logger.Error(err, appqosPutResponse)
-				return ctrl.Result{}, nil
+				continue
 			}
 
 			pool := &appqos.Pool{}
@@ -303,7 +324,7 @@ func cpusRemovedFromWorkload(previousCPUList []int, updatedCPUList []int) []int 
 	returnedCPUs := make([]int, 0)
 
 	for _, poolCPU := range previousCPUList {
-		if !cpuInCPUList(poolCPU, updatedCPUList) {
+		if !CpuInCPUList(poolCPU, updatedCPUList) {
 			returnedCPUs = append(returnedCPUs, poolCPU)
 		}
 	}
@@ -315,7 +336,7 @@ func removeCPUsFromCPUList(cpusToRemove []int, cpuList []int) []int {
 	updatedCPUList := make([]int, 0)
 
 	for _, cpu := range cpuList {
-		if !cpuInCPUList(cpu, cpusToRemove) {
+		if !CpuInCPUList(cpu, cpusToRemove) {
 			updatedCPUList = append(updatedCPUList, cpu)
 		}
 	}
@@ -344,7 +365,7 @@ func checkWorkloadCPUDifference(oldCPUList []string, updatedCPUList []string) ([
 }
 */
 
-func cpuInCPUList(cpu int, cpuList []int) bool {
+func CpuInCPUList(cpu int, cpuList []int) bool {
 	for _, cpuListID := range cpuList {
 		if cpu == cpuListID {
 			return true
