@@ -4,15 +4,6 @@ projectName: power-operator
 repo: gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git
 resources:
 - group: power
-  kind: Profile
-  version: v1alpha1
-- group: power
-  kind: Config
-  version: v1alpha1
-- group: power
-  kind: Pod
-  version: v1alpha1
-- group: power
   kind: PowerNode
   version: v1alpha1
 - group: power
@@ -20,6 +11,9 @@ resources:
   version: v1alpha1
 - group: power
   kind: PowerPod
+  version: v1alpha1
+- group: power
+  kind: PowerConfig
   version: v1alpha1
 version: 3-alpha
 plugins:

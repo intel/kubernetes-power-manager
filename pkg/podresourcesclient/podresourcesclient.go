@@ -3,11 +3,11 @@ package podresourcesclient
 import (
 	"context"
 	"fmt"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cpuset"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/api/errors"
 	podresourcesapi "k8s.io/kubelet/pkg/apis/podresources/v1"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cpuset"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
 	//	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"time"
 )

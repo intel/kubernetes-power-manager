@@ -23,66 +23,44 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type NodeInfo struct {
-	Name   string `json:"name,omitempty"`
-	CpuIds []int  `json:"cpuIds,omitempty"`
-}
-
-// PowerWorkloadSpec defines the desired state of PowerWorkload
-type PowerWorkloadSpec struct {
+// PowerConfigSpec defines the desired state of PowerConfig
+type PowerConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// AllCores determines if the Workload is to be applied to all cores (i.e. use the Default Workload)
-	AllCores bool `json:"allCores,omitempty"`
-
-	ReservedCPUs []int `json:"reservedCPUs,omitempty"`
-
+	PowerImage        string            `json:"powerImage,omitempty"`
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
-
-	Nodes []NodeInfo `json:"nodes,omitempty"`
-
-	// PowerProfile is the Profile that this PowerWorkload is based on
-	//PowerProfile `json:"powerprofile,omitempty"`
-	PowerProfile int `json:"powerProfile,omitempty"`
 }
 
-// PowerWorkloadStatus defines the observed state of PowerWorkload
-type PowerWorkloadStatus struct {
+// PowerConfigStatus defines the observed state of PowerConfig
+type PowerConfigStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	Nodes []string `json:"nodes,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// PowerWorkload is the Schema for the powerworkloads API
-type PowerWorkload struct {
+// PowerConfig is the Schema for the powerconfigs API
+type PowerConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   PowerWorkloadSpec   `json:"spec,omitempty"`
-	Status PowerWorkloadStatus `json:"status,omitempty"`
+	Spec   PowerConfigSpec   `json:"spec,omitempty"`
+	Status PowerConfigStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// PowerWorkloadList contains a list of PowerWorkload
-type PowerWorkloadList struct {
+// PowerConfigList contains a list of PowerConfig
+type PowerConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []PowerWorkload `json:"items"`
-}
-
-func (pw *PowerWorkload) GetNodeList() []string {
-	nodeList := make([]string, 0)
-	for _, nodeInfo := range pw.Spec.Nodes {
-		nodeList = append(nodeList, nodeInfo.Name)
-	}
-
-	return nodeList
+	Items           []PowerConfig `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&PowerWorkload{}, &PowerWorkloadList{})
+	SchemeBuilder.Register(&PowerConfig{}, &PowerConfigList{})
 }

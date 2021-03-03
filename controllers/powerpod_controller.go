@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sort"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -32,8 +33,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podresourcesclient"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 )
 
 const (
@@ -43,9 +44,9 @@ const (
 // PowerPodReconciler reconciles a PowerPod object
 type PowerPodReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
-	State  state.State
+	Log                logr.Logger
+	Scheme             *runtime.Scheme
+	State              state.State
 	PodResourcesClient podresourcesclient.PodResourcesClient
 }
 
@@ -70,11 +71,10 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	if !pod.ObjectMeta.DeletionTimestamp.IsZero() {
-		// If the Pod's DeletionTimestamp is not zero then the Pod hasbeen deleted
+		// If the Pod's DeletionTimestamp is not zero then the Pod has been deleted
 
 		powerPodState := r.State.GetPodFromState(pod.GetName())
-		powerPodCPUs := r.State.GetCPUsFromPodState(powerPodState)
-		workloadName := fmt.Sprintf("%s%s", powerPodState.PowerProfile.Name, WorkloadNameSuffix)
+		workloadName := fmt.Sprintf("%s%s", powerPodState.PowerProfile, WorkloadNameSuffix)
 
 		workload := &powerv1alpha1.PowerWorkload{}
 		err = r.Get(context.TODO(), client.ObjectKey{
@@ -91,8 +91,17 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 
-		updatedWorkloadCPUList := getNewWorkloadCPUList(powerPodCPUs, workload.Spec.CpuIds)
-		workload.Spec.CpuIds = updatedWorkloadCPUList
+		updatedWorkloadCPUList := r.getNewWorkloadCPUList(powerPodState, workload.Spec.Nodes)
+		for i, node := range workload.Spec.Nodes {
+			if node.Name == powerPodState.Node {
+				if len(updatedWorkloadCPUList) == 0 {
+					workload.Spec.Nodes = append(workload.Spec.Nodes[:i], workload.Spec.Nodes[i+1:]...)
+				} else {
+					workload.Spec.Nodes[i].CpuIds = updatedWorkloadCPUList
+				}
+				break
+			}
+		}
 
 		err = r.Client.Update(context.TODO(), workload)
 		if err != nil {
@@ -112,6 +121,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, podNotRunningErr
 	}
 
+	/* Here's the start of the PowerProfile stuff */
 	// Get the PowerProfile request by the pods
 	// GOING TO MOVE OVER TO EXTENDED RESOURCES
 	profileName := getProfileFromPodAnnotations(pod)
@@ -120,20 +130,23 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	profile := &powerv1alpha1.PowerProfile{}
-	err = r.Client.Get(context.TODO(), client.ObjectKey{
-		Namespace: req.NamespacedName.Namespace,
-		Name:      profileName,
-	}, profile)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			logger.Error(err, "PowerProfile not found")
-			return ctrl.Result{}, nil
-		}
+	/*
+		profile := &powerv1alpha1.PowerProfile{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Namespace: req.NamespacedName.Namespace,
+			Name:      profileName,
+		}, profile)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				logger.Error(err, "PowerProfile not found")
+				return ctrl.Result{}, nil
+			}
 
-		logger.Error(err, "error while trying to retrieve PowerProfile")
-		return ctrl.Result{}, err
-	}
+			logger.Error(err, "error while trying to retrieve PowerProfile")
+			return ctrl.Result{}, err
+		}
+	*/
+	/* Here's the end of the PowerProfile stuff */
 
 	// Get the Containers of the Pod that are requesting exclusive CPUs
 	containersRequestingExclusiveCPUs := getContainersRequestingExclusiveCPUs(pod)
@@ -143,6 +156,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	guaranteedPod := powerv1alpha1.GuaranteedPod{}
+	guaranteedPod.Node = pod.Spec.NodeName
 	guaranteedPod.Name = pod.GetName()
 	podUID := pod.GetUID()
 	if podUID == "" {
@@ -152,22 +166,31 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	guaranteedPod.UID = string(podUID)
 
 	powerContainers := make([]powerv1alpha1.Container, 0)
-	allCores := make([]string, 0)
+	allCores := make([]int, 0)
 
 	for _, container := range containersRequestingExclusiveCPUs {
 		containerID := getContainerID(pod, container)
+		logger.Info(fmt.Sprintf("Pod: %v", pod.Spec.Containers))
 		coreIDs, err := r.PodResourcesClient.GetContainerCPUs(guaranteedPod.Name, container)
-		/*
+
 		if err != nil {
 			logger.Error(err, "error call to PodResourcesClient")
 			return ctrl.Result{}, nil
 		}
+
+		// ============================================
+		// ============================================
+		// ===================DELETE===================
+		// ============================================
+		// ============================================
 		logger.Info("********************************")
 		logger.Info(fmt.Sprintf("CoreIDs: %v", coreIDs))
-		if 1 == 1 {
-			return ctrl.Result{}, nil
-		}
-		*/
+		// ============================================
+		// ============================================
+		// ===================DELETE===================
+		// ============================================
+		// ============================================
+
 		if err != nil {
 			logger.Error(err, "failed to retrieve cpuset from groups")
 			return ctrl.Result{}, err
@@ -184,7 +207,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	guaranteedPod.Containers = make([]powerv1alpha1.Container, 0)
 	guaranteedPod.Containers = powerContainers
-	guaranteedPod.PowerProfile = *profile
+	guaranteedPod.PowerProfile = profileName
 
 	err = r.State.UpdateStateGuaranteedPods(guaranteedPod)
 	if err != nil {
@@ -203,12 +226,18 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			// This is the first Pod to request this PowerProfile, need to create corresponding
 			// PowerWorkload
 
-			// TODO: Replace this
-			placeholderName := []string{"placeholders"}
+			nodeInfo := []powerv1alpha1.NodeInfo{
+				powerv1alpha1.NodeInfo{
+					Name:   pod.Spec.NodeName,
+					CpuIds: allCores,
+				},
+			}
+
+			powerProfileID := getPowerProfileIDFromName(profileName)
+
 			workloadSpec := &powerv1alpha1.PowerWorkloadSpec{
-				Nodes:        placeholderName,
-				CpuIds:       allCores,
-				PowerProfile: guaranteedPod.PowerProfile,
+				Nodes:        nodeInfo,
+				PowerProfile: powerProfileID,
 			}
 			workload = &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
@@ -230,8 +259,28 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	// PowerWorkload already exists so need to update it
-	workload.Spec.CpuIds = append(workload.Spec.CpuIds, allCores...)
+	// PowerWorkload already exists so need to update it. If the Node already
+	// exists in the Workload, we update the Node's CPU list, if not we create
+	// the entry for the node
+
+	nodeExisted := false
+	for i, node := range workload.Spec.Nodes {
+		if node.Name == pod.Spec.NodeName {
+			nodeExisted = true
+			workload.Spec.Nodes[i].CpuIds = appendIfUnique(node.CpuIds, allCores)
+			sort.Ints(workload.Spec.Nodes[i].CpuIds)
+		}
+	}
+
+	if !nodeExisted {
+		nodeInfo := powerv1alpha1.NodeInfo{
+                        Name:   pod.Spec.NodeName,
+                        CpuIds: allCores,
+                }
+
+		workload.Spec.Nodes = append(workload.Spec.Nodes, nodeInfo)
+	}
+
 	err = r.Client.Update(context.TODO(), workload)
 	if err != nil {
 		logger.Error(err, "error while trying to update PowerWorkload")
@@ -241,16 +290,46 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func getNewWorkloadCPUList(powerPodCPUs []string, workloadCPUs []string) []string {
-	updatedWorkloadCPUList := make([]string, 0)
+func (r *PowerPodReconciler) getNewWorkloadCPUList(powerPodState powerv1alpha1.GuaranteedPod, nodeInfoList []powerv1alpha1.NodeInfo) []int {
+	updatedWorkloadCPUList := make([]int, 0)
+	powerPodCPUs := r.State.GetCPUsFromPodState(powerPodState)
 
-	for _, cpu := range workloadCPUs {
-		if !IdInCPUList(cpu, powerPodCPUs) {
-			updatedWorkloadCPUList = append(updatedWorkloadCPUList, cpu)
+	for _, node := range nodeInfoList {
+		if node.Name != powerPodState.Node {
+			continue
+		}
+
+		for _, cpu := range node.CpuIds {
+			if !CpuInCPUList(cpu, powerPodCPUs) {
+				updatedWorkloadCPUList = append(updatedWorkloadCPUList, cpu)
+			}
 		}
 	}
 
 	return updatedWorkloadCPUList
+}
+
+func appendIfUnique(cpuList []int, cpus []int) []int {
+	for _, cpu := range cpus {
+		if !CpuInCPUList(cpu, cpuList) {
+			cpuList = append(cpuList, cpu)
+		}
+	}
+
+	return cpuList
+}
+
+func getPowerProfileIDFromName(profileName string) int {
+	// ==========================
+	// ==========================
+	// ==========DELETE==========
+	// ==========================
+	// ==========================
+	if profileName == profileName {
+		return 0
+	}
+
+	return 0
 }
 
 func getProfileFromPodAnnotations(pod *corev1.Pod) string {
@@ -294,18 +373,19 @@ func getContainerID(pod *corev1.Pod, containerName string) string {
 	return ""
 }
 
-func getCleanCoreList(coreIDs string) []string {
-	cleanCores := make([]string, 0)
+func getCleanCoreList(coreIDs string) []int {
+	cleanCores := make([]int, 0)
 	commaSeparated := strings.Split(coreIDs, ",")
 	for _, splitCore := range commaSeparated {
 		hyphenSeparated := strings.Split(splitCore, "-")
 		if len(hyphenSeparated) == 1 {
-			cleanCores = append(cleanCores, hyphenSeparated[0])
+			intCore, _ := strconv.Atoi(hyphenSeparated[0])
+			cleanCores = append(cleanCores, intCore)
 		} else {
 			startCore, _ := strconv.Atoi(hyphenSeparated[0])
 			endCore, _ := strconv.Atoi(hyphenSeparated[len(hyphenSeparated)-1])
 			for i := startCore; i <= endCore; i++ {
-				cleanCores = append(cleanCores, strconv.Itoa(i))
+				cleanCores = append(cleanCores, i)
 			}
 		}
 	}
