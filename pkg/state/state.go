@@ -2,67 +2,84 @@ package state
 
 import (
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	cgp "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
-	"k8s.io/apimachinery/pkg/api/errors"
 )
 
-type State struct {
-	PowerNodeStatus *powerv1alpha1.PowerNodeStatus
+type PowerNodeData struct {
+	PowerNodeList      []string
+	ProfileAssociation map[string][]string
 }
 
-func NewState() (*State, error) {
-	state := &State{}
-	sharedPool, err := cgp.GetSharedPool()
-	if err != nil {
-		return state, err
+func NewPowerNodeData() *PowerNodeData {
+	profAssoc := make(map[string][]string, 0)
+
+	return &PowerNodeData{
+		PowerNodeList:      []string{},
+		ProfileAssociation: profAssoc,
 	}
-
-	if len(sharedPool) == 0 {
-		return state, errors.NewServiceUnavailable("No shared pool discovered - kubepods cpuset cgroup not found")
-	}
-
-	state.PowerNodeStatus = &powerv1alpha1.PowerNodeStatus{}
-	state.PowerNodeStatus.SharedPool = sharedPool
-
-	return state, nil
 }
 
-func (s *State) UpdateStateGuaranteedPods(guaranteedPod powerv1alpha1.GuaranteedPod) error {
-	if len(s.PowerNodeStatus.GuaranteedPods) == 0 {
-		pods := make([]powerv1alpha1.GuaranteedPod, 0)
-		s.PowerNodeStatus.GuaranteedPods = pods
-	}
-
-	// Check existing pods in state. If pod aleady exists, update and return
-	for i, existingPod := range s.PowerNodeStatus.GuaranteedPods {
-		if existingPod.Name == guaranteedPod.Name {
-			s.PowerNodeStatus.GuaranteedPods[i] = guaranteedPod
-			return nil
+func (nd *PowerNodeData) UpdatePowerNodeData(nodeName string) {
+	for _, node := range nd.PowerNodeList {
+		if nodeName == node {
+			return
 		}
 	}
 
-	// Otherwise append pod to GuaranteedPods in state
-	s.PowerNodeStatus.GuaranteedPods = append(s.PowerNodeStatus.GuaranteedPods, guaranteedPod)
-	return nil
+	nd.PowerNodeList = append(nd.PowerNodeList, nodeName)
 }
 
-func (s *State) GetPodFromState(podName string) powerv1alpha1.GuaranteedPod {
-	for _, existingPod := range s.PowerNodeStatus.GuaranteedPods {
-		if existingPod.Name == podName {
-			return existingPod
+func (nd *PowerNodeData) DeletePowerNodeData(nodeName string) {
+	for index, node := range nd.PowerNodeList {
+		if node == nodeName {
+			nd.PowerNodeList = append(nd.PowerNodeList[:index], nd.PowerNodeList[index+1:]...)
+		}
+	}
+}
+
+func (nd *PowerNodeData) AddProfile(profileName string) {
+	if _, exists := nd.ProfileAssociation[profileName]; !exists {
+		nd.ProfileAssociation[profileName] = make([]string, 0)
+	}
+}
+
+func (nd *PowerNodeData) UpdateProfileAssociation(profileName string, workloadName string) {
+	if workloads, exists := nd.ProfileAssociation[profileName]; !exists {
+		workloads := []string{workloadName}
+		nd.ProfileAssociation[profileName] = workloads
+	} else {
+		workloads = append(workloads, workloadName)
+	}
+}
+
+func (nd *PowerNodeData) DeleteWorkloadFromProfile(profileName string, workloadName string) {
+	if workloads, exists := nd.ProfileAssociation[profileName]; exists {
+		for index, workload := range workloads {
+			if workload == workloadName {
+				workloads = append(workloads[:index], workloads[index+1:]...)
+				nd.ProfileAssociation[profileName] = workloads
+			}
+		}
+	}
+}
+
+func (nd *PowerNodeData) Difference(nodeInfo []powerv1alpha1.NodeInfo) []string {
+	difference := make([]string, 0)
+
+	for _, node := range nd.PowerNodeList {
+		if NodeNotInNodeInfo(node, nodeInfo) {
+			difference = append(difference, node)
 		}
 	}
 
-	return powerv1alpha1.GuaranteedPod{}
+	return difference
 }
 
-func (s *State) GetCPUsFromPodState(podState powerv1alpha1.GuaranteedPod) []int {
-	cpus := make([]int, 0)
-	for _, container := range podState.Containers {
-		for _, cpu := range container.ExclusiveCPUs {
-			cpus = append(cpus, cpu)
+func NodeNotInNodeInfo(nodeName string, nodeInfo []powerv1alpha1.NodeInfo) bool {
+	for _, node := range nodeInfo {
+		if nodeName == node.Name {
+			return false
 		}
 	}
 
-	return cpus
+	return true
 }

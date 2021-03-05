@@ -19,9 +19,9 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
-	"sort"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -34,7 +34,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podresourcesclient"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podstate"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
 )
 
 const (
@@ -46,7 +47,7 @@ type PowerPodReconciler struct {
 	client.Client
 	Log                logr.Logger
 	Scheme             *runtime.Scheme
-	State              state.State
+	State              podstate.State
 	PodResourcesClient podresourcesclient.PodResourcesClient
 }
 
@@ -61,7 +62,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err := r.Get(context.TODO(), req.NamespacedName, pod)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Maybe do a check to see if the Pod is still recorded in state for some reason
+			// Maybe do a check to see if the Pod is still recorded in State for some reason
 
 			return ctrl.Result{}, nil
 		}
@@ -274,9 +275,9 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if !nodeExisted {
 		nodeInfo := powerv1alpha1.NodeInfo{
-                        Name:   pod.Spec.NodeName,
-                        CpuIds: allCores,
-                }
+			Name:   pod.Spec.NodeName,
+			CpuIds: allCores,
+		}
 
 		workload.Spec.Nodes = append(workload.Spec.Nodes, nodeInfo)
 	}
@@ -300,7 +301,7 @@ func (r *PowerPodReconciler) getNewWorkloadCPUList(powerPodState powerv1alpha1.G
 		}
 
 		for _, cpu := range node.CpuIds {
-			if !CpuInCPUList(cpu, powerPodCPUs) {
+			if !util.CPUInCPUList(cpu, powerPodCPUs) {
 				updatedWorkloadCPUList = append(updatedWorkloadCPUList, cpu)
 			}
 		}
@@ -311,7 +312,7 @@ func (r *PowerPodReconciler) getNewWorkloadCPUList(powerPodState powerv1alpha1.G
 
 func appendIfUnique(cpuList []int, cpus []int) []int {
 	for _, cpu := range cpus {
-		if !CpuInCPUList(cpu, cpuList) {
+		if !util.CPUInCPUList(cpu, cpuList) {
 			cpuList = append(cpuList, cpu)
 		}
 	}

@@ -84,19 +84,22 @@ func (ac *AppQoSClient) GetPool(address string, id int) (*Pool, error) {
 	return pool, nil
 }
 
-func (ac *AppQoSClient) GetPoolByName(address string, name string) (*Pool, error) {
+func (ac *AppQoSClient) GetPoolByName(address string, name string) (*Pool, bool, error) {
 	allPools, err := ac.GetPools(address)
 	if err != nil {
-		return &Pool{}, err
+		// Return true when there is an error as we don't know if the pool exists or not.
+		// Also allows whatever called GetPoolByName to handle the error
+
+		return &Pool{}, true, err
 	}
 
 	for _, pool := range allPools {
 		if *pool.Name == name {
-			return &pool, nil
+			return &pool, true, nil
 		}
 	}
 
-	return &Pool{}, nil
+	return &Pool{}, false, nil
 }
 
 // PostPool /pools

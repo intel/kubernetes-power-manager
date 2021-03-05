@@ -28,12 +28,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	//"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/workloadstate"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podresourcesclient"
 
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/newstate"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podstate"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	// +kubebuilder:scaffold:imports
 )
@@ -74,26 +73,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	powerNodeState, err := state.NewState()
+	powerNodeState, err := podstate.NewState()
 	if err != nil {
 		setupLog.Error(err, "unable to create internal state")
 		os.Exit(1)
 	}
 
-	//workloadState, err := workloadstate.NewWorkloads()
-	//if err != nil {
-	//	setupLog.Error(err, "unable to create internal cpu state")
-	//	os.Exit(1)
-	//}
-
 	appQoSClient := appqos.NewDefaultAppQoSClient()
-	//if err != nil {
-	//	setupLog.Error(err, "unable to create internal AppQoS client")
-	//	os.Exit(1)
-	//}
 
-	newstate := newstate.NewPowerNodeData()
-	//newstate.UpdatePowerNodeData("worker")
+	state := state.NewPowerNodeData()
 
 	podResourcesClient, err := podresourcesclient.NewPodResourcesClient()
 	if err != nil {
@@ -114,7 +102,7 @@ func main() {
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerProfile"),
 		Scheme:       mgr.GetScheme(),
 		AppQoSClient: appQoSClient,
-		State:        newstate,
+		State:        state,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
 		os.Exit(1)
@@ -124,7 +112,7 @@ func main() {
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerWorkload"),
 		Scheme:       mgr.GetScheme(),
 		AppQoSClient: appQoSClient,
-		State:        newstate,
+		State:        state,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerWorkload")
 		os.Exit(1)
@@ -143,7 +131,7 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("PowerConfig"),
 		Scheme: mgr.GetScheme(),
-		State:  newstate,
+		State:  state,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerConfig")
 		os.Exit(1)
