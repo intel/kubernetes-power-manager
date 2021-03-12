@@ -56,39 +56,36 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
 
+	logger.Info("Entered")
+
 	workload := &powerv1alpha1.PowerWorkload{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, workload)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Assume PowerWorkload has been deleted. Check each Power Node to delete from each AppQoS instance
+			logger.Info("Entered the deletion")
 
 			obseleteWorkloads, err := r.findObseleteWorkloads(req, r.State.PowerNodeList)
+			logger.Info(fmt.Sprintf("Obselete: %v", obseleteWorkloads))
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 
 			for address, pool := range obseleteWorkloads {
+				logger.Info(fmt.Sprintf("Pool name: %v", *pool.Name))
 				err = r.AppQoSClient.DeletePool(address, *pool.ID)
 				if err != nil {
 					logger.Error(err, "Failed to delete PowerWorkload from AppQoS")
 					continue
 				}
 
-				// =================================================
-				// ====================IMPORTANT====================
-				// =================================================
-				// updateDefaultPool() has O(n) where
-				// n = len(defaultPool.Cores) even though the
-				// previous list it's comparing to is empty.
-				// Consider (actaully do) change this implementation
-				// =================================================
-				// ====================IMPORTANT====================
-				// =================================================
-
 				// Pass in an emtpy slice so no CPUs are removed from the Shared pool
 				updatedSharedPool, id, err := r.getUpdatedSharedPool([]int{}, address)
+				logger.Info(fmt.Sprintf("Updated Shared Pool: %v", updatedSharedPool))
+				logger.Info(fmt.Sprintf("Updated Shared Pool: %v", *updatedSharedPool.Cores))
 				updatedSharedCPUs := append(*updatedSharedPool.Cores, *pool.Cores...)
 				sort.Ints(updatedSharedCPUs)
+				logger.Info(fmt.Sprintf("Sorted: %v", updatedSharedCPUs))
 				updatedSharedPool.Cores = &updatedSharedCPUs
 				appqosPutResponse, err := r.AppQoSClient.PutPool(updatedSharedPool, address, id)
 				if err != nil {
@@ -335,6 +332,9 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 func (r *PowerWorkloadReconciler) findObseleteWorkloads(req ctrl.Request, nodes []string) (map[string]*appqos.Pool, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
+
+	logger.Info(fmt.Sprintf("Nodes: %v", nodes))
+	logger.Info(fmt.Sprintf("Req Name: %v", req.NamespacedName.Name))
 
 	obseleteWorkloads := make(map[string]*appqos.Pool, 0)
 

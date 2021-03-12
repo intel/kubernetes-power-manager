@@ -57,14 +57,13 @@ spec:
                           type: string
                         name:
                           type: string
+                        powerProfile:
+                          type: string
                       type: object
                     type: array
                   name:
                     type: string
                   node:
-                    type: string
-                  powerprofile:
-                    description: PowerProfile `json:"powerprofile,omitempty"`
                     type: string
                   uid:
                     type: string

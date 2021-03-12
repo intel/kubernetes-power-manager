@@ -42,6 +42,10 @@ spec:
               additionalProperties:
                 type: string
               type: object
+            powerProfiles:
+              items:
+                type: string
+              type: array
           type: object
         status:
           description: PowerConfigStatus defines the observed state of PowerConfig
