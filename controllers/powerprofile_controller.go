@@ -29,6 +29,7 @@ import (
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+
 	//cgp "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,9 +61,9 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 	r.State.AddProfile("NewProfile")
 	logger.Info(fmt.Sprintf("State: %v", r.State.ProfileAssociation))
-	if 1 == 1 {
-		return ctrl.Result{}, nil
-	}
+	//if 1 == 1 {
+	//	return ctrl.Result{}, nil
+	//}
 
 	/*app, e := r.AppQoSClient.GetApps("https://localhoste:5000")
 	if e != nil {
