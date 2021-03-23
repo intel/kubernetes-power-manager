@@ -6,4 +6,5 @@ resources:
 - power_v1alpha1_powernode.yaml
 - power_v1alpha1_powerprofile.yaml
 - power_v1alpha1_powerpod.yaml
+- power_v1alpha1_powerconfig.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

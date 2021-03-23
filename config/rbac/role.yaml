@@ -9,6 +9,26 @@ rules:
 - apiGroups:
   - power.intel.com
   resources:
+  - powerconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - power.intel.com
+  resources:
+  - powerconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - power.intel.com
+  resources:
   - powernodes
   verbs:
   - create

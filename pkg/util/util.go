@@ -25,7 +25,11 @@ import (
 	"path/filepath"
 
 	"golang.org/x/sys/unix"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
+
+	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 )
 
 const (
@@ -148,4 +152,58 @@ func IsUnixDomainSocket(filePath string) (bool, error) {
 // NormalizePath is a no-op for Linux for now
 func NormalizePath(path string) string {
 	return path
+}
+
+func GetPodFromNodeName(pods *corev1.PodList, nodeName string) (corev1.Pod, error) {
+	for _, pod := range pods.Items {
+		if nodeName == pod.Spec.NodeName {
+			return pod, nil
+		}
+	}
+
+	return corev1.Pod{}, errors.NewServiceUnavailable(fmt.Sprintf("%s%s", "appqos pod not found by name ", nodeName))
+}
+
+func GetPodFromNodeAddresses(pods *corev1.PodList, node *corev1.Node) (corev1.Pod, error) {
+	for _, pod := range pods.Items {
+		for _, address := range node.Status.Addresses {
+			if address.Address == pod.Status.HostIP {
+				return pod, nil
+			}
+		}
+	}
+
+	return corev1.Pod{}, errors.NewServiceUnavailable(fmt.Sprintf("%s%s", "appqos pod not found by node addresses ", node.GetObjectMeta().GetName()))
+}
+
+func CPUListDifference(cpusToRemove []int, cpuList []int) []int {
+	updatedList := make([]int, 0)
+
+	for _, cpu := range cpuList {
+		if !CPUInCPUList(cpu, cpusToRemove) {
+			updatedList = append(updatedList, cpu)
+		}
+	}
+
+	return updatedList
+}
+
+func CPUInCPUList(cpu int, cpuList []int) bool {
+	for _, cpuListID := range cpuList {
+		if cpuListID == cpu {
+			return true
+		}
+	}
+
+	return false
+}
+
+func NodeNameInNodeInfoList(name string, nodeInfo []powerv1alpha1.NodeInfo) bool {
+	for _, node := range nodeInfo {
+		if node.Name == name {
+			return true
+		}
+	}
+
+	return false
 }

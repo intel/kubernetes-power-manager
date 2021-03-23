@@ -6,20 +6,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
-  name: profiles.power.intel.com
+  name: powerconfigs.power.intel.com
 spec:
   group: power.intel.com
   names:
-    kind: Profile
-    listKind: ProfileList
-    plural: profiles
-    singular: profile
+    kind: PowerConfig
+    listKind: PowerConfigList
+    plural: powerconfigs
+    singular: powerconfig
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
-      description: Profile is the Schema for the profiles API
+      description: PowerConfig is the Schema for the powerconfigs API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -34,30 +34,26 @@ spec:
         metadata:
           type: object
         spec:
-          description: ProfileSpec defines the desired state of Profile
+          description: PowerConfigSpec defines the desired state of PowerConfig
           properties:
-            cstate:
-              description: 'TODO: determine exactly what cstate is for'
-              type: boolean
-            max:
-              description: Max is the maximum frequency that the core is allowed to
-                go up to
-              type: integer
-            min:
-              description: Min is the minimum frequency that the core is allowed to
-                drop to
-              type: integer
-            name:
-              description: Name is the name identifying the profile
+            powerImage:
               type: string
-          required:
-          - cstate
-          - max
-          - min
-          - name
+            powerNodeSelector:
+              additionalProperties:
+                type: string
+              type: object
+            powerProfiles:
+              items:
+                type: string
+              type: array
           type: object
         status:
-          description: ProfileStatus defines the observed state of Profile
+          description: PowerConfigStatus defines the observed state of PowerConfig
+          properties:
+            nodes:
+              items:
+                type: string
+              type: array
           type: object
       type: object
   version: v1alpha1

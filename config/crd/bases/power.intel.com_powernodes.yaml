@@ -51,59 +51,20 @@ spec:
                       properties:
                         exclusiveCpus:
                           items:
-                            type: string
+                            type: integer
                           type: array
                         id:
                           type: string
                         name:
                           type: string
+                        powerProfile:
+                          type: string
                       type: object
                     type: array
                   name:
                     type: string
-                  powerprofile:
-                    description: PowerProfile is the Schema for the powerprofiles
-                      API
-                    properties:
-                      apiVersion:
-                        description: 'APIVersion defines the versioned schema of this
-                          representation of an object. Servers should convert recognized
-                          schemas to the latest internal value, and may reject unrecognized
-                          values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-                        type: string
-                      kind:
-                        description: 'Kind is a string value representing the REST
-                          resource this object represents. Servers may infer this
-                          from the endpoint the client submits requests to. Cannot
-                          be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-                        type: string
-                      metadata:
-                        type: object
-                      spec:
-                        description: PowerProfileSpec defines the desired state of
-                          PowerProfile
-                        properties:
-                          max:
-                            description: Max indicates the maximum frequency the core
-                              is allowed go
-                            type: integer
-                          min:
-                            description: Min indicates the minimum frequency the core
-                              is allowed go
-                            type: integer
-                          name:
-                            description: Name is the name identifying the PowerProfile
-                            type: string
-                        required:
-                        - max
-                        - min
-                        - name
-                        type: object
-                      status:
-                        description: PowerProfileStatus defines the observed state
-                          of PowerProfile
-                        type: object
-                    type: object
+                  node:
+                    type: string
                   uid:
                     type: string
                 type: object
