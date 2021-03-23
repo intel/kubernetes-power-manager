@@ -18,25 +18,40 @@ package controllers
 
 import (
 	"context"
-	//"fmt"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/newstate"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	corev1 "k8s.io/api/core/v1"
 )
+
+const (
+	ExtendedResourcePrefix = "power.intel.com/"
+	//GoldResource resource.ResourceName = ""power.intel.com/gold"
+	//SilverResource resource.ResourceName = ""power.intel.com/silver"
+	//BronzeResource resource.ResourceName = ""power.intel.com/bronze"
+)
+
+var extendedResourceQuantity map[string]int64 = map[string]int64{
+	// CHANGE TO BE A REP OF THE NUMBER OF CORES
+	"gold": 400,
+	"silver": 800,
+	"bronze": 101,
+}
 
 // PowerConfigReconciler reconciles a PowerConfig object
 type PowerConfigReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
-	State  *newstate.PowerNodeData
+	State  *state.PowerNodeData
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -78,6 +93,52 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		logger.Error(err, "Failed to update PowerConfig")
 		return ctrl.Result{}, nil
 	}
+
+	for _, nodeName := range r.State.PowerNodeList {
+		node := &corev1.Node{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+                	Name: nodeName,
+        	}, node)
+		if err != nil {
+                	logger.Error(err, "Failed to get node")
+                	return ctrl.Result{}, nil
+        	}
+
+		for _, profileName := range config.Spec.PowerProfiles {
+			profilesAvailable := resource.NewQuantity(extendedResourceQuantity[profileName], resource.DecimalSI)
+			extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
+			node.Status.Capacity[extendedResourceName] = *profilesAvailable
+		}
+
+		err = r.Client.Status().Update(context.TODO(), node)
+		if err != nil {
+			logger.Error(err, "Failed updating node")
+			continue
+		}
+	}
+/*
+	node := &corev1.Node{}
+	err = r.Client.Get(context.TODO(), client.ObjectKey{
+		Name: "cascade-lake",
+	}, node)
+	if err != nil {
+		logger.Error(err, "Failed to get node")
+		return ctrl.Result{}, nil
+	}
+
+	for _, profileName := range config.Spec.PowerProfiles {
+		//logger.Info(fmt.Sprintf("%s: %d", profileName, extendedResourceQuantity[profileName]))
+		numExtendedResources := resource.NewQuantity(extendedResourceQuantity[profileName], resource.DecimalSI)
+		extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
+		node.Status.Capacity[extendedResourceName] = *numExtendedResources
+	}
+
+	err = r.Client.Status().Update(context.TODO(), node)
+	if err != nil {
+		logger.Error(err, "Failed updating node")
+		return ctrl.Result{}, nil
+	}
+*/
 
 	return ctrl.Result{}, nil
 }

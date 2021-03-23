@@ -30,6 +30,7 @@ type PowerConfigSpec struct {
 
 	PowerImage        string            `json:"powerImage,omitempty"`
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
+	PowerProfiles	  []string	    `json:"powerProfiles,omitempty"`
 }
 
 // PowerConfigStatus defines the observed state of PowerConfig

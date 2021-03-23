@@ -46,14 +46,13 @@ type GuaranteedPod struct {
 	Name       string      `json:"name,omitempty"`
 	UID        string      `json:"uid,omitempty"`
 	Containers []Container `json:"containers,omitempty"`
-	//PowerProfile `json:"powerprofile,omitempty"`
-	PowerProfile string `json:"powerprofile,omitempty"`
 }
 
 type Container struct {
 	Name          string `json:"name,omitempty"`
 	ID            string `json:"id,omitempty"`
 	ExclusiveCPUs []int  `json:"exclusiveCpus,omitempty"`
+	PowerProfile  string `json:"powerProfile,omitempty"`
 }
 
 // +kubebuilder:object:root=true

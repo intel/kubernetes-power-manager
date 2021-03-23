@@ -28,12 +28,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	corev1 "k8s.io/api/core/v1"
 
-	//cgp "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cgroupsparser"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/newstate"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
 )
 
@@ -47,7 +46,7 @@ type PowerProfileReconciler struct {
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
 	AppQoSClient *appqos.AppQoSClient
-	State        *newstate.PowerNodeData
+	State        *state.PowerNodeData
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerprofiles,verbs=get;list;watch;create;update;patch;delete
