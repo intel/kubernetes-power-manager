@@ -22,46 +22,40 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"k8s.io/apimachinery/pkg/api/resource"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 )
 
 const (
 	ExtendedResourcePrefix = "power.intel.com/"
-	//GoldResource resource.ResourceName = ""power.intel.com/gold"
-	//SilverResource resource.ResourceName = ""power.intel.com/silver"
-	//BronzeResource resource.ResourceName = ""power.intel.com/bronze"
 )
 
-/*
-var extendedResourceQuantity map[string] = map[string]int64{
-	// CHANGE TO BE A REP OF THE NUMBER OF CORES
-	"gold": 400,
-	"silver": 800,
-	"bronze": 101,
-}
-*/
-
 var extendedResourcePercentage map[string]float64 = map[string]float64{
-	"gold": 40.0,
-	"silver": 80.0,
-	"bronze": 100.0,
+	// performance          ===>  priority level 0
+	// balance_performance  ===>  priority level 1
+	// balance_power        ===>  priority level 2
+	// power                ===>  priority level 3
+
+	"performance":         40.0,
+	"balance_performance": 80.0,
+	"balance_power":       100.0,
+	"power":               100.0,
 }
 
 // PowerConfigReconciler reconciles a PowerConfig object
 type PowerConfigReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
-	State  *state.PowerNodeData
+	Log          logr.Logger
+	Scheme       *runtime.Scheme
+	State        *state.PowerNodeData
 	AppQoSClient *appqos.AppQoSClient
 }
 
@@ -109,34 +103,39 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		nodeAddress, err := r.getPodAddress(nodeName, req)
 		if err != nil {
 			// Continue with other nodes if there's a failure with this one
+
 			logger.Error(err, fmt.Sprintf("Failed to get IP address for node: %s", nodeName))
 			continue
 		}
 
-		defaultPool, _, err := r.AppQoSClient.GetPoolByName(nodeAddress, "Default")
+		// Don't need to determine if it's the Default or the Shared pool because there shouldn't
+		// be a Shared pool at this stage
+		defaultPool, err := r.AppQoSClient.GetPoolByName(nodeAddress, "Default")
 		if err != nil {
 			logger.Error(err, "Error getting Default pool")
 			return ctrl.Result{}, nil
 		}
 
 		numPools := len(*defaultPool.Cores)
-		logger.Info(fmt.Sprintf("NUMBER OF CORES: %v", numPools))
 
 		node := &corev1.Node{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-                	Name: nodeName,
-        	}, node)
+			Name: nodeName,
+		}, node)
 		if err != nil {
-                	logger.Error(err, "Failed to get node")
-                	return ctrl.Result{}, nil
-        	}
+			logger.Error(err, "Failed to get node")
+			return ctrl.Result{}, nil
+		}
 
 		for _, profileName := range config.Spec.PowerProfiles {
-			numProfileResources := int64((float64(numPools) / 100) * extendedResourcePercentage[profileName])
-			//numProfileResources := numPools * extendedResourcePercentage[profileName]
-			profilesAvailable := resource.NewQuantity(numProfileResources, resource.DecimalSI)
-			extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
-			node.Status.Capacity[extendedResourceName] = *profilesAvailable
+			if profilePercentage, exists := extendedResourcePercentage[profileName]; exists {
+				numProfileResources := int64((float64(numPools) / 100) * profilePercentage)
+				profilesAvailable := resource.NewQuantity(numProfileResources, resource.DecimalSI)
+				extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
+				node.Status.Capacity[extendedResourceName] = *profilesAvailable
+			} else {
+				logger.Info(fmt.Sprintf("Skipping profile '%s', profile must be 'performance', 'balance_performance', 'balance_power', or 'power'", profileName))
+			}
 		}
 
 		err = r.Client.Status().Update(context.TODO(), node)
@@ -145,29 +144,6 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			continue
 		}
 	}
-/*
-	node := &corev1.Node{}
-	err = r.Client.Get(context.TODO(), client.ObjectKey{
-		Name: "cascade-lake",
-	}, node)
-	if err != nil {
-		logger.Error(err, "Failed to get node")
-		return ctrl.Result{}, nil
-	}
-
-	for _, profileName := range config.Spec.PowerProfiles {
-		//logger.Info(fmt.Sprintf("%s: %d", profileName, extendedResourceQuantity[profileName]))
-		numExtendedResources := resource.NewQuantity(extendedResourceQuantity[profileName], resource.DecimalSI)
-		extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
-		node.Status.Capacity[extendedResourceName] = *numExtendedResources
-	}
-
-	err = r.Client.Status().Update(context.TODO(), node)
-	if err != nil {
-		logger.Error(err, "Failed updating node")
-		return ctrl.Result{}, nil
-	}
-*/
 
 	return ctrl.Result{}, nil
 }

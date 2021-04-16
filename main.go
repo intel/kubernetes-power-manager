@@ -128,16 +128,16 @@ func main() {
 		Scheme:             mgr.GetScheme(),
 		State:              *powerNodeState,
 		PodResourcesClient: *podResourcesClient,
-		AppQoSClient: appQoSClient,
+		AppQoSClient:       appQoSClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerPod")
 		os.Exit(1)
 	}
 	if err = (&controllers.PowerConfigReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("PowerConfig"),
-		Scheme: mgr.GetScheme(),
-		State:  state,
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName("controllers").WithName("PowerConfig"),
+		Scheme:       mgr.GetScheme(),
+		State:        state,
 		AppQoSClient: appQoSClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerConfig")

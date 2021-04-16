@@ -36,15 +36,18 @@ type PowerWorkloadSpec struct {
 	// AllCores determines if the Workload is to be applied to all cores (i.e. use the Default Workload)
 	AllCores bool `json:"allCores,omitempty"`
 
+	// Reserved CPUs are the CPUs that have been reserved by Kubelet for use by the Kubernetes admin process
+	// This list must match the list in the user's Kubelet configuration
 	ReservedCPUs []int `json:"reservedCPUs,omitempty"`
 
+	// The labels signifying the nodes the user wants to use
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
 
+	// Holds the info on the node name and cpu ids for each node
 	Nodes []NodeInfo `json:"nodes,omitempty"`
 
 	// PowerProfile is the Profile that this PowerWorkload is based on
-	//PowerProfile `json:"powerprofile,omitempty"`
-	PowerProfile int `json:"powerProfile,omitempty"`
+	PowerProfile string `json:"powerProfile, omitempty"`
 }
 
 // PowerWorkloadStatus defines the observed state of PowerWorkload

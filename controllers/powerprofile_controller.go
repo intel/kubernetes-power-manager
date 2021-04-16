@@ -31,7 +31,6 @@ import (
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	corev1 "k8s.io/api/core/v1"
 
-	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
 )
@@ -64,16 +63,16 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		if errors.IsNotFound(err) {
 			// When a PowerProfile cannot be found, we assume it has been deleted. We need to check if there is a
 			// corresponding PowerWorkload and, if there is, delete that too. We leave the cleanup of requesting the
-			// frequency resets of the effected CPUs to the PowerWorkload controller.
+			// frequency resets of the effected CPUs to the PowerWorkload controller. We also need to check to see
+			// if there are any AppQoS instances on other nodes
 
 			obseleteProfiles, err := r.findObseleteProfiles(req)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 
-			for address, profileName := range obseleteProfiles {
-				// TODO: CHANGE TO POWERPROFILES
-				err = r.AppQoSClient.DeleteApp(address, profileName)
+			for address, profileID := range obseleteProfiles {
+				err = r.AppQoSClient.DeletePowerProfile(address, profileID)
 				if err != nil {
 					logger.Error(err, "Failed to delete profile from AppQoS")
 					return ctrl.Result{}, err
@@ -90,42 +89,38 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	// Loop through Power Nodes to check which AppQos instances have this PowerProfile already
 	// If an instance has it, update it, otherwise create it
 
-	for _, targetNode := range r.State.PowerNodeList {
-		nodeAddress, err := r.getPodAddress(targetNode, req)
-		logger.Info(fmt.Sprintf("NODE ADDRESS: %v", nodeAddress))
+	for _, nodeName := range r.State.PowerNodeList {
+		nodeAddress, err := r.getPodAddress(nodeName, req)
 		if err != nil {
 			// Continue with other Nodes if there's a failure on one
-			logger.Error(err, "Failed to get IP address for node: ", targetNode)
+
+			logger.Error(err, fmt.Sprintf("Failed to get IP address for node: %s", nodeName))
 			continue
 		}
 
-		allProfilesOnNode, err := r.AppQoSClient.GetPowerProfiles(nodeAddress)
+		powerProfileFromAppQoS, err := r.AppQoSClient.GetProfileByName(req.NamespacedName.Name, nodeAddress)
 		if err != nil {
-			logger.Error(err, fmt.Sprintf("Failed to list PowerProfiles on node: %s", targetNode))
+			logger.Error(err, fmt.Sprintf("Error retrieving Power Profiles from AppQoS from node %s", nodeName))
 			continue
 		}
 
-		powerProfileFromAppQoS := appqos.FindProfileByName(allProfilesOnNode, req.NamespacedName.Name)
+		powerProfile := &appqos.PowerProfile{}
+		powerProfile.Name = &req.NamespacedName.Name
+		powerProfile.MinFreq = &profile.Spec.Min
+		powerProfile.MaxFreq = &profile.Spec.Max
+		powerProfile.Epp = &profile.Spec.Epp
 
 		if !reflect.DeepEqual(powerProfileFromAppQoS, &appqos.PowerProfile{}) {
 			// Update PowerProfile
-			updatedProfile := &appqos.PowerProfile{}
-			updatedProfile.Name = powerProfileFromAppQoS.Name
-			updatedProfile.MinFreq = powerProfileFromAppQoS.MinFreq
-			updatedProfile.MaxFreq = powerProfileFromAppQoS.MaxFreq
-			updatedProfile.Epp = powerProfileFromAppQoS.Epp
-			appqosPutResp, err := r.AppQoSClient.PutPowerProfile(updatedProfile, nodeAddress, *powerProfileFromAppQoS.ID)
+
+			appqosPutResp, err := r.AppQoSClient.PutPowerProfile(powerProfile, nodeAddress, *powerProfileFromAppQoS.ID)
 			if err != nil {
 				logger.Error(err, appqosPutResp)
 				continue
 			}
 		} else {
-			// Creating PowerProfile
-			powerProfile := &appqos.PowerProfile{}
-			powerProfile.Name = &req.NamespacedName.Name
-			powerProfile.MinFreq = &profile.Spec.Min
-			powerProfile.MaxFreq = &profile.Spec.Max
-			powerProfile.Epp = &profile.Spec.Epp
+			// Create PowerProfile
+
 			appqosPostResp, err := r.AppQoSClient.PostPowerProfile(powerProfile, nodeAddress)
 			if err != nil {
 				logger.Error(err, appqosPostResp)
@@ -149,14 +144,13 @@ func (r *PowerProfileReconciler) findObseleteProfiles(req ctrl.Request) (map[str
 			return nil, err
 		}
 
-		activeProfiles, err := r.AppQoSClient.GetPowerProfiles(address)
+		profile, err := r.AppQoSClient.GetProfileByName(req.NamespacedName.Name, address)
 		if err != nil {
-			logger.Info("Could not GET PowerProfiles.", "Error:", err)
+			logger.Error(err, fmt.Sprintf("Error retrieving Power Profiles from AppQoS from node %s", nodeName))
 			return nil, err
 		}
 
-		profile := appqos.FindProfileByName(activeProfiles, req.NamespacedName.Name)
-		if *profile.Name == "" {
+		if reflect.DeepEqual(profile, &appqos.PowerProfile{}) {
 			logger.Info("PowerProfile not found on AppQoS instance")
 			continue
 		}

@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 
 	"github.com/go-logr/logr"
@@ -56,37 +57,31 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
 
-	logger.Info("Entered")
-
 	workload := &powerv1alpha1.PowerWorkload{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, workload)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Assume PowerWorkload has been deleted. Check each Power Node to delete from each AppQoS instance
-			logger.Info("Entered the deletion")
 
 			obseleteWorkloads, err := r.findObseleteWorkloads(req, r.State.PowerNodeList)
-			logger.Info(fmt.Sprintf("Obselete: %v", obseleteWorkloads))
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 
 			for address, pool := range obseleteWorkloads {
-				logger.Info(fmt.Sprintf("Pool name: %v", *pool.Name))
 				err = r.AppQoSClient.DeletePool(address, *pool.ID)
 				if err != nil {
 					logger.Error(err, "Failed to delete PowerWorkload from AppQoS")
 					continue
 				}
 
-				// Pass in an emtpy slice so no CPUs are removed from the Shared pool
-				updatedSharedPool, id, err := r.getUpdatedSharedPool([]int{}, address)
-				logger.Info(fmt.Sprintf("Updated Shared Pool: %v", updatedSharedPool))
-				logger.Info(fmt.Sprintf("Updated Shared Pool: %v", *updatedSharedPool.Cores))
-				updatedSharedCPUs := append(*updatedSharedPool.Cores, *pool.Cores...)
-				sort.Ints(updatedSharedCPUs)
-				logger.Info(fmt.Sprintf("Sorted: %v", updatedSharedCPUs))
-				updatedSharedPool.Cores = &updatedSharedCPUs
+				// We only need to call returnCoresToSharedPool as no cores will be taken away
+				updatedSharedPool, id, err := r.returnCoresToSharedPool(*pool.Cores, address)
+				if err != nil {
+					logger.Error(err, "Error updating Shared Pool")
+					continue
+				}
+
 				appqosPutResponse, err := r.AppQoSClient.PutPool(updatedSharedPool, address, id)
 				if err != nil {
 					logger.Error(err, appqosPutResponse)
@@ -114,7 +109,6 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	// Remove Pools from AppQoS instances that were potentially removed from this Workload
 	nodesToCheck := r.State.Difference(workload.Spec.Nodes)
-	logger.Info(fmt.Sprintf("Checking nodes: %v", nodesToCheck))
 	obseleteWorkloads, err := r.findObseleteWorkloads(req, nodesToCheck)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -127,10 +121,13 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			continue
 		}
 
-		updatedSharedPool, id, err := r.getUpdatedSharedPool([]int{}, address)
-		updatedSharedCPUs := append(*updatedSharedPool.Cores, *pool.Cores...)
-		sort.Ints(updatedSharedCPUs)
-		updatedSharedPool.Cores = &updatedSharedCPUs
+		// We only need to call returnCoresToSharedPool as no cores will be taken away
+		updatedSharedPool, id, err := r.returnCoresToSharedPool(*pool.Cores, address)
+		if err != nil {
+			logger.Error(err, "Error updating Shared Pool")
+			continue
+		}
+
 		appqosPutResponse, err := r.AppQoSClient.PutPool(updatedSharedPool, address, id)
 		if err != nil {
 			logger.Error(err, appqosPutResponse)
@@ -140,65 +137,147 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	// Loop through all Power Nodes requested with this PowerWorkload
 
-	for _, targetNode := range workload.Spec.Nodes {
-		logger.Info(fmt.Sprintf("NodeInfo: %v", workload.Spec.Nodes))
-		nodeAddress, err := r.getPodAddress(targetNode.Name, req)
+	for _, node := range workload.Spec.Nodes {
+		nodeAddress, err := r.getPodAddress(node.Name, req)
 		if err != nil {
 			// Continue with other nodes if there's a failure with this one
-			logger.Error(err, fmt.Sprintf("Failed to get IP address for node: %s", targetNode.Name))
+
+			logger.Error(err, fmt.Sprintf("Failed to get IP address for node: %s", node.Name))
 			continue
 		}
 
-		if poolFromAppQos, exists, err := r.AppQoSClient.GetPoolByName(nodeAddress, req.NamespacedName.Name); exists {
-			if err != nil {
-				logger.Error(err, "Failed while retreiving pool")
-				continue
-			}
+		powerProfileFromAppQoS, err := r.AppQoSClient.GetProfileByName(workload.Spec.PowerProfile, nodeAddress)
+		if err != nil {
+			// If we can't find the Power Profile, fail out now without requeueing request"
 
-			if req.NamespacedName.Name == SharedWorkloadName {
-				defaultPool, _, err := r.AppQoSClient.GetPoolByName(nodeAddress, DefaultPool)
+			logger.Error(err, fmt.Sprintf("Error retrieving Power Profile from AppQoS on node %s", node.Name))
+			continue
+		}
+
+		if reflect.DeepEqual(powerProfileFromAppQoS, &appqos.PowerProfile{}) {
+			profileNotFoundError := errors.NewServiceUnavailable(fmt.Sprintf("Power Profile '%s' not found on node '%s'", workload.Spec.PowerProfile, node.Name))
+			logger.Error(profileNotFoundError, "Error retrieving Power Profile")
+			continue
+		}
+
+		poolFromAppQoS, err := r.AppQoSClient.GetPoolByName(nodeAddress, req.NamespacedName.Name)
+		if err != nil {
+			logger.Error(err, "Error retrieving Pool from AppQoS")
+			continue
+		}
+
+		if reflect.DeepEqual(poolFromAppQoS, &appqos.Pool{}) {
+			// Pool does not exist so we need to create it. We need to check first if it is the Shared Workload
+
+			if workload.Spec.AllCores {
+				// If this is being designated as the Shared Workload, we need to make sure the Shared pool
+				// doesn't already exist. If it does, just bail out.
+
+				sharedPoolFromAppQoS, err := r.AppQoSClient.GetPoolByName(nodeAddress, SharedWorkloadName)
 				if err != nil {
-					logger.Error(err, "Failed retrieving Default pool from AppQoS")
+					logger.Error(err, fmt.Sprintf("Error retrieving Shared pool from AppQoS on node '%s'", node.Name))
 					continue
 				}
 
-				updatedSharedPool, sharedPoolID := updatePool(*poolFromAppQos.Cores, *poolFromAppQos.PowerProfile, poolFromAppQos)
+				if !reflect.DeepEqual(sharedPoolFromAppQoS, &appqos.Pool{}) {
+					// Shared pool exists, so we skip this node
 
-				sharedCoresWithoutReservedCPUs := util.CPUListDifference(workload.Spec.ReservedCPUs, *poolFromAppQos.Cores)
-				if len(sharedCoresWithoutReservedCPUs) > 0 {
-					updatedSharedPool, sharedPoolID = updatePool(sharedCoresWithoutReservedCPUs, *poolFromAppQos.PowerProfile, poolFromAppQos)
-					appqosPutResponse, err := r.AppQoSClient.PutPool(updatedSharedPool, nodeAddress, sharedPoolID)
+					logger.Info(fmt.Sprintf("Shared pool already exists on node '%s'", node.Name))
+					continue
+				}
+
+				sharedCores, err := r.removeNonReservedCPUsFromDefaultPool(workload.Spec.ReservedCPUs, nodeAddress)
+				if err != nil {
+					logger.Error(err, fmt.Sprintf("Failed removing ReservedCPUs from Default pool on node '%s'", node.Name))
+					continue
+				}
+
+				if len(sharedCores) == 0 {
+					logger.Info(fmt.Sprintf("Length of shared cores cannot be zero (node '%s'", node.Name))
+					continue
+				}
+
+				// getUpdatedSharedPool will default to the Default pool as the Shared pool doesn't exist yet
+				updatedDefaultPool, id, err := r.removeCoresFromSharedPool(sharedCores, nodeAddress)
+				if err != nil {
+					logger.Error(err, fmt.Sprintf("Failed updating Default pool on node '%s'", node.Name))
+					continue
+				}
+
+				if !reflect.DeepEqual(updatedDefaultPool, &appqos.Pool{}) {
+					appqosPutResponse, err := r.AppQoSClient.PutPool(updatedDefaultPool, nodeAddress, id)
 					if err != nil {
 						logger.Error(err, appqosPutResponse)
 						continue
 					}
 				}
 
-				sharedCoresRetrievedFromDefaultPool, err := r.removeNonReservedCPUsFromDefaultPool(workload.Spec.ReservedCPUs, nodeAddress)
-                                if err != nil {
-                                        logger.Error(err, "Failed trying to remove ReservedCPUs from Default pool")
-                                        continue
-                                }
+				// This is strange because we have the Shared Workload name as a constant, but you can't get the memory
+				// address of a constant so we have to create a variable
+				sharedName := "shared-workload"
+				cbmDefault := 1
 
-				if len(sharedCoresWithoutReservedCPUs) > 0 || len(sharedCoresRetrievedFromDefaultPool) > 0 {
-					updatedDefaultPool, defaultPoolID := updatePoolWithoutPowerProfile(workload.Spec.ReservedCPUs, defaultPool)
-					appqosPutResponse, err := r.AppQoSClient.PutPool(updatedDefaultPool, nodeAddress, defaultPoolID)
+				pool := &appqos.Pool{}
+				pool.Name = &sharedName
+				pool.Cores = &sharedCores
+				pool.PowerProfile = powerProfileFromAppQoS.ID
+				pool.Cbm = &cbmDefault
+
+				appqosPostResponse, err := r.AppQoSClient.PostPool(pool, nodeAddress)
+				if err != nil {
+					logger.Error(err, appqosPostResponse)
+					continue
+				}
+
+				// Finally, update the PowerWorkload on the node so it contains the new Shared CPU list
+				for _, node := range workload.Spec.Nodes {
+					if node.Name == node.Name {
+						node.CpuIds = sharedCores
+						break
+					}
+				}
+			} else {
+				// Have to update the Shared pool before creating the pool for the newly created
+				// Power Workload
+
+				updatedSharedPool, id, err := r.removeCoresFromSharedPool(node.CpuIds, nodeAddress)
+				if err != nil {
+					logger.Error(err, fmt.Sprintf("Error retrieving Shared pool on node '%s'", node.Name))
+					continue
+				}
+
+				// Only update the AppQoS instance if there were any cores removed
+				// In this instance where the Pool is being created, there will always be a removal of cores from the Shared pool
+				if !reflect.DeepEqual(updatedSharedPool, &appqos.Pool{}) {
+					appqosPutResponse, err := r.AppQoSClient.PutPool(updatedSharedPool, nodeAddress, id)
 					if err != nil {
 						logger.Error(err, appqosPutResponse)
-                                                continue
+						continue
 					}
 				}
 
-				if len(sharedCoresRetrievedFromDefaultPool) > 0 {
-					newSharedCores := append(*updatedSharedPool.Cores, sharedCoresRetrievedFromDefaultPool...)
-					updatedSharedPool, sharedPoolID = updatePool(newSharedCores, *poolFromAppQos.PowerProfile, poolFromAppQos)
-					appqosPutResponse, err := r.AppQoSClient.PutPool(updatedSharedPool, nodeAddress, sharedPoolID)
-					if err != nil {
-                                                logger.Error(err, appqosPutResponse)
-                                                continue
-                                        }
-				}
+				cbmDefault := 1
 
+				pool := &appqos.Pool{}
+				pool.Name = &req.NamespacedName.Name
+				pool.Cores = &node.CpuIds
+				pool.PowerProfile = powerProfileFromAppQoS.ID
+				pool.Cbm = &cbmDefault
+
+				appqosPostResponse, err := r.AppQoSClient.PostPool(pool, nodeAddress)
+				if err != nil {
+					logger.Error(err, appqosPostResponse)
+					continue
+				}
+			}
+		} else {
+			// The pool already exists in AppQoS, so need to retrieve and update it
+
+			if req.NamespacedName.Name == SharedWorkloadName {
+				// Figure out this. May need to do some housekeeping to see if anything
+				// has changed, view other commit for this. If not can just skip
+
+				logger.Info("Shared Profile, skipping for now...")
 				continue
 			}
 
@@ -208,118 +287,41 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			// back into the Default pool. It has to be done in this order as AppQoS will fail
 			// if you try and assign CPUs to a new pool when they exist in another one
 
-			// Check if CPUs were removed from PowerWorkload and need to be added back to Default
-			// and update the Default pool in AppQoS instance
-
-			// MAYBE DO A CHECK TO SEE IF LIST IS EMPTY, NO POINT PUTTING IF IT IS
-			returnedCPUs := util.CPUListDifference(targetNode.CpuIds, *poolFromAppQos.Cores)
-			updatedSharedPool, id, err := r.getUpdatedSharedPool(returnedCPUs, nodeAddress)
+			updatedSharedPool, id, err := r.removeCoresFromSharedPool(node.CpuIds, nodeAddress)
 			if err != nil {
-				logger.Error(err, "Failed updating Shared pool")
+				logger.Error(err, fmt.Sprintf("Failed updating Shared pool on node '%s'", node.Name))
 				continue
 			}
 
-			appqosPutResponse, err := r.AppQoSClient.PutPool(updatedSharedPool, nodeAddress, id)
-			if err != nil {
-				logger.Error(err, appqosPutResponse)
-				continue
-			}
-
-			// Update the Workload (length of Core List in a Pool cannot be zero)
-			updatedPool := &appqos.Pool{}
-			updatedPool.Name = poolFromAppQos.Name
-			updatedPool.Cores = &targetNode.CpuIds
-			updatedPool.PowerProfile = &workload.Spec.PowerProfile
-			appqosPutResponse, err = r.AppQoSClient.PutPool(updatedPool, nodeAddress, *poolFromAppQos.ID)
-			if err != nil {
-				logger.Error(err, appqosPutResponse)
-				continue
-			}
-		} else {
-			if workload.Spec.AllCores {
-				if _, exists, err := r.AppQoSClient.GetPoolByName(nodeAddress, SharedWorkloadName); exists {
-					if err != nil {
-						logger.Error(err, "Failed retreiving Shared workload")
-						continue
-					}
-
-					logger.Info("Shared workload already exist")
-
-					// FOR NOW JUST RETURN, WILL COME BACK TO THIS
-					return ctrl.Result{}, nil
-				}
-
-				sharedCores, err := r.removeNonReservedCPUsFromDefaultPool(workload.Spec.ReservedCPUs, nodeAddress)
-				if err != nil {
-					logger.Error(err, "Failed trying to remove ReservedCPUs from Default pool")
-					continue
-				}
-
-				if len(sharedCores) == 0 {
-					logger.Info("Length of shared cores cannot be zero")
-					continue
-				}
-
-				// getUpdatedSharedPool will default to the Default pool as the Shared pool doesn't exist yet
-				updatedDefaultPool, id, err := r.getUpdatedSharedPool(sharedCores, nodeAddress)
-				if err != nil {
-					logger.Error(err, "Failed updating Default pool")
-					continue
-				}
-
-				appqosPutResponse, err := r.AppQoSClient.PutPool(updatedDefaultPool, nodeAddress, id)
-				if err != nil {
-					logger.Error(err, appqosPutResponse)
-					continue
-				}
-
-				sharedName := "shared-workload"
-
-				pool := &appqos.Pool{}
-				pool.Name = &sharedName
-				//pool.Name = &SharedWorkloadName
-				pool.Cores = &sharedCores
-				// CHANGE BELOW TO USE THE SHARED PROFILE (MAY NEED ERROR CHECKING OR JUST MAKE THEM PROVIDE IT)
-				pool.PowerProfile = &workload.Spec.PowerProfile
-				cbmDefault := 1
-				pool.Cbm = &cbmDefault
-
-				appqosPostResponse, err := r.AppQoSClient.PostPool(pool, nodeAddress)
-				if err != nil {
-					logger.Error(err, appqosPostResponse)
-					continue
-				}
-
-				// Finally, update the PwerWorkload on the node so it contains the new Shared CPU list
-				for _, node := range workload.Spec.Nodes {
-					if node.Name == targetNode.Name {
-						node.CpuIds = sharedCores
-						break
-					}
-				}
-			} else {
-				updatedSharedPool, id, err := r.getUpdatedSharedPool(targetNode.CpuIds, nodeAddress)
-				if err != nil {
-					logger.Error(err, "Failed updating Shared pool")
-					continue
-				}
-
+			// Only update the Shared Pool if there were cores removed
+			if !reflect.DeepEqual(updatedSharedPool, &appqos.Pool{}) {
 				appqosPutResponse, err := r.AppQoSClient.PutPool(updatedSharedPool, nodeAddress, id)
 				if err != nil {
 					logger.Error(err, appqosPutResponse)
 					continue
 				}
+			}
 
-				pool := &appqos.Pool{}
-				pool.Name = &req.NamespacedName.Name
-				pool.Cores = &targetNode.CpuIds
-				pool.PowerProfile = &workload.Spec.PowerProfile
-				cbmDefault := 1
-				pool.Cbm = &cbmDefault
+			returnedCPUs := util.CPUListDifference(node.CpuIds, *poolFromAppQoS.Cores)
 
-				appqosPostResponse, err := r.AppQoSClient.PostPool(pool, nodeAddress)
+			// Update the Workload (length of Core List in a Pool cannot be zero)
+			updatedPool := &appqos.Pool{}
+			updatedPool.Name = &req.NamespacedName.Name
+			updatedPool.Cores = &node.CpuIds
+			updatedPool.PowerProfile = powerProfileFromAppQoS.ID
+
+			appqosPutResponse, err := r.AppQoSClient.PutPool(updatedPool, nodeAddress, *poolFromAppQoS.ID)
+			if err != nil {
+				logger.Error(err, appqosPutResponse)
+				continue
+			}
+
+			if len(returnedCPUs) > 0 {
+				updatedSharedPool, id, err := r.returnCoresToSharedPool(returnedCPUs, nodeAddress)
+
+				appqosPutResponse, err := r.AppQoSClient.PutPool(updatedSharedPool, nodeAddress, id)
 				if err != nil {
-					logger.Error(err, appqosPostResponse)
+					logger.Error(err, appqosPutResponse)
 					continue
 				}
 			}
@@ -333,9 +335,6 @@ func (r *PowerWorkloadReconciler) findObseleteWorkloads(req ctrl.Request, nodes 
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
 
-	logger.Info(fmt.Sprintf("Nodes: %v", nodes))
-	logger.Info(fmt.Sprintf("Req Name: %v", req.NamespacedName.Name))
-
 	obseleteWorkloads := make(map[string]*appqos.Pool, 0)
 
 	for _, nodeName := range nodes {
@@ -344,16 +343,17 @@ func (r *PowerWorkloadReconciler) findObseleteWorkloads(req ctrl.Request, nodes 
 			return nil, err
 		}
 
-		if pool, exists, err := r.AppQoSClient.GetPoolByName(address, req.NamespacedName.Name); exists {
-			if err != nil {
-				return nil, err
-			}
+		pool, err := r.AppQoSClient.GetPoolByName(address, req.NamespacedName.Name)
+		if err != nil {
+			return nil, err
+		}
 
-			obseleteWorkloads[address] = pool
-		} else {
-			logger.Info("PowerWorkload not found on AppQoS instance")
+		if reflect.DeepEqual(pool, &appqos.Pool{}) {
+			logger.Info(fmt.Sprintf("PowerWorkload not found in AppQoS instance on node '%s'", nodeName))
 			continue
 		}
+
+		obseleteWorkloads[address] = pool
 	}
 
 	return obseleteWorkloads, nil
@@ -423,35 +423,81 @@ func (r *PowerWorkloadReconciler) getPodAddress(nodeName string, req ctrl.Reques
 	return address, nil
 }
 
-func (r *PowerWorkloadReconciler) getUpdatedSharedPool(workloadCPUList []int, nodeAddress string) (*appqos.Pool, int, error) {
-	// Returns the updated Shared pool along with the corresponding id for it
-	// Uses Shared pool if it exists, Default pool otherwise
+func (r *PowerWorkloadReconciler) getCorrectSharedPool(nodeAddress string) (*appqos.Pool, error) {
+	// Returns the correct Shared Pool (either Default or Shared). First it looks in AppQoS for the
+	// Shared pool and then if that isn't found gets the Default pool
 
-	sharedPool := &appqos.Pool{}
+	sharedPool, err := r.AppQoSClient.GetPoolByName(nodeAddress, SharedWorkloadName)
+	if err != nil {
+                return &appqos.Pool{}, err
+        }
 
-	if sharedPoolFromAppQoS, exists, err := r.AppQoSClient.GetPoolByName(nodeAddress, SharedWorkloadName); exists {
-		if err != nil {
-			return &appqos.Pool{}, 0, err
-		}
+	if reflect.DeepEqual(sharedPool, &appqos.Pool{}) {
+                // If the Shared Pool does not exist, we have to use the Default Pool
 
-		sharedPool = sharedPoolFromAppQoS
-	} else {
-		defaultPool, _, err := r.AppQoSClient.GetPoolByName(nodeAddress, DefaultPool)
-		if err != nil {
-			return &appqos.Pool{}, 0, err
-		}
+                sharedPool, err = r.AppQoSClient.GetPoolByName(nodeAddress, DefaultPool)
+                if err != nil {
+                        return &appqos.Pool{}, err
+                }
 
-		sharedPool = defaultPool
+                if reflect.DeepEqual(sharedPool, &appqos.Pool{}) {
+                        notFoundError := errors.NewServiceUnavailable("Default Pool not found")
+                        return &appqos.Pool{}, notFoundError
+                }
+        }
+
+	return sharedPool, nil
+}
+
+func (r *PowerWorkloadReconciler) removeCoresFromSharedPool(workloadCPUList []int, nodeAddress string) (*appqos.Pool, int, error) {
+	// Removes the CPUs in workloadCPUList from the Shared Pool if they exist. Returns an empty Pool if
+	// no cores have been removed
+
+	sharedPool, err := r.getCorrectSharedPool(nodeAddress)
+	if err != nil {
+		return &appqos.Pool{}, 0, err
 	}
 
 	updatedSharedCoreList := util.CPUListDifference(workloadCPUList, *sharedPool.Cores)
+	if len(updatedSharedCoreList) == 0 {
+		// Return empty Pool so the calling function knows there's no need to update the AppQoS instance
+
+		return &appqos.Pool{}, 0, nil
+	}
+
 	updatedSharedPool := &appqos.Pool{}
 	var sharedPoolID int
-	if sharedPool.PowerProfile == nil {
-		updatedSharedPool, sharedPoolID = updatePoolWithoutPowerProfile(updatedSharedCoreList, sharedPool)
+
+	// The Default pool won't have an associated Power Profile
+        if sharedPool.PowerProfile == nil {
+                updatedSharedPool, sharedPoolID = updatePoolWithoutPowerProfile(updatedSharedCoreList, sharedPool)
+        } else {
+                updatedSharedPool, sharedPoolID = updatePool(updatedSharedCoreList, *sharedPool.PowerProfile, sharedPool)
+        }
+
+        return updatedSharedPool, sharedPoolID, nil
+}
+
+func (r *PowerWorkloadReconciler) returnCoresToSharedPool(returnedCPUs []int, nodeAddress string) (*appqos.Pool, int, error) {
+	// Returns the cores that are no longer used by a Power Workload to the Shared Pool
+
+	sharedPool, err := r.getCorrectSharedPool(nodeAddress)
+        if err != nil {
+                return &appqos.Pool{}, 0, err
+        }
+
+	updatedSharedPool := &appqos.Pool{}
+        var sharedPoolID int
+	newSharedCPUList := append(*sharedPool.Cores, returnedCPUs...)
+	sort.Ints(newSharedCPUList)
+
+        // The Default pool won't have an associated Power Profile
+        if sharedPool.PowerProfile == nil {
+		updatedSharedPool, sharedPoolID = updatePoolWithoutPowerProfile(newSharedCPUList, sharedPool)
 	} else {
-		updatedSharedPool, sharedPoolID = updatePool(updatedSharedCoreList, *sharedPool.PowerProfile, sharedPool)
+                updatedSharedPool, sharedPoolID = updatePool(newSharedCPUList, *sharedPool.PowerProfile, sharedPool)
 	}
+
 	return updatedSharedPool, sharedPoolID, nil
 }
 
@@ -466,18 +512,23 @@ func updatePool(newCPUList []int, newPowerProfile int, pool *appqos.Pool) (*appq
 
 func updatePoolWithoutPowerProfile(newCPUList []int, pool *appqos.Pool) (*appqos.Pool, int) {
 	updatedPool := &appqos.Pool{}
-        updatedPool.Name = pool.Name
-        updatedPool.Cores = &newCPUList
+	updatedPool.Name = pool.Name
+	updatedPool.Cores = &newCPUList
 
-        return updatedPool, *pool.ID
+	return updatedPool, *pool.ID
 }
 
 func (r *PowerWorkloadReconciler) removeNonReservedCPUsFromDefaultPool(reservedCPUs []int, nodeAddress string) ([]int, error) {
 	sharedCores := make([]int, 0)
 
-	defaultPool, _, err := r.AppQoSClient.GetPoolByName(nodeAddress, DefaultPool)
+	defaultPool, err := r.AppQoSClient.GetPoolByName(nodeAddress, DefaultPool)
 	if err != nil {
 		return sharedCores, err
+	}
+
+	if reflect.DeepEqual(defaultPool, &appqos.Pool{}) {
+		notFoundError := errors.NewServiceUnavailable("Default Pool not found")
+		return sharedCores, notFoundError
 	}
 
 	return util.CPUListDifference(reservedCPUs, *defaultPool.Cores), nil

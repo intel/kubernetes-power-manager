@@ -57,12 +57,14 @@ spec:
               type: object
             powerProfile:
               description: PowerProfile is the Profile that this PowerWorkload is
-                based on PowerProfile `json:"powerprofile,omitempty"`
-              type: integer
+                based on
+              type: string
             reservedCPUs:
               items:
                 type: integer
               type: array
+          required:
+          - powerProfile
           type: object
         status:
           description: PowerWorkloadStatus defines the observed state of PowerWorkload

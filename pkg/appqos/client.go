@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	tlsServerName   = "appqos-nameserver"
+	tlsServerName = "appqos-nameserver"
 )
 
 var certPath = "/etc/certs/public/appqos.crt"
@@ -36,12 +36,12 @@ func NewOperatorAppQoSClient() (*AppQoSClient, error) {
 	if err != nil {
 		return &AppQoSClient{}, err
 	}
-/*
-	err = verifyKeyLength(cert)
-	if err != nil {
-		return &AppQoSClient{}, err
-	}
-*/
+	/*
+		err = verifyKeyLength(cert)
+		if err != nil {
+			return &AppQoSClient{}, err
+		}
+	*/
 	caCert, err := ioutil.ReadFile(caPath)
 	if err != nil {
 		return &AppQoSClient{}, err
@@ -66,16 +66,16 @@ func NewOperatorAppQoSClient() (*AppQoSClient, error) {
 
 	client := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig,
-			TLSHandshakeTimeout:   700 * time.Millisecond,
+			TLSClientConfig:     tlsConfig,
+			TLSHandshakeTimeout: 700 * time.Millisecond,
 		},
 	}
 
 	appQoSClient := &AppQoSClient{
-                client: client,
-        }
+		client: client,
+	}
 
-        return appQoSClient, nil
+	return appQoSClient, nil
 }
 
 // NewDefaultAppQoSClient returns a default client for testing and debugging
