@@ -29,6 +29,8 @@ import (
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -39,11 +41,19 @@ const (
 	//BronzeResource resource.ResourceName = ""power.intel.com/bronze"
 )
 
-var extendedResourceQuantity map[string]int64 = map[string]int64{
+/*
+var extendedResourceQuantity map[string] = map[string]int64{
 	// CHANGE TO BE A REP OF THE NUMBER OF CORES
 	"gold": 400,
 	"silver": 800,
 	"bronze": 101,
+}
+*/
+
+var extendedResourcePercentage map[string]float64 = map[string]float64{
+	"gold": 40.0,
+	"silver": 80.0,
+	"bronze": 100.0,
 }
 
 // PowerConfigReconciler reconciles a PowerConfig object
@@ -52,6 +62,7 @@ type PowerConfigReconciler struct {
 	Log    logr.Logger
 	Scheme *runtime.Scheme
 	State  *state.PowerNodeData
+	AppQoSClient *appqos.AppQoSClient
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -95,6 +106,22 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	}
 
 	for _, nodeName := range r.State.PowerNodeList {
+		nodeAddress, err := r.getPodAddress(nodeName, req)
+		if err != nil {
+			// Continue with other nodes if there's a failure with this one
+			logger.Error(err, fmt.Sprintf("Failed to get IP address for node: %s", nodeName))
+			continue
+		}
+
+		defaultPool, _, err := r.AppQoSClient.GetPoolByName(nodeAddress, "Default")
+		if err != nil {
+			logger.Error(err, "Error getting Default pool")
+			return ctrl.Result{}, nil
+		}
+
+		numPools := len(*defaultPool.Cores)
+		logger.Info(fmt.Sprintf("NUMBER OF CORES: %v", numPools))
+
 		node := &corev1.Node{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
                 	Name: nodeName,
@@ -105,7 +132,9 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
         	}
 
 		for _, profileName := range config.Spec.PowerProfiles {
-			profilesAvailable := resource.NewQuantity(extendedResourceQuantity[profileName], resource.DecimalSI)
+			numProfileResources := int64((float64(numPools) / 100) * extendedResourcePercentage[profileName])
+			//numProfileResources := numPools * extendedResourcePercentage[profileName]
+			profilesAvailable := resource.NewQuantity(numProfileResources, resource.DecimalSI)
 			extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
 			node.Status.Capacity[extendedResourceName] = *profilesAvailable
 		}
@@ -141,6 +170,70 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 */
 
 	return ctrl.Result{}, nil
+}
+
+func (r *PowerConfigReconciler) getPodAddress(nodeName string, req ctrl.Request) (string, error) {
+	_ = context.Background()
+	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
+
+	// TODO: DELETE WHEN APPQOS CONTAINERIZED
+	if 1 == 1 {
+		node := &corev1.Node{}
+		err := r.Client.Get(context.TODO(), client.ObjectKey{
+			Name: nodeName,
+		}, node)
+		if err != nil {
+			return "", err
+		}
+		address := fmt.Sprintf("%s%s%s", "https://", node.Status.Addresses[0].Address, ":5000")
+		return address, nil
+	}
+
+	pods := &corev1.PodList{}
+	err := r.Client.List(context.TODO(), pods, client.MatchingLabels(client.MatchingLabels{"name": PowerPodNameConst}))
+	if err != nil {
+		logger.Error(err, "Failed to list AppQoS pods")
+		return "", nil
+	}
+
+	appqosPod, err := util.GetPodFromNodeName(pods, nodeName)
+	if err != nil {
+		appqosNode := &corev1.Node{}
+		err := r.Client.Get(context.TODO(), client.ObjectKey{
+			Name: nodeName,
+		}, appqosNode)
+		if err != nil {
+			logger.Error(err, "Error getting AppQoS node")
+			return "", err
+		}
+
+		appqosPod, err = util.GetPodFromNodeAddresses(pods, appqosNode)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	var podIP string
+	notFoundError := errors.NewServiceUnavailable("pod address not available")
+	if appqosPod.Status.PodIP != "" {
+		podIP = appqosPod.Status.PodIP
+	} else if len(appqosPod.Status.PodIPs) != 0 {
+		podIP = appqosPod.Status.PodIPs[0].IP
+	} else {
+		return "", notFoundError
+	}
+
+	if len(appqosPod.Spec.Containers) == 0 {
+		return "", notFoundError
+	}
+
+	if len(appqosPod.Spec.Containers[0].Ports) == 0 {
+		return "", notFoundError
+	}
+
+	addressPrefix := r.AppQoSClient.GetAddressPrefix()
+	address := fmt.Sprintf("%s%s%s%d", addressPrefix, podIP, ":", appqosPod.Spec.Containers[0].Ports[0].ContainerPort)
+	return address, nil
 }
 
 func (r *PowerConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {

@@ -36,12 +36,18 @@ type PowerProfileSpec struct {
 
 	// Min indicates the minimum frequency the core is allowed go
 	Min int `json:"min"`
+
+	// EPP is the priority value associated with this Power Profile
+	Epp string `json:"epp"`
 }
 
 // PowerProfileStatus defines the observed state of PowerProfile
 type PowerProfileStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// ID is the id given to the power profile by AppQoS
+	ID int `json:"id"`
 }
 
 // +kubebuilder:object:root=true

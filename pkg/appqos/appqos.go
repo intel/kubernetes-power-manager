@@ -89,6 +89,7 @@ func (ac *AppQoSClient) GetPoolByName(address string, name string) (*Pool, bool,
 	if err != nil {
 		// Return true when there is an error as we don't know if the pool exists or not.
 		// Also allows whatever called GetPoolByName to handle the error
+		fmt.Println(err)
 
 		return &Pool{}, true, err
 	}
@@ -262,6 +263,43 @@ func (ac *AppQoSClient) GetPowerProfile(address string, id int) (*PowerProfile, 
 	resp.Body.Close()
 
 	return powerProfile, nil
+}
+
+// PostPowerProfile /power_profiles
+func (ac *AppQoSClient) PostPowerProfile(powerProfile *PowerProfile, address string) (string, error) {
+	postFailedErr := errors.NewServiceUnavailable("Response status code error")
+
+	payloadBytes, err := json.Marshal(powerProfile)
+        if err != nil {
+                return "Failed to marshal payload data", err
+        }
+        body := bytes.NewReader(payloadBytes)
+
+	httpString := fmt.Sprintf("%s%s", address, PowerProfilesEndpoint)
+        req, err := http.NewRequest("POST", httpString, body)
+        if err != nil {
+                return "Failed to create new HTTP POST request", err
+        }
+        req.Header.Set("Content-Type", "application/json")
+        req.SetBasicAuth(Username, Passwd)
+        resp, err := ac.client.Do(req)
+        if err != nil {
+                return "Failed to set header for  HTTP POST request", err
+        }
+
+        buf := new(bytes.Buffer)
+        buf.ReadFrom(resp.Body)
+        respStr := buf.String()
+
+        if resp.StatusCode != 201 {
+                errStr := fmt.Sprintf("%s%v", "Fail: ", respStr)
+                return errStr, postFailedErr
+        }
+
+        defer resp.Body.Close()
+        successStr := fmt.Sprintf("%s%v", "Success: ", resp.StatusCode)
+
+        return successStr, nil
 }
 
 // PutPowerProfile /power_profiles/{id}
@@ -479,10 +517,10 @@ func (ac *AppQoSClient) GetAddressPrefix() string {
 	return HttpsPrefix
 }
 
-func FindProfileByName(profiles []*PowerProfile, profileName string) *PowerProfile {
+func FindProfileByName(profiles []PowerProfile, profileName string) *PowerProfile {
 	for _, profile := range profiles {
 		if *profile.Name == profileName {
-			return profile
+			return &profile
 		}
 	}
 

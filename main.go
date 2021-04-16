@@ -79,7 +79,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	appQoSClient := appqos.NewDefaultAppQoSClient()
+	//appQoSClient := appqos.NewDefaultAppQoSClient()
+	appQoSClient, err := appqos.NewOperatorAppQoSClient()
+	if err != nil {
+		setupLog.Error(err, "unable to create AppQoSClient")
+		os.Exit(1)
+	}
 
 	state := state.NewPowerNodeData()
 
@@ -123,6 +128,7 @@ func main() {
 		Scheme:             mgr.GetScheme(),
 		State:              *powerNodeState,
 		PodResourcesClient: *podResourcesClient,
+		AppQoSClient: appQoSClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerPod")
 		os.Exit(1)
@@ -132,6 +138,7 @@ func main() {
 		Log:    ctrl.Log.WithName("controllers").WithName("PowerConfig"),
 		Scheme: mgr.GetScheme(),
 		State:  state,
+		AppQoSClient: appQoSClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerConfig")
 		os.Exit(1)

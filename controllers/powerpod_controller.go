@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -36,6 +37,7 @@ import (
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podresourcesclient"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podstate"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 )
 
 const (
@@ -50,6 +52,7 @@ type PowerPodReconciler struct {
 	Scheme             *runtime.Scheme
 	State              podstate.State
 	PodResourcesClient podresourcesclient.PodResourcesClient
+	AppQoSClient	   *appqos.AppQoSClient
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerpods,verbs=get;list;watch;create;update;patch;delete
@@ -166,7 +169,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if containerProfile == "" {
 			continue
 		} else if containerProfile == "Cannot have more than one profile per container" {
-			logger.Info("Cannot have more than one PowerProfile per container"
+			logger.Info("Cannot have more than one PowerProfile per container")
 			continue
 		}
 
@@ -210,6 +213,10 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	logger.Info(fmt.Sprintf("CHECKING NODE %s", pod.Spec.NodeName))
+	nodeAddress, err := r.getPodAddress(pod.Spec.NodeName, req)
+	allProfiles, err := r.AppQoSClient.GetPowerProfiles(nodeAddress)
+
 	for workloadName, cpuList := range profiles {
 		workload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
@@ -218,6 +225,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}, workload)
 		if err != nil {
 			if errors.IsNotFound(err) {
+				logger.Info("CREATING WORKLOAD")
 				// This is the first Pod to request this PowerProfile, need to create corresponding
 				// PowerWorkload
 
@@ -228,11 +236,16 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 					},
 				}
 
-				powerProfileID := getPowerProfileIDFromName("replace when the time is right")
+				powerProfile := appqos.FindProfileByName(allProfiles, workloadName)
+
+				if reflect.DeepEqual(powerProfile, &appqos.PowerProfile{}) {
+					logger.Info(fmt.Sprintf("Power Profile %s does not exist", workloadName))
+					return ctrl.Result{}, nil
+				}
 
 				workloadSpec := &powerv1alpha1.PowerWorkloadSpec{
 					Nodes:        nodeInfo,
-					PowerProfile: powerProfileID,
+					PowerProfile: *powerProfile.ID,
 				}
 				workload = &powerv1alpha1.PowerWorkload{
 					ObjectMeta: metav1.ObjectMeta{
@@ -287,6 +300,70 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
+func (r *PowerPodReconciler) getPodAddress(nodeName string, req ctrl.Request) (string, error) {
+	_ = context.Background()
+	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
+
+	// TODO: DELETE WHEN APPQOS CONTAINERIZED
+	if 1 == 1 {
+		node := &corev1.Node{}
+		err := r.Client.Get(context.TODO(), client.ObjectKey{
+			Name: nodeName,
+		}, node)
+		if err != nil {
+			return "", err
+		}
+		address := fmt.Sprintf("%s%s%s", "https://", node.Status.Addresses[0].Address, ":5000")
+		return address, nil
+	}
+
+	pods := &corev1.PodList{}
+	err := r.Client.List(context.TODO(), pods, client.MatchingLabels(client.MatchingLabels{"name": PowerPodNameConst}))
+	if err != nil {
+		logger.Error(err, "Failed to list AppQoS pods")
+		return "", nil
+	}
+
+	appqosPod, err := util.GetPodFromNodeName(pods, nodeName)
+	if err != nil {
+		appqosNode := &corev1.Node{}
+		err := r.Client.Get(context.TODO(), client.ObjectKey{
+			Name: nodeName,
+		}, appqosNode)
+		if err != nil {
+			logger.Error(err, "Error getting AppQoS node")
+			return "", err
+		}
+
+		appqosPod, err = util.GetPodFromNodeAddresses(pods, appqosNode)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	var podIP string
+	notFoundError := errors.NewServiceUnavailable("pod address not available")
+	if appqosPod.Status.PodIP != "" {
+		podIP = appqosPod.Status.PodIP
+	} else if len(appqosPod.Status.PodIPs) != 0 {
+		podIP = appqosPod.Status.PodIPs[0].IP
+	} else {
+		return "", notFoundError
+	}
+
+	if len(appqosPod.Spec.Containers) == 0 {
+		return "", notFoundError
+	}
+
+	if len(appqosPod.Spec.Containers[0].Ports) == 0 {
+		return "", notFoundError
+	}
+
+	addressPrefix := r.AppQoSClient.GetAddressPrefix()
+	address := fmt.Sprintf("%s%s%s%d", addressPrefix, podIP, ":", appqosPod.Spec.Containers[0].Ports[0].ContainerPort)
+	return address, nil
+}
+
 func getNewWorkloadCPUList(nodeName string, cpuList []int, nodeInfoList []powerv1alpha1.NodeInfo) []int {
 	updatedWorkloadCPUList := make([]int, 0)
 
@@ -315,6 +392,7 @@ func appendIfUnique(cpuList []int, cpus []int) []int {
 	return cpuList
 }
 
+/*
 func getPowerProfileIDFromName(profileName string) int {
 	// ==========================
 	// ==========DELETE==========
@@ -325,6 +403,7 @@ func getPowerProfileIDFromName(profileName string) int {
 
 	return 0
 }
+*/
 
 func getContainerProfileFromRequests(container corev1.Container) string {
 	profileName := ""
