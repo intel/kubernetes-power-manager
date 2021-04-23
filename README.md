@@ -114,7 +114,7 @@ metadata:
 spec:
   maxFrequency: 2100
   minFrequency: 2100
-  epp: "balance-performace"  
+  epp: "balance-performance"  
 ````
 
 ### PowerWorkload
