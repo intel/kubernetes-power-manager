@@ -79,7 +79,7 @@ The PowerConfig status represents the nodes which match the `powerNodeSelector` 
 apiVersion: intel.com/v1alpha1
 kind: PowerConfig
 metadata:
-    name: rmdconfig
+    name: powerconfig
 spec:
     appQoSImage: "appqos:latest"
     powerNodeSelector:
