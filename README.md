@@ -68,7 +68,7 @@ The power operator is the main component of this project and is responsible for:
 ## Custom Resource Definitions (CRDs)
 ### PowerConfig
 The PowerConfig custom resource is the operator's main configuration object.
-The RmdConfig spec consists of:
+The PowerConfig spec consists of:
 -   `appQoSImage`: This is the name/tag given to the AppQoS container image that will be deployed in a DaemonSet by the operator.
 -   `powerNodeSelector`: This is a key/value map used for defining a list of node labels that a node must satisfy in order for AppQoS and the operator's node agent to be deployed.
 
