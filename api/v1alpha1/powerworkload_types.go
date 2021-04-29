@@ -47,7 +47,7 @@ type PowerWorkloadSpec struct {
 	Nodes []NodeInfo `json:"nodes,omitempty"`
 
 	// PowerProfile is the Profile that this PowerWorkload is based on
-	PowerProfile string `json:"powerProfile, omitempty"`
+	PowerProfile string `json:"powerProfile,omitempty"`
 }
 
 // PowerWorkloadStatus defines the observed state of PowerWorkload

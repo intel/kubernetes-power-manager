@@ -26,7 +26,8 @@ import (
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/newstate"
+	//"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/newstate"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -56,10 +57,15 @@ func createWorkloadReconcilerObject(powerWorkload *powerv1alpha1.PowerWorkload) 
 	ppC1 := appqos.NewDefaultAppQoSClient()
 
 	// state
-	State := &newstate.PowerNodeData{
+	State := &state.PowerNodeData{
 		PowerNodeList: []string{},
-		//ProfileAssociation: map[string][]string{},
 	}
+	/*
+		State := &newstate.PowerNodeData{
+			PowerNodeList: []string{},
+			//ProfileAssociation: map[string][]string{},
+		}
+	*/
 
 	// Create a ReconcileNode object with the scheme and fake client.
 	r := &PowerWorkloadReconciler{cl, ctrl.Log.WithName("testing"), s, ppC1, State}
@@ -87,7 +93,7 @@ func TestPowerWorkload(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					PowerProfile: 1,
+					PowerProfile: "performance",
 					AllCores:     true,
 					ReservedCPUs: []int{0, 1},
 					//Nodes: []powerv1alpha1.NodeInfo{
@@ -166,7 +172,7 @@ func TestFindObseleteWorkloads(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					PowerProfile: 1,
+					PowerProfile: "shared",
 					AllCores:     true,
 					ReservedCPUs: []int{0, 1},
 				},
@@ -238,7 +244,8 @@ func TestFindObseleteWorkloads(t *testing.T) {
 
 		returnedErr := false
 		r.State.PowerNodeList = tc.State
-		obseleteWorkloads, err := r.findObseleteWorkloads(tc.request)
+		nodes := []string{"a", "b"}
+		obseleteWorkloads, err := r.findObseleteWorkloads(tc.request, nodes)
 		if err != nil {
 			returnedErr = true
 		}

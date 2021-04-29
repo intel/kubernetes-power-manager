@@ -63,7 +63,11 @@ fmt:
 
 # Run go vet against code
 vet:
-	go vet ./...
+	go vet -composites=false ./...
+
+# Testing the generation of TLS certificates
+tls:
+	./build/gen_test_certs.sh
 
 # Generate code
 generate: controller-gen

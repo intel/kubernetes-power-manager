@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: appqos
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      name: appqos-pod
+  template:
+    metadata:
+      labels:
+        name: appqos-pod
+    spec:
+      containers:
+        - image: 'appqos:latest'
+          imagePullPolicy: IfNotPresent
+          name: appqos
+          ports:
+          - containerPort: 5000
+          volumeMounts:
+          - mountPath: /etc/certs/
+          name: certs
+      volumes:
+      - name: certs
+        hostPath:
+          path: build/certs/
+      nodeSelector:
+        "feature.node.kubernetes.io/appqos-node": "true"

@@ -21,7 +21,8 @@ import (
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/newstate"
+	//"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/newstate"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -51,10 +52,15 @@ func createProfileReconcilerObject(powerProfile *powerv1alpha1.PowerProfile) (*P
 	ppC1 := appqos.NewDefaultAppQoSClient()
 
 	// state
-	State := &newstate.PowerNodeData{
+	State := &state.PowerNodeData{
 		PowerNodeList: []string{},
-		//ProfileAssociation: map[string][]string{},
 	}
+	/*
+		State := &newstate.PowerNodeData{
+			PowerNodeList: []string{},
+			//ProfileAssociation: map[string][]string{},
+		}
+	*/
 
 	// Create a ReconcileNode object with the scheme and fake client.
 	r := &PowerProfileReconciler{cl, ctrl.Log.WithName("testing"), s, ppC1, State}
