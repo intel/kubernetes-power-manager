@@ -56,7 +56,8 @@ Note: NFD is recommended, but not essential. Node labels can also be applied man
 [AppQos](https://github.com/intel/intel-cmt-cat/appqos) is containerized application deployed by the power operator in a DaemonSet. AppQos is responsible for node level configuration of SST capabilities, as delegated to by the power operator via the AppQoS HTTP REST interface.
 
 ### Node Agent
-The node agent is also a containerized application deployed by the power operator in a DaemonSet. The primary function of the node agent is to communicate with the node's Kubelet PodResources endpoint to discover the exact CPUs that are allocated per container. 
+The node agent is also a containerized application deployed by the power operator in a DaemonSet. The primary function of the node agent is to communicate with the node's Kubelet PodResources endpoint to discover the exact CPUs that are allocated per container.
+The node agent watches for Pods that are created in your cluster and examines them to determine which Power Profile they have requested and then sets off the chain of events that tunes the frequencies of the cores designated to the Pod.
 
 ### Power Operator
 The power operator is the main component of this project and is responsible for: 
@@ -71,8 +72,11 @@ The PowerConfig custom resource is the operator's main configuration object.
 The PowerConfig spec consists of:
 -   `appQoSImage`: This is the name/tag given to the AppQoS container image that will be deployed in a DaemonSet by the operator.
 -   `powerNodeSelector`: This is a key/value map used for defining a list of node labels that a node must satisfy in order for AppQoS and the operator's node agent to be deployed.
+-   `powerProfiles`: The list of PowerProfiles that the user ants available  the nodes.
 
 The PowerConfig status represents the nodes which match the `powerNodeSelector` and, as such, have AppQoS and the power operator node agent deployed.
+
+The Operator will wait for a PowerConfig to be created by the user, in which the desired PowerProfiles will be specified. From this, the Operator will deploy the AppQoS and node agent DaemonSets and communicate with the AppQoS Pod to create the desired PowerProfiles.
 
 #### Example
 ````yaml
@@ -85,6 +89,9 @@ spec:
     powerNodeSelector:
       "feature.node.kubernetes.io/cpu-sst_bf.enabled": "true"
       "feature.node.kubernetes.io/cpu-sst_cp.enabled": "true"
+    powerProfiles: 
+    - “performance” 
+    - “power”
 ````
 **Note:** Only one PowerConfig object is necessary per cluster. This is enforced by virtue of the default naming convention `"powerconfig"`.
 
@@ -98,7 +105,7 @@ The PowerProfile custom resource holds values for specific SST settings which ar
 apiVersion: intel.com/v1alpha1
 kind: PowerProfile
 metadata:
-    name: high-performance
+    name: performance
 spec:
   maxFrequency: 2700
   minFrequency: 2700
@@ -110,7 +117,7 @@ spec:
 apiVersion: intel.com/v1alpha1
 kind: PowerProfile
 metadata:
-    name: standard-performance
+    name: balance-performance
 spec:
   maxFrequency: 2100
   minFrequency: 2100
@@ -128,14 +135,14 @@ PowerWorkload objects are create **automatically** via the pod spec. This action
 apiVersion: intel.com/v1alpha1
 kind: PowerWorkload
 metadata:
-    name: powerworkload-hp
+    name: performance-workload
 spec:
     nodes:
     - name: "worker-node-1"
       cpuIds: [2, 3, 22, 23]
-    powerProfile: "high-performance"  
+    powerProfile: "performance"  
 ````
-This workload assigns the `high-performance` power profile to CPUs 2, 3, 22, and 23 on node "worker-node-1".
+This workload assigns the `performance` power profile to CPUs 2, 3, 22, and 23 on node "worker-node-1".
 
 This example shows a power workload that might be created automatically by the operator based on CPUs allocated to a container by the CPU Manager upon request via pod spec.
 
@@ -149,16 +156,16 @@ It is not recommended to directly configure power workloads with specific nodes 
 apiVersion: intel.com/v1alpha1
 kind: PowerWorkload
 metadata:
-    name: powerworkload-sp
+    name: shared-workload
 spec:
     sharedPool: true
     powerNodeSelector: 
       "feature.node.kubernetes.io/cpu-sst_bf.enabled": "true"
       "feature.node.kubernetes.io/cpu-sst_cp.enabled": "true"
     reservedCPUs: [0, 1, 20, 21]
-    powerProfile: "standard-performance"  
+    powerProfile: "shared"  
 ````
-This workload assigns the `standard-performance` power profile to all CPUs in the CPU Manager's shared pool (minus those specified in the `reservedCPUs` field) on nodes that match all the `powerNodeSelector` labels.
+This workload assigns the `shared` power profile to all CPUs in the CPU Manager's shared pool (minus those specified in the `reservedCPUs` field) on nodes that match all the `powerNodeSelector` labels.
 
 The `reservedCPUs` option is used to represent the list of CPUs which have been [reserved by the Kubelet](https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/#explicitly-reserved-cpu-list). 
 This option enables the user to only configure CPUs that are exclusively allocatable (i.e. shared pool - reserved CPUs) to containers with a given profile. This allows the reserved CPUs to continue with default settings, exempt from any power profile. 
@@ -174,7 +181,7 @@ This option enables the user to only configure CPUs that are exclusively allocat
 `kubectl get powerworkloads`
 
 ##### Display a particular PowerWorkload:
-`kubectl describe powerworkload power-workload-hp`
+`kubectl describe powerworkload power-workload-performance`
 
 ````yaml
 Name:         powerworkload-hp
@@ -189,7 +196,7 @@ Spec:
       3
       22
       23
-  PowerProfile: high-performance 
+  PowerProfile: performance
 Status:
   Nodes:
     Name: worker-node-1:
@@ -199,13 +206,13 @@ Status:
       22
       23
     PoolId: 3 
-    PoolName: powerworkload-hp 
-    PowerProfile: high-performance
+    PoolName: performance
+    PowerProfile: performance
     Response: Success: 200
 ````
 This displays the PowerWorkload object including the spec as defined above and the status of the workload. Here, the status shows that this workload was configured successfully on node "worker-node-1".
 
-`kubectl describe powerworkload power-workload-sp`
+`kubectl describe powerworkload power-workload-performance`
 
 ````yaml
 Name:         powerworkload-sp
@@ -222,7 +229,7 @@ Spec:
     1
     20
     21 	
-  powerProfile: "standard-performance"  
+  powerProfile: "shared"  
 Status:
   Nodes:
   - Name: worker-node-1:
@@ -230,16 +237,16 @@ Status:
       4-19	 
       24-39 
     PoolId: 7
-    PoolName: powerworkload-sp 
-    PowerProfile: standard-performance
+    PoolName: shared
+    PowerProfile: shared
     Response: Success: 200
   - Name: worker-node-2:
     CpuIds:
       2-19	 
       22-39 
     PoolId: 4
-    PoolName: powerworkload-sp 
-    PowerProfile: standard-performance
+    PoolName: shared
+    PowerProfile: shared
     Response: Success: 200
 
 ````
@@ -312,7 +319,7 @@ The following steps should be carried out on nodes that already possess Intel SS
 
 * Set the Kubelet flag `reserved-cpus` with a list of specific [CPUs to be reserved for system and Kubernetes daemons](https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/#explicitly-reserved-cpu-list):
   
-  `--reserved-cpus=0-1,20,21`
+  `--reserved-cpus=0-1,20-21`
   
   Reserved CPUs 0-1,20-21 are no longer **exclusively** allocatable by the CPU Manager. Simply put, a container requesting exclusive CPUs cannot be allocated CPUs 0-1,20-21.
   
@@ -337,11 +344,11 @@ The following steps should be carried out on nodes that already possess Intel SS
 apiVersion: intel.com/v1alpha1
 kind: PowerProfile
 metadata:
-    name: high-performance
+    name: performance
 spec:
   maxFrequency: 2700
   minFrequency: 2700
-  epp: "performace"  
+  epp: "performance"  
 ````
 
 ##### Standard Performance (to be applied to CPU Manager's *Shared Pool*)
@@ -349,11 +356,11 @@ spec:
 apiVersion: intel.com/v1alpha1
 kind: PowerProfile
 metadata:
-    name: standard-performance
+    name: shared
 spec:
   maxFrequency: 2100
   minFrequency: 2100
-  epp: "balance-performace"  
+  epp: "power"  
 ````
 
 #### Create PowerWorkload for Shared Pool
@@ -362,13 +369,13 @@ spec:
 apiVersion: intel.com/v1alpha1
 kind: PowerWorkload
 metadata:
-    name: powerworkload-sp
+    name: shared-workload
 spec:
   sharedPool: true
   reservedCPUs: [0, 1, 20, 21"]
   powerNodeSelector: 
     intel.power.node: "true"
-  powerProfile: standard-performance 
+  powerProfile: shared
 ````
 
 This workload is to be configured for all *Allocatable* CPUs on the desired node(s). This is done by setting `sharedPool` to true and specifying `reservedCPUs` with the **same CPU list that has been reserved by the Kubelet** in the earlier step. 
@@ -397,11 +404,11 @@ spec:
       requests:
         memory: "64Mi"
         cpu: 3
-        sst.intel.com/high_performance: 3
+        sst.intel.com/performance: 3
       limits:
         memory: "64Mi"
         cpu: 3
-        sst.intel.com/high_performance: 3 
+        sst.intel.com/performance: 3 
 ````
 This pod is provided with a `nodeSelector` for the designated node label, and a `taintToleration` for the designated node taint. 
 
