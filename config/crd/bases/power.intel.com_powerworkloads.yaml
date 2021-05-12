@@ -40,7 +40,10 @@ spec:
               description: AllCores determines if the Workload is to be applied to
                 all cores (i.e. use the Default Workload)
               type: boolean
+            name:
+              type: string
             nodes:
+              description: Holds the info on the node name and cpu ids for each node
               items:
                 properties:
                   cpuIds:
@@ -54,17 +57,19 @@ spec:
             powerNodeSelector:
               additionalProperties:
                 type: string
+              description: The labels signifying the nodes the user wants to use
               type: object
             powerProfile:
               description: PowerProfile is the Profile that this PowerWorkload is
                 based on
               type: string
             reservedCPUs:
+              description: Reserved CPUs are the CPUs that have been reserved by Kubelet
+                for use by the Kubernetes admin process This list must match the list
+                in the user's Kubelet configuration
               items:
                 type: integer
               type: array
-          required:
-          - powerProfile
           type: object
         status:
           description: PowerWorkloadStatus defines the observed state of PowerWorkload

@@ -79,6 +79,12 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// If the Pod's DeletionTimestamp is not zero then the Pod has been deleted
 
 		powerPodState := r.State.GetPodFromState(pod.GetName())
+		err = r.State.DeletePodFromState(pod.GetName())
+		if err != nil {
+			logger.Error(err, "Error removing Pod from internal state")
+			return ctrl.Result{}, err
+		}
+
 		workloadToCPUsRemoved := make(map[string][]int, 0)
 		for _, container := range powerPodState.Containers {
 			workload := fmt.Sprintf("%s%s", container.PowerProfile, WorkloadNameSuffix)
@@ -180,6 +186,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				}
 
 				workloadSpec := &powerv1alpha1.PowerWorkloadSpec{
+					Name:	      workloadName,
 					Nodes:        nodeInfo,
 					PowerProfile: profile,
 				}

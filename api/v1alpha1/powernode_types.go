@@ -37,8 +37,15 @@ type PowerNodeStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	SharedPool     []string        `json:"sharedPool,omitempty"`
-	GuaranteedPods []GuaranteedPod `json:"guaranteedPods,omitempty"`
+	//SharedPool       []string        	`json:"sharedPool,omitempty"`
+	//GuaranteedPods   []GuaranteedPod 	`json:"guaranteedPods,omitempty"`
+	PowerNodeCPUState			`json:"powerNodeCPUState,omitempty"`
+	Workloads          []Workload       	`json:"workloads,omitempty"`
+}
+
+type PowerNodeCPUState struct {
+	SharedPool	[]string	`json:"sharedPool,omitempty"`
+	GuaranteedPods	[]GuaranteedPod `json:"guaranteedPods,omitempty"`
 }
 
 type GuaranteedPod struct {
@@ -53,6 +60,19 @@ type Container struct {
 	ID            string `json:"id,omitempty"`
 	ExclusiveCPUs []int  `json:"exclusiveCpus,omitempty"`
 	PowerProfile  string `json:"powerProfile,omitempty"`
+}
+
+type Workload struct {
+	Name    	string		`json:"name,omitempty"`
+	PowerProfile	string		`json:"powerProfile,omitempty"`
+	Containers	[]ContainerInfo	`json:"containers,omitempty"`
+	Cores		[]int		`json:"cores,omitempty"`
+}
+
+type ContainerInfo struct {
+	Name string `json:"name,omitempty"`
+	ID   string `json:"id,omitempty"`
+	Pod  string `json:"pod,omitempty"`
 }
 
 // +kubebuilder:object:root=true

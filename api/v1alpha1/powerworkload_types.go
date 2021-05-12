@@ -33,6 +33,8 @@ type PowerWorkloadSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	Name string `json:"name,omitempty"`
+
 	// AllCores determines if the Workload is to be applied to all cores (i.e. use the Default Workload)
 	AllCores bool `json:"allCores,omitempty"`
 

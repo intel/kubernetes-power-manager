@@ -43,35 +43,64 @@ spec:
         status:
           description: PowerNodeStatus defines the observed state of PowerNode
           properties:
-            guaranteedPods:
+            powerNodeCPUState:
+              description: "SharedPool       []string        \t`json:\"sharedPool,omitempty\"`
+                GuaranteedPods   []GuaranteedPod \t`json:\"guaranteedPods,omitempty\"`"
+              properties:
+                guaranteedPods:
+                  items:
+                    properties:
+                      containers:
+                        items:
+                          properties:
+                            exclusiveCpus:
+                              items:
+                                type: integer
+                              type: array
+                            id:
+                              type: string
+                            name:
+                              type: string
+                            powerProfile:
+                              type: string
+                          type: object
+                        type: array
+                      name:
+                        type: string
+                      node:
+                        type: string
+                      uid:
+                        type: string
+                    type: object
+                  type: array
+                sharedPool:
+                  items:
+                    type: string
+                  type: array
+              type: object
+            workloads:
               items:
                 properties:
                   containers:
                     items:
                       properties:
-                        exclusiveCpus:
-                          items:
-                            type: integer
-                          type: array
                         id:
                           type: string
                         name:
                           type: string
-                        powerProfile:
+                        pod:
                           type: string
                       type: object
                     type: array
+                  cores:
+                    items:
+                      type: integer
+                    type: array
                   name:
                     type: string
-                  node:
-                    type: string
-                  uid:
+                  powerProfile:
                     type: string
                 type: object
-              type: array
-            sharedPool:
-              items:
-                type: string
               type: array
           type: object
       type: object

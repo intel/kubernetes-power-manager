@@ -6,8 +6,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 )
 
+/*
 type State struct {
 	PowerNodeStatus *powerv1alpha1.PowerNodeStatus
+}
+*/
+
+type State struct {
+	PowerNodeStatus *powerv1alpha1.PowerNodeCPUState
 }
 
 func NewState() (*State, error) {
@@ -21,7 +27,8 @@ func NewState() (*State, error) {
 		return state, errors.NewServiceUnavailable("No shared pool discovered - kubepods cpuset cgroup not found")
 	}
 
-	state.PowerNodeStatus = &powerv1alpha1.PowerNodeStatus{}
+	//state.PowerNodeStatus = &powerv1alpha1.PowerNodeStatus{}
+	state.PowerNodeStatus = &powerv1alpha1.PowerNodeCPUState{}
 	state.PowerNodeStatus.SharedPool = sharedPool
 
 	return state, nil
@@ -65,4 +72,21 @@ func (s *State) GetCPUsFromPodState(podState powerv1alpha1.GuaranteedPod) []int 
 	}
 
 	return cpus
+}
+
+func (s *State) DeletePodFromState(podName string) error {
+	if len(s.PowerNodeStatus.GuaranteedPods) == 0 {
+		pods := make([]powerv1alpha1.GuaranteedPod, 0)
+                s.PowerNodeStatus.GuaranteedPods = pods
+		return nil
+	}
+
+	for i, pod := range s.PowerNodeStatus.GuaranteedPods {
+		if pod.Name == podName {
+			s.PowerNodeStatus.GuaranteedPods = append(s.PowerNodeStatus.GuaranteedPods[:i], s.PowerNodeStatus.GuaranteedPods[i+1:]...)
+			return nil
+		}
+	}
+
+	return nil
 }

@@ -32,6 +32,7 @@ import (
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -142,6 +143,22 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		if err != nil {
 			logger.Error(err, "Failed updating node")
 			continue
+		}
+
+		powerNodeSpec := &powerv1alpha1.PowerNodeSpec{
+			NodeName: nodeName,
+		}
+		powerNode := &powerv1alpha1.PowerNode{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: req.NamespacedName.Namespace,
+				Name: nodeName,
+			},
+		}
+		powerNode.Spec = *powerNodeSpec
+		err = r.Client.Create(context.TODO(), powerNode)
+		if err != nil {
+			logger.Error(err, "Error creating PowerNode CRD")
+			return ctrl.Result{}, err
 		}
 	}
 

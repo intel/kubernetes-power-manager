@@ -18,13 +18,18 @@ package controllers
 
 import (
 	"context"
+	"time"
+	"sort"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
+
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podstate"
 )
 
 // PowerNodeReconciler reconciles a PowerNode object
@@ -32,6 +37,7 @@ type PowerNodeReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	State  podstate.State
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powernodes,verbs=get;list;watch;create;update;patch;delete
@@ -39,11 +45,64 @@ type PowerNodeReconciler struct {
 
 func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
-	_ = r.Log.WithValues("powernode", req.NamespacedName)
+	logger := r.Log.WithValues("powernode", req.NamespacedName)
 
-	// your logic here
+	node := &powerv1alpha1.PowerNode{}
+	err := r.Client.Get(context.TODO(), req.NamespacedName, node)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
 
-	return ctrl.Result{}, nil
+		return ctrl.Result{}, err
+	}
+
+	workloads := &powerv1alpha1.PowerWorkloadList{}
+	err = r.Client.List(context.TODO(), workloads)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+		}
+
+		return ctrl.Result{}, err
+	}
+
+	workloadObjects := []powerv1alpha1.Workload{}
+	for _, workload := range workloads.Items {
+		containers := []powerv1alpha1.ContainerInfo{}
+		cores := []int{}
+		profile := workload.Spec.PowerProfile
+		for _, pod := range r.State.PowerNodeStatus.GuaranteedPods {
+			for _, container := range pod.Containers {
+				if container.PowerProfile == profile {
+					containerInfo := powerv1alpha1.ContainerInfo{}
+					containerInfo.Name = container.Name
+					containerInfo.ID = container.ID
+					containerInfo.Pod = pod.Name
+					containers = append(containers, containerInfo)
+					cores = append(cores, container.ExclusiveCPUs...)
+				}
+			}
+		}
+
+		sort.Ints(cores)
+		workloadObject := powerv1alpha1.Workload{}
+		workloadObject.Name = workload.Spec.Name
+		workloadObject.PowerProfile = profile
+		workloadObject.Containers = containers
+		workloadObject.Cores = cores
+		workloadObjects = append(workloadObjects, workloadObject)
+	}
+
+	node.Status.GuaranteedPods = r.State.PowerNodeStatus.GuaranteedPods
+	node.Status.Workloads = workloadObjects
+	err = r.Client.Status().Update(context.TODO(), node)
+	if err != nil {
+		logger.Error(err, "Error updating PowerNode CRD")
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 }
 
 func (r *PowerNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
