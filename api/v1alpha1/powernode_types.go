@@ -37,10 +37,8 @@ type PowerNodeStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	//SharedPool       []string        	`json:"sharedPool,omitempty"`
-	//GuaranteedPods   []GuaranteedPod 	`json:"guaranteedPods,omitempty"`
 	PowerNodeCPUState			`json:"powerNodeCPUState,omitempty"`
-	Workloads          []Workload       	`json:"workloads,omitempty"`
+	Workloads          []WorkloadInfo      	`json:"workloads,omitempty"`
 }
 
 type PowerNodeCPUState struct {
@@ -62,7 +60,7 @@ type Container struct {
 	PowerProfile  string `json:"powerProfile,omitempty"`
 }
 
-type Workload struct {
+type WorkloadInfo struct {
 	Name    	string		`json:"name,omitempty"`
 	PowerProfile	string		`json:"powerProfile,omitempty"`
 	Containers	[]ContainerInfo	`json:"containers,omitempty"`

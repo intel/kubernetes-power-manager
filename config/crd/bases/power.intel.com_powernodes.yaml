@@ -44,8 +44,6 @@ spec:
           description: PowerNodeStatus defines the observed state of PowerNode
           properties:
             powerNodeCPUState:
-              description: "SharedPool       []string        \t`json:\"sharedPool,omitempty\"`
-                GuaranteedPods   []GuaranteedPod \t`json:\"guaranteedPods,omitempty\"`"
               properties:
                 guaranteedPods:
                   items:

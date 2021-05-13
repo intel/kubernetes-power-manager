@@ -67,7 +67,7 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	workloadObjects := []powerv1alpha1.Workload{}
+	workloadObjects := []powerv1alpha1.WorkloadInfo{}
 	for _, workload := range workloads.Items {
 		containers := []powerv1alpha1.ContainerInfo{}
 		cores := []int{}
@@ -86,7 +86,7 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 
 		sort.Ints(cores)
-		workloadObject := powerv1alpha1.Workload{}
+		workloadObject := powerv1alpha1.WorkloadInfo{}
 		workloadObject.Name = workload.Spec.Name
 		workloadObject.PowerProfile = profile
 		workloadObject.Containers = containers
