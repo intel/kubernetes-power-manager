@@ -276,9 +276,29 @@ Namespace:    default
 API Version:  intel.com/v1alpha1
 Kind:         PowerNode
 Spec:
-  Node:      worker-node-1
+  nodeName:      worker-node-1
 Status:
- (TBD)
+  powerNodeCPUState:
+    guaranteedPods:
+      - name: worker-node-pod
+        node: worker-node-1
+        uid: 54f92b0d-ec99-4cf5-8a5e-00cd3a5ee63f
+        containers:
+          - name: container1
+            id: fhsaldkjfh18431nfqwe14441293
+            powerProfile: performance
+            exclusiveCpus:
+              [2, 3, 66, 67]
+    workloads:
+      - name: performance-workload
+        powerProfile: performance
+        cores:
+          [2, 3, 66, 67]
+        containers:
+          - name: container1
+            pod: worker-node-pod
+            id: fhsaldkjfh18431nfqwe14441293
+        
 ````
 This example displays the PowerNode for worker-node-1.
 
