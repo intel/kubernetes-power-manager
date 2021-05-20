@@ -19,24 +19,34 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
+	AppQoSLabel            = "feature.node.kubernetes.io/appqos-node"
+	AppQoSDaemonSetPath    = "/power-manifests/appqos-ds.yaml"
+	AppQoSPodPath          = "/power-manifests/appqos-pod-template.yaml"
+	NodeAgentDaemonSetPath = "/power-manifests/power-node-agent-ds.yaml"
 	ExtendedResourcePrefix = "power.intel.com/"
+	AppQoSPodLabel         = "appqos-pod"
 )
 
 var extendedResourcePercentage map[string]float64 = map[string]float64{
@@ -89,8 +99,33 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		return ctrl.Result{}, err
 	}
 
+	/* CAN DELETE - NODE DOESN'T NEED TO BE LABELLED PRIOR TO DS CREATION */
+	/* CAN MOVE INTO THE NODENAME FOR LOOP */
 	for _, node := range labelledNodeList.Items {
 		r.State.UpdatePowerNodeData(node.Name)
+
+		err = r.createPodIfNotPresent(node.Name, AppQoSPodPath)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		/*
+			appqosNode := &corev1.Node{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name: node.Name,
+			}, appqosNode)
+			if err != nil {
+				logger.Error(err, "Error getting node")
+				return ctrl.Result{}, nil
+			}
+
+			appqosNode.Labels["feature.node.kubernetes.io/appqos-node"] = "true"
+			err = r.Client.Update(context.TODO(), appqosNode)
+			if err != nil {
+				logger.Error(err, "Error updating node's label")
+				return ctrl.Result{}, nil
+			}
+		*/
 	}
 
 	config.Status.Nodes = r.State.PowerNodeList
@@ -101,20 +136,31 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	}
 
 	for _, nodeName := range r.State.PowerNodeList {
-		nodeAddress, err := r.getPodAddress(nodeName, req)
+		appqosNotReadyError := fmt.Sprintf("Failed to get IP address for node: %s", nodeName)
+		nodeAddress, err := r.getPodAddress(nodeName)
 		if err != nil {
-			// Continue with other nodes if there's a failure with this one
+			// Requeue after 5 seconds to give the AppQoS Pod time to start up
 
-			logger.Error(err, fmt.Sprintf("Failed to get IP address for node: %s", nodeName))
-			continue
+			logger.Info(appqosNotReadyError)
+			return ctrl.Result{RequeueAfter: time.Second * 5}, err
+		}
+
+		// We need to make sure that the appqos pod is running, as it causes problems if it is not
+		appqosRunning := r.checkAppQoSRunning(nodeName)
+		if !appqosRunning {
+			logger.Info("AppQoS not running yet")
+			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 		}
 
 		// Don't need to determine if it's the Default or the Shared pool because there shouldn't
 		// be a Shared pool at this stage
 		defaultPool, err := r.AppQoSClient.GetPoolByName(nodeAddress, "Default")
 		if err != nil {
-			logger.Error(err, "Error getting Default pool")
-			return ctrl.Result{}, nil
+			// Requeue after 5 seconds to give the AppQoS Pod time to start up
+
+			//logger.Info(appqosNotReadyError)
+			logger.Info("Failed in GetPoolByName")
+			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 		}
 
 		numPools := len(*defaultPool.Cores)
@@ -145,45 +191,90 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			continue
 		}
 
-		powerNodeSpec := &powerv1alpha1.PowerNodeSpec{
-			NodeName: nodeName,
-		}
-		powerNode := &powerv1alpha1.PowerNode{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: req.NamespacedName.Namespace,
-				Name: nodeName,
-			},
-		}
-		powerNode.Spec = *powerNodeSpec
-		err = r.Client.Create(context.TODO(), powerNode)
+		powerNode := &powerv1alpha1.PowerNode{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Namespace: req.NamespacedName.Namespace,
+			Name:      nodeName,
+		}, powerNode)
+
 		if err != nil {
-			logger.Error(err, "Error creating PowerNode CRD")
+			if errors.IsNotFound(err) {
+				powerNode = &powerv1alpha1.PowerNode{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: req.NamespacedName.Namespace,
+						Name:      nodeName,
+					},
+				}
+
+				powerNodeSpec := &powerv1alpha1.PowerNodeSpec{
+					NodeName: nodeName,
+				}
+
+				powerNode.Spec = *powerNodeSpec
+				err = r.Client.Create(context.TODO(), powerNode)
+				if err != nil {
+					logger.Error(err, "Error creating PowerNode CRD")
+					return ctrl.Result{}, err
+				}
+			}
+
 			return ctrl.Result{}, err
 		}
 	}
 
+	logger.Info("We are finished")
+
+	/*
+	err = r.createDaemonSetIfNotPresent(config, NodeAgentDaemonSetPath)
+	if err != nil {
+		return ctrl.Result{}, nil
+	}
+	*/
+
 	return ctrl.Result{}, nil
 }
 
-func (r *PowerConfigReconciler) getPodAddress(nodeName string, req ctrl.Request) (string, error) {
+func (r *PowerConfigReconciler) checkAppQoSRunning(nodeName string) bool {
 	_ = context.Background()
-	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
+        logger := r.Log.WithName("checkAppQoSRunning")
 
-	// TODO: DELETE WHEN APPQOS CONTAINERIZED
-	if 1 == 1 {
-		node := &corev1.Node{}
-		err := r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: nodeName,
-		}, node)
-		if err != nil {
-			return "", err
-		}
-		address := fmt.Sprintf("%s%s%s", "https://", node.Status.Addresses[0].Address, ":5000")
-		return address, nil
+        pods := &corev1.PodList{}
+        err := r.Client.List(context.TODO(), pods, client.MatchingLabels(client.MatchingLabels{"name": AppQoSPodLabel}))
+        if err != nil {
+                logger.Error(err, "Failed to list AppQoS pods")
+                return false
+        }
+
+	appqosPod, err := util.GetPodFromNodeName(pods, nodeName)
+        if err != nil {
+                appqosNode := &corev1.Node{}
+                err := r.Client.Get(context.TODO(), client.ObjectKey{
+                        Name: nodeName,
+                }, appqosNode)
+                if err != nil {
+                        logger.Error(err, "Error getting AppQoS node")
+                        return false
+                }
+
+                appqosPod, err = util.GetPodFromNodeAddresses(pods, appqosNode)
+                if err != nil {
+                        return false
+                }
+        }
+
+	if appqosPod.Status.Phase != corev1.PodRunning {
+		return false
 	}
 
+	return true
+}
+
+func (r *PowerConfigReconciler) getPodAddress(nodeName string) (string, error) {
+	_ = context.Background()
+	logger := r.Log.WithName("getPodAddress")
+
 	pods := &corev1.PodList{}
-	err := r.Client.List(context.TODO(), pods, client.MatchingLabels(client.MatchingLabels{"name": PowerPodNameConst}))
+	err := r.Client.List(context.TODO(), pods, client.MatchingLabels(client.MatchingLabels{"name": AppQoSPodLabel}))
 	if err != nil {
 		logger.Error(err, "Failed to list AppQoS pods")
 		return "", nil
@@ -206,27 +297,103 @@ func (r *PowerConfigReconciler) getPodAddress(nodeName string, req ctrl.Request)
 		}
 	}
 
-	var podIP string
-	notFoundError := errors.NewServiceUnavailable("pod address not available")
-	if appqosPod.Status.PodIP != "" {
-		podIP = appqosPod.Status.PodIP
-	} else if len(appqosPod.Status.PodIPs) != 0 {
-		podIP = appqosPod.Status.PodIPs[0].IP
-	} else {
-		return "", notFoundError
-	}
-
-	if len(appqosPod.Spec.Containers) == 0 {
-		return "", notFoundError
-	}
-
-	if len(appqosPod.Spec.Containers[0].Ports) == 0 {
-		return "", notFoundError
-	}
-
 	addressPrefix := r.AppQoSClient.GetAddressPrefix()
-	address := fmt.Sprintf("%s%s%s%d", addressPrefix, podIP, ":", appqosPod.Spec.Containers[0].Ports[0].ContainerPort)
-	return address, nil
+	podHostname := appqosPod.Spec.Hostname
+	podSubdomain := appqosPod.Spec.Subdomain
+	fullHostname := fmt.Sprintf("%s%s.%s:%d", addressPrefix, podHostname, podSubdomain, appqosPod.Spec.Containers[0].Ports[0].ContainerPort)
+
+	return fullHostname, nil
+}
+
+func (r *PowerConfigReconciler) createDaemonSetIfNotPresent(powerConfig *powerv1alpha1.PowerConfig, path string) error {
+	logger := r.Log.WithName("createDaemonSetIfNotPresent")
+
+	daemonSet, err := newDaemonSet(path)
+	if err != nil {
+		logger.Error(err, "Error creating DaemonSet")
+		return err
+	}
+
+	err = r.Client.Get(context.TODO(), client.ObjectKey{
+		Namespace: daemonSet.GetObjectMeta().GetNamespace(),
+		Name:      daemonSet.GetObjectMeta().GetName(),
+	}, daemonSet)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			err = r.Client.Create(context.TODO(), daemonSet)
+			if err != nil {
+				logger.Error(err, "Error creating DaemonSet")
+				return err
+			}
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func newDaemonSet(path string) (*appsv1.DaemonSet, error) {
+	yamlFile, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	decode := scheme.Codecs.UniversalDeserializer().Decode
+	obj, _, err := decode(yamlFile, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	appqosDaemonSet := obj.(*appsv1.DaemonSet)
+	return appqosDaemonSet, nil
+}
+
+func (r *PowerConfigReconciler) createPodIfNotPresent(nodeName string, path string) error {
+	logger := r.Log.WithName("createPodIfNotPresent")
+
+	pod, err := newPod(path)
+	if err != nil {
+		logger.Error(err, "Error creating Pod")
+		return err
+	}
+
+	pod.Name = fmt.Sprintf("%s%s", pod.Name, nodeName)
+	pod.Spec.Hostname = fmt.Sprintf("%s%s", pod.Spec.Hostname, nodeName)
+
+	err = r.Client.Get(context.TODO(), client.ObjectKey{
+		Namespace: pod.GetObjectMeta().GetNamespace(),
+		Name:      pod.GetObjectMeta().GetName(),
+	}, pod)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			err = r.Client.Create(context.TODO(), pod)
+			if err != nil {
+				logger.Error(err, "Error creating Pod")
+				return err
+			}
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func newPod(path string) (*corev1.Pod, error) {
+	yamlFile, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	decode := scheme.Codecs.UniversalDeserializer().Decode
+	obj, _, err := decode(yamlFile, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	appqosPod := obj.(*corev1.Pod)
+	return appqosPod, nil
 }
 
 func (r *PowerConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {

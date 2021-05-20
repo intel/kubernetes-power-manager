@@ -23,7 +23,7 @@ const (
 )
 
 var certPath = "/etc/certs/public/appqos.crt"
-var keyPath = "/etc/certs/private/appqos.key"
+var keyPath = "/etc/certs/public/appqos.key"
 var caPath = "/etc/certs/public/ca.crt"
 
 // AppQoSClient is used by the operator to become a client to AppQoS

@@ -77,7 +77,7 @@ func (s *State) GetCPUsFromPodState(podState powerv1alpha1.GuaranteedPod) []int 
 func (s *State) DeletePodFromState(podName string) error {
 	if len(s.PowerNodeStatus.GuaranteedPods) == 0 {
 		pods := make([]powerv1alpha1.GuaranteedPod, 0)
-                s.PowerNodeStatus.GuaranteedPods = pods
+		s.PowerNodeStatus.GuaranteedPods = pods
 		return nil
 	}
 

@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: power-node-agent
+  namespace: system
+spec:
+  selector:
+    matchLabels:
+      name: power-node-agent-pod
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: power-node-agent-pod
+    spec:
+      containers:
+        - image: 'intel-power-node-agent:latest'
+          imagePullPolicy: IfNotPresent
+          name: power-node-agent
+          resources:
+            limits:
+              cpu: 100m
+              memory: 30Mi
+            requests:
+              cpu: 100m
+              memory: 30Mi
+          volumeMounts:
+            - mountPath: /sys/fs
+              name: cgroup
+            - mountPath: /etc/certs/
+              name: certs
+      volumes:
+        - name: cgroup
+          hostPath:
+            path: /sys/fs
+        - name: certs
+          hostPath:
+            path: /etc/certs/
+      nodeSelector:
+        "feature.node.kubernetes.io/appqos-node": "true"

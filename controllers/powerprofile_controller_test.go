@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	//"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 func createProfileReconcilerObject(powerProfile *powerv1alpha1.PowerProfile) (*PowerProfileReconciler, error) {
@@ -302,17 +302,17 @@ func TestGetPodAddress(t *testing.T) {
 			}
 		}
 
-		powerProfileName := tc.powerProfile.GetObjectMeta().GetName()
-		powerProfileNamespace := tc.powerProfile.GetObjectMeta().GetNamespace()
-		req := reconcile.Request{
+		//powerProfileName := tc.powerProfile.GetObjectMeta().GetName()
+		//powerProfileNamespace := tc.powerProfile.GetObjectMeta().GetNamespace()
+		/*req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Name:      powerProfileName,
 				Namespace: powerProfileNamespace,
 			},
-		}
+		}*/
 
 		errorReturned := false
-		address, err := r.getPodAddress(tc.nodeName, req)
+		address, err := r.getPodAddress(tc.nodeName)
 		if err != nil {
 			errorReturned = true
 		}

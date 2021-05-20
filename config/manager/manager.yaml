@@ -27,7 +27,8 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        image: controller:latest
+        imagePullPolicy: IfNotPresent
+        image: operator:latest
         name: manager
         resources:
           limits:
@@ -40,8 +41,52 @@ spec:
         - mountPath: /sys/fs
           name: cgroup
           mountPropagation: HostToContainer
+        - mountPath: /etc/certs
+          name: certs
+          mountPropagation: HostToContainer
       terminationGracePeriodSeconds: 10
       volumes:
       - name: cgroup
         hostPath:
           path: /sys/fs
+      - name: certs
+        hostPath:
+          path: /etc/certs
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: network-test
+  namespace: system
+  labels:
+    name: testing
+spec:
+  selector:
+    matchLabels:
+      name: testing
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: testing
+    spec:
+      containers:
+      - command: [sleep, "3600"]
+        imagePullPolicy: IfNotPresent
+        image: weibeld/ubuntu-networking
+        name: testing
+        volumeMounts:
+        - mountPath: /sys/fs
+          name: cgroup
+          mountPropagation: HostToContainer
+        - mountPath: /etc/certs
+          name: certs
+          mountPropagation: HostToContainer
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: cgroup
+        hostPath:
+          path: /sys/fs
+      - name: certs
+        hostPath:
+          path: /etc/certs

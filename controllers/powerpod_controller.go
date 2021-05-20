@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -155,10 +156,10 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, errors.NewServiceUnavailable("pod UID not found")
 	}
 
-	nodeAddress, err := r.getPodAddress(pod.Spec.NodeName, req)
+	nodeAddress, err := r.getPodAddress(pod.Spec.NodeName)
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("Error retrieving AppQoS address on node '%s'", pod.Spec.NodeName))
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
 
 	powerProfiles, powerContainers, err := r.getPowerProfileRequestsFromContainers(containersRequestingExclusiveCPUs, nodeAddress, pod)
@@ -186,7 +187,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				}
 
 				workloadSpec := &powerv1alpha1.PowerWorkloadSpec{
-					Name:	      workloadName,
+					Name:         workloadName,
 					Nodes:        nodeInfo,
 					PowerProfile: profile,
 				}
@@ -256,25 +257,12 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func (r *PowerPodReconciler) getPodAddress(nodeName string, req ctrl.Request) (string, error) {
+func (r *PowerPodReconciler) getPodAddress(nodeName string) (string, error) {
 	_ = context.Background()
-	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
-
-	// TODO: DELETE WHEN APPQOS CONTAINERIZED
-	if 1 == 1 {
-		node := &corev1.Node{}
-		err := r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: nodeName,
-		}, node)
-		if err != nil {
-			return "", err
-		}
-		address := fmt.Sprintf("%s%s%s", "https://", node.Status.Addresses[0].Address, ":5000")
-		return address, nil
-	}
+	logger := r.Log.WithName("getPodAddress")
 
 	pods := &corev1.PodList{}
-	err := r.Client.List(context.TODO(), pods, client.MatchingLabels(client.MatchingLabels{"name": PowerPodNameConst}))
+	err := r.Client.List(context.TODO(), pods, client.MatchingLabels(client.MatchingLabels{"name": AppQoSPodLabel}))
 	if err != nil {
 		logger.Error(err, "Failed to list AppQoS pods")
 		return "", nil
@@ -297,27 +285,12 @@ func (r *PowerPodReconciler) getPodAddress(nodeName string, req ctrl.Request) (s
 		}
 	}
 
-	var podIP string
-	notFoundError := errors.NewServiceUnavailable("pod address not available")
-	if appqosPod.Status.PodIP != "" {
-		podIP = appqosPod.Status.PodIP
-	} else if len(appqosPod.Status.PodIPs) != 0 {
-		podIP = appqosPod.Status.PodIPs[0].IP
-	} else {
-		return "", notFoundError
-	}
-
-	if len(appqosPod.Spec.Containers) == 0 {
-		return "", notFoundError
-	}
-
-	if len(appqosPod.Spec.Containers[0].Ports) == 0 {
-		return "", notFoundError
-	}
-
 	addressPrefix := r.AppQoSClient.GetAddressPrefix()
-	address := fmt.Sprintf("%s%s%s%d", addressPrefix, podIP, ":", appqosPod.Spec.Containers[0].Ports[0].ContainerPort)
-	return address, nil
+	podHostname := appqosPod.Spec.Hostname
+	podSubdomain := appqosPod.Spec.Subdomain
+	fullHostname := fmt.Sprintf("%s%s.%s:%d", addressPrefix, podHostname, podSubdomain, appqosPod.Spec.Containers[0].Ports[0].ContainerPort)
+
+	return fullHostname, nil
 }
 
 func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []corev1.Container, nodeAddress string, pod *corev1.Pod) (map[string][]int, []powerv1alpha1.Container, error) {
