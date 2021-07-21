@@ -28,8 +28,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
-
-	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 )
 
 const (
@@ -198,8 +196,8 @@ func CPUInCPUList(cpu int, cpuList []int) bool {
 	return false
 }
 
-func NodeNameInNodeInfoList(name string, nodeInfo []powerv1alpha1.NodeInfo) bool {
-	for _, node := range nodeInfo {
+func NodeNameInNodeList(name string, nodeList []corev1.Node) bool {
+	for _, node := range nodeList {
 		if node.Name == name {
 			return true
 		}

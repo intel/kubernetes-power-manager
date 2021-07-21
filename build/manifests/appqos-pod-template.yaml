@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: appqos-pod-
-  namespace: system
+  namespace: default
   labels:
     name: appqos-pod
 spec:

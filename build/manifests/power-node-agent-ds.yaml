@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: power-node-agent
-  namespace: system
+  namespace: default
 spec:
   selector:
     matchLabels:
@@ -16,7 +16,16 @@ spec:
       containers:
         - image: 'intel-power-node-agent:latest'
           imagePullPolicy: IfNotPresent
+          #securityContext:
+          #  allowPrivilegeEscalation: false
+          #  capabilities:
+          #    drop: ["ALL"]
           name: power-node-agent
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           resources:
             limits:
               cpu: 100m
@@ -29,6 +38,23 @@ spec:
               name: cgroup
             - mountPath: /etc/certs/
               name: certs
+            - mountPath: /var/lib/kubelet/pod-resources/
+              name: kubesock
+              readOnly: false
+        - image: 'appqos:latest'
+          imagePullPolicy: IfNotPresent
+          name: appqos
+          ports:
+          - containerPort: 5000
+          volumeMounts:
+          - mountPath: /etc/certs
+            name: certs
+          - mountPath: /appqos_workspace/appqos/ca
+            name: conf
+          - mountPath: /dev
+            name: dev
+          securityContext:
+            privileged: true
       volumes:
         - name: cgroup
           hostPath:
@@ -36,5 +62,14 @@ spec:
         - name: certs
           hostPath:
             path: /etc/certs/
+        - name: kubesock
+          hostPath:
+            path: /var/lib/kubelet/pod-resources
+        - name: conf
+          hostPath:
+            path: /opt/intel/appqos_ca
+        - name: dev
+          hostPath:
+            path: /dev
       nodeSelector:
         "feature.node.kubernetes.io/appqos-node": "true"

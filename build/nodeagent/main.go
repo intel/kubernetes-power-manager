@@ -73,15 +73,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	powerNodeState, err := podstate.NewState()
-	if err != nil {
-		setupLog.Error(err, "unable to create internal state")
-		os.Exit(1)
-	}
-
 	appQoSClient, err := appqos.NewOperatorAppQoSClient()
 	if err != nil {
 		setupLog.Error(err, "unable to create AppQoSClient")
+		os.Exit(1)
+	}
+
+	powerNodeState, err := podstate.NewState()
+	if err != nil {
+		setupLog.Error(err, "unable to create internal state")
 		os.Exit(1)
 	}
 
@@ -90,7 +90,35 @@ func main() {
 		setupLog.Error(err, "unable to create internal client")
 		os.Exit(1)
 	}
-
+	if err = (&controllers.PowerProfileReconciler{
+                Client:       mgr.GetClient(),
+                Log:          ctrl.Log.WithName("controllers").WithName("PowerProfile"),
+                Scheme:       mgr.GetScheme(),
+                AppQoSClient: appQoSClient,
+                //State:        state,
+        }).SetupWithManager(mgr); err != nil {
+                setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
+                os.Exit(1)
+        }
+	if err = (&controllers.PowerWorkloadReconciler{
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName("controllers").WithName("PowerWorkload"),
+		Scheme:       mgr.GetScheme(),
+		AppQoSClient: appQoSClient,
+		//State:        state,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PowerWorkload")
+		os.Exit(1)
+	}
+	if err = (&controllers.PowerNodeReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("PowerNode"),
+		Scheme: mgr.GetScheme(),
+		AppQoSClient: appQoSClient,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PowerNode")
+		os.Exit(1)
+	}
 	if err = (&controllers.PowerPodReconciler{
 		Client:             mgr.GetClient(),
 		Log:                ctrl.Log.WithName("controllers").WithName("PowerPod"),

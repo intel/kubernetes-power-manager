@@ -73,16 +73,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	powerNodeState, err := podstate.NewState()
-	if err != nil {
-		setupLog.Error(err, "unable to create internal state")
-		os.Exit(1)
-	}
-
 	//appQoSClient := appqos.NewDefaultAppQoSClient()
 	appQoSClient, err := appqos.NewOperatorAppQoSClient()
 	if err != nil {
 		setupLog.Error(err, "unable to create AppQoSClient")
+		os.Exit(1)
+	}
+
+	powerNodeState, err := podstate.NewState(appQoSClient)
+	if err != nil {
+		setupLog.Error(err, "unable to create internal state")
 		os.Exit(1)
 	}
 
@@ -94,6 +94,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	/*
 	if err = (&controllers.PowerNodeReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("PowerNode"),
@@ -113,6 +114,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
 		os.Exit(1)
 	}
+	*/
 	if err = (&controllers.PowerWorkloadReconciler{
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerWorkload"),
@@ -134,6 +136,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerPod")
 		os.Exit(1)
 	}
+	/*
 	if err = (&controllers.PowerConfigReconciler{
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerConfig"),
@@ -144,6 +147,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerConfig")
 		os.Exit(1)
 	}
+	*/
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

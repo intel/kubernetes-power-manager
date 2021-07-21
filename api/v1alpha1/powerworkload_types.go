@@ -24,7 +24,13 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type NodeInfo struct {
+	// The name of the node associated with these containers and CPUs
 	Name   string `json:"name,omitempty"`
+
+	// The containers that are utilizing this workload
+	Containers []Container `json:"containers,omitempty"`
+
+	// All of the CPUs accross each container
 	CpuIds []int  `json:"cpuIds,omitempty"`
 }
 
@@ -33,7 +39,8 @@ type PowerWorkloadSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Name string `json:"name,omitempty"`
+	// The name of the workload
+	Name string `json:"name"`
 
 	// AllCores determines if the Workload is to be applied to all cores (i.e. use the Default Workload)
 	AllCores bool `json:"allCores,omitempty"`
@@ -46,7 +53,7 @@ type PowerWorkloadSpec struct {
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
 
 	// Holds the info on the node name and cpu ids for each node
-	Nodes []NodeInfo `json:"nodes,omitempty"`
+	Node NodeInfo `json:"nodeInfo,omitempty"`
 
 	// PowerProfile is the Profile that this PowerWorkload is based on
 	PowerProfile string `json:"powerProfile,omitempty"`
@@ -79,6 +86,7 @@ type PowerWorkloadList struct {
 	Items           []PowerWorkload `json:"items"`
 }
 
+/*
 func (pw *PowerWorkload) GetNodeList() []string {
 	nodeList := make([]string, 0)
 	for _, nodeInfo := range pw.Spec.Nodes {
@@ -87,6 +95,7 @@ func (pw *PowerWorkload) GetNodeList() []string {
 
 	return nodeList
 }
+*/
 
 func init() {
 	SchemeBuilder.Register(&PowerWorkload{}, &PowerWorkloadList{})

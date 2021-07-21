@@ -28,8 +28,20 @@ type PowerNodeSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// NodeName is the name of the node
+	// The name of the node
 	NodeName string `json:"nodeName,omitempty"`
+
+	// The PowerProfiles in the cluster that are currently being used by Pods
+	ActiveProfiles map[string]bool `json:"activeProfiles,omitempty"`
+
+	// Information about the active PowerWorkloads in the cluster
+	ActiveWorkloads []WorkloadInfo `json:"activeWorkloads,omitempty"`
+
+	// Information about the containers in the cluster utilizing some PowerWorkload
+	PowerContainers []Container `json:"powerContainers,omitempty"`
+
+	// Shows what cores are in the Default and Shared AppQoS Pools
+	SharedPools []SharedPoolInfo `json:"sharedPools,omitempty"`
 }
 
 // PowerNodeStatus defines the observed state of PowerNode
@@ -37,40 +49,67 @@ type PowerNodeStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// The state of the Guaranteed Pods and Shared Pool in a cluster
 	PowerNodeCPUState `json:"powerNodeCPUState,omitempty"`
-	Workloads         []WorkloadInfo `json:"workloads,omitempty"`
+	//Workloads         []WorkloadInfo `json:"workloads,omitempty"`
 }
 
 type PowerNodeCPUState struct {
-	SharedPool     []string        `json:"sharedPool,omitempty"`
+	// The CPUs that are currently part of the Shared pool on a Node
+	SharedPool     []int        `json:"sharedPool,omitempty"`
+
+	// Pods that are requesting CPUs in the Guaranteed QoS class
 	GuaranteedPods []GuaranteedPod `json:"guaranteedPods,omitempty"`
 }
 
 type GuaranteedPod struct {
+	// The name of the Node the Pod is running on
 	Node       string      `json:"node,omitempty"`
+
+	// The name of the Pod
 	Name       string      `json:"name,omitempty"`
+
+	// The UID of the Pod
 	UID        string      `json:"uid,omitempty"`
+
+	// The Containers that are running in the Pod
 	Containers []Container `json:"containers,omitempty"`
 }
 
 type Container struct {
+	// The name of the Container
 	Name          string `json:"name,omitempty"`
-	ID            string `json:"id,omitempty"`
+
+	// The ID of the Container
+	Id            string `json:"id,omitempty"`
+
+	// The name of the Pod the Container is running on
+	Pod	      string `json:"pod,omitempty"`
+
+	// The exclusive CPUs given to this Container
 	ExclusiveCPUs []int  `json:"exclusiveCpus,omitempty"`
+
+	// The PowerProfile that the Container is utilizing
 	PowerProfile  string `json:"powerProfile,omitempty"`
+
+	// The PowerWorkload that the Container is utilizing
+	Workload string `json:"workload,omitempty"`
 }
 
 type WorkloadInfo struct {
+	// The name of the PowerWorkload
 	Name         string          `json:"name,omitempty"`
-	PowerProfile string          `json:"powerProfile,omitempty"`
-	Containers   []ContainerInfo `json:"containers,omitempty"`
-	Cores        []int           `json:"cores,omitempty"`
+
+	// The CPUs that are utilizing the PowerWorkload
+	CpuIds        []int           `json:"cores,omitempty"`
 }
 
-type ContainerInfo struct {
+type SharedPoolInfo struct {
+	// The name of the AppQoS (either Default or Shared)
 	Name string `json:"name,omitempty"`
-	ID   string `json:"id,omitempty"`
-	Pod  string `json:"pod,omitempty"`
+
+	// The cores that are a part of this Shared AppQoS Pool
+	SharedPoolCpuIds []int `json:"sharedPoolCpuIds,omitempty"`
 }
 
 // +kubebuilder:object:root=true

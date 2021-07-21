@@ -37,18 +37,16 @@ spec:
           description: PowerProfileSpec defines the desired state of PowerProfile
           properties:
             epp:
-              description: EPP is the priority value associated with this Power Profile
+              description: The priority value associated with this Power Profile
               type: string
             max:
-              description: Max indicates the maximum frequency the core is allowed
-                go
+              description: The maximum frequency the core is allowed go
               type: integer
             min:
-              description: Min indicates the minimum frequency the core is allowed
-                go
+              description: The minimum frequency the core is allowed go
               type: integer
             name:
-              description: Name is the name identifying the PowerProfile
+              description: The name of the PowerProfile
               type: string
           required:
           - epp
@@ -60,7 +58,7 @@ spec:
           description: PowerProfileStatus defines the observed state of PowerProfile
           properties:
             id:
-              description: ID is the id given to the power profile by AppQoS
+              description: The ID given to the power profile by AppQoS
               type: integer
           required:
           - id

@@ -28,16 +28,16 @@ type PowerProfileSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Name is the name identifying the PowerProfile
+	// The name of the PowerProfile
 	Name string `json:"name"`
 
-	// Max indicates the maximum frequency the core is allowed go
+	// The maximum frequency the core is allowed go
 	Max int `json:"max"`
 
-	// Min indicates the minimum frequency the core is allowed go
+	// The minimum frequency the core is allowed go
 	Min int `json:"min"`
 
-	// EPP is the priority value associated with this Power Profile
+	// The priority value associated with this Power Profile
 	Epp string `json:"epp"`
 }
 
@@ -46,7 +46,7 @@ type PowerProfileStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// ID is the id given to the power profile by AppQoS
+	// The ID given to the power profile by AppQoS
 	ID int `json:"id"`
 }
 

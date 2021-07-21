@@ -79,6 +79,12 @@ docker-build:
 	docker build -f build/Dockerfile -t operator .
 	docker build -f build/Dockerfile.nodeagent -t intel-power-node-agent .
 
+build-controller:
+	docker build -f build/Dockerfile -t operator .
+
+build-agent:
+	docker build -f build/Dockerfile.nodeagent -t intel-power-node-agent .
+
 # Push the docker image
 docker-push:
 	docker push ${IMG}

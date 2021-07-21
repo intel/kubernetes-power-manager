@@ -19,26 +19,41 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"time"
+	"os"
+	rt "runtime"
+	"io/ioutil"
+	"strconv"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/api/resource"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	corev1 "k8s.io/api/core/v1"
-
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	//PowerPodNameConst = "PowerPod"
+	AppQoSClientAddress = "https://localhost:5000"
+	MaxFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"
 )
+
+var extendedResourcePercentage map[string]float64 = map[string]float64{
+        // performance          ===>  priority level 0
+        // balance_performance  ===>  priority level 1
+        // balance_power        ===>  priority level 2
+        // power                ===>  priority level 3
+
+        "performance":         .40,
+        "balance_performance": .80,
+        "balance_power":       1.0,
+        "power":               1.0,
+}
 
 // PowerProfileReconciler reconciles a PowerProfile object
 type PowerProfileReconciler struct {
@@ -46,7 +61,6 @@ type PowerProfileReconciler struct {
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
 	AppQoSClient *appqos.AppQoSClient
-	State        *state.PowerNodeData
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerprofiles,verbs=get;list;watch;create;update;patch;delete
@@ -67,17 +81,16 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			// frequency resets of the effected CPUs to the PowerWorkload controller. We also need to check to see
 			// if there are any AppQoS instances on other nodes
 
-			obseleteProfiles, err := r.findObseleteProfiles(req)
+			profileFromAppQoS, err := r.AppQoSClient.GetProfileByName(req.NamespacedName.Name, AppQoSClientAddress)
 			if err != nil {
+				logger.Error(err, "error retrieving PowerProfile from AppQoS instance")
 				return ctrl.Result{}, err
 			}
 
-			for address, profileID := range obseleteProfiles {
-				err = r.AppQoSClient.DeletePowerProfile(address, profileID)
-				if err != nil {
-					logger.Error(err, "Failed to delete profile from AppQoS")
-					return ctrl.Result{}, err
-				}
+			err = r.AppQoSClient.DeletePowerProfile(AppQoSClientAddress, *profileFromAppQoS.ID)
+			if err != nil {
+				logger.Error(err, "error deleting PowerProfile from AppQoS instance")
+				return ctrl.Result{}, err
 			}
 
 			return ctrl.Result{}, nil
@@ -87,118 +100,124 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
-	// Loop through Power Nodes to check which AppQos instances have this PowerProfile already
-	// If an instance has it, update it, otherwise create it
+	if _, exists := extendedResourcePercentage[profile.Spec.Name]; !exists && profile.Spec.Epp != "power" {
+		logger.Info("PowerProfile is not a base profile or designated as a Shared Profile, skipping...")
+		return ctrl.Result{}, nil
+	}
 
-	for _, nodeName := range r.State.PowerNodeList {
-		nodeAddress, err := r.getPodAddress(nodeName)
-		if err != nil {
-			// Continue with other Nodes if there's a failure on one
+	// Update the PowerProfile with the correct min/max values and name for the given node
+	nodeName := os.Getenv("NODE_NAME")
+	profileName := fmt.Sprintf("%s-%s", profile.Spec.Name, nodeName)
 
-			logger.Error(err, fmt.Sprintf("Failed to get Pod address for node: %s", nodeName))
-			return ctrl.Result{RequeueAfter: time.Second * 5}, err
-		}
+	maximumFrequencyByte, err := ioutil.ReadFile(MaxFrequencyFile)
+        if err != nil {
+                logger.Error(err, "error reading maximum frequency from file")
+                return ctrl.Result{}, err
+        }
 
-		powerProfileFromAppQoS, err := r.AppQoSClient.GetProfileByName(req.NamespacedName.Name, nodeAddress)
-		/*
-		if err != nil {
-			logger.Error(err, fmt.Sprintf("Error retrieving Power Profiles from AppQoS from node %s", nodeName))
-			continue
-		}
-		*/
+        maximumFrequencyString := string(maximumFrequencyByte)
+        maximumFrequency, err := strconv.Atoi(strings.Split(maximumFrequencyString, "\n")[0])
+        if err != nil {
+                logger.Error(err, "error reading maximum frequency value")
+        }
 
-		powerProfile := &appqos.PowerProfile{}
-		powerProfile.Name = &req.NamespacedName.Name
-		powerProfile.MinFreq = &profile.Spec.Min
-		powerProfile.MaxFreq = &profile.Spec.Max
-		powerProfile.Epp = &profile.Spec.Epp
+        maximumFrequency = maximumFrequency/1000
+        minimumFrequency := maximumFrequency-400
 
-		if !reflect.DeepEqual(powerProfileFromAppQoS, &appqos.PowerProfile{}) {
-			// Update PowerProfile
+	// Check to see if this PowerProfile has already been created for this Node
+	profileForNode := &powerv1alpha1.PowerProfile{}
+	err = r.Client.Get(context.TODO(), client.ObjectKey{
+		Namespace: req.NamespacedName.Namespace,
+		Name: profileName,
+	}, profileForNode)
 
-			appqosPutResp, err := r.AppQoSClient.PutPowerProfile(powerProfile, nodeAddress, *powerProfileFromAppQoS.ID)
-			if err != nil {
-				logger.Error(err, appqosPutResp)
-				continue
+	if err != nil {
+		if errors.IsNotFound(err) {
+			if profile.Spec.Epp != "power" {
+				powerProfile := &powerv1alpha1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: req.NamespacedName.Namespace,
+						Name: profileName,
+					},
+				}
+
+				powerProfileSpec := &powerv1alpha1.PowerProfileSpec{
+					Name: profileName,
+					Max: maximumFrequency,
+					Min: minimumFrequency,
+					Epp: profile.Spec.Epp,
+				}
+
+				powerProfile.Spec = *powerProfileSpec
+				err = r.Client.Create(context.TODO(), powerProfile)
+				if err != nil {
+					logger.Error(err, "error creating PowerProfile CRD")
+					return ctrl.Result{}, err
+				}
+
+				err = r.createExtendedResources(nodeName, profileName, profile.Spec.Epp)
+				if err != nil {
+					logger.Error(err, "error creating Extended resources")
+					return ctrl.Result{}, err
+				}
+			} else {
+				err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp)
+				if err != nil {
+                                        logger.Error(err, "error creating Extended resources")
+                                        return ctrl.Result{}, err
+                                }
 			}
 		} else {
-			// Create PowerProfile
+			return ctrl.Result{}, err
+		}
+	}
 
-			appqosPostResp, err := r.AppQoSClient.PostPowerProfile(powerProfile, nodeAddress)
-			if err != nil {
-				logger.Error(err, appqosPostResp)
-				continue
-			}
+	// TODO: Do check for update
+	if _, exists := extendedResourcePercentage[profileName]; !exists {
+		powerProfile := &appqos.PowerProfile{}
+		powerProfile.Name = &profileName
+		powerProfile.Epp = &profile.Spec.Epp
+		if profile.Spec.Epp == "power" {
+			powerProfile.MinFreq = &profile.Spec.Min
+			powerProfile.MaxFreq = &profile.Spec.Max
+		} else {
+			powerProfile.MinFreq = &minimumFrequency
+			powerProfile.MaxFreq = &maximumFrequency
+		}
+
+		// Create PowerProfile
+
+		appqosPostResp, err := r.AppQoSClient.PostPowerProfile(powerProfile, AppQoSClientAddress)
+		if err != nil {
+			logger.Error(err, appqosPostResp)
+			return ctrl.Result{}, err
 		}
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func (r *PowerProfileReconciler) findObseleteProfiles(req ctrl.Request) (map[string]int, error) {
-	_ = context.Background()
-	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
-
-	obseleteProfiles := make(map[string]int, 0)
-
-	for _, nodeName := range r.State.PowerNodeList {
-		address, err := r.getPodAddress(nodeName)
-		if err != nil {
-			return nil, err
-		}
-
-		profile, err := r.AppQoSClient.GetProfileByName(req.NamespacedName.Name, address)
-		if err != nil {
-			logger.Error(err, fmt.Sprintf("Error retrieving Power Profiles from AppQoS from node %s", nodeName))
-			return nil, err
-		}
-
-		if reflect.DeepEqual(profile, &appqos.PowerProfile{}) {
-			logger.Info("PowerProfile not found on AppQoS instance")
-			continue
-		}
-
-		obseleteProfiles[address] = *profile.ID
-	}
-
-	return obseleteProfiles, nil
-}
-
-func (r *PowerProfileReconciler) getPodAddress(nodeName string) (string, error) {
-	_ = context.Background()
-	logger := r.Log.WithName("getPodAddress")
-
-	pods := &corev1.PodList{}
-	err := r.Client.List(context.TODO(), pods, client.MatchingLabels(client.MatchingLabels{"name": AppQoSPodLabel}))
+func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profileName string, eppValue string) error {
+	node := &corev1.Node{}
+	err := r.Client.Get(context.TODO(), client.ObjectKey{
+		Name: nodeName,
+	}, node)
 	if err != nil {
-		logger.Error(err, "Failed to list AppQoS pods")
-		return "", nil
+		return err
 	}
 
-	appqosPod, err := util.GetPodFromNodeName(pods, nodeName)
+	numCPUsOnNode := float64(rt.NumCPU())
+	numExtendedResources := int64(numCPUsOnNode * extendedResourcePercentage[eppValue])
+	profilesAvailable := resource.NewQuantity(numExtendedResources, resource.DecimalSI)
+	extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
+	node.Status.Capacity[extendedResourceName] = *profilesAvailable
+
+	err = r.Client.Status().Update(context.TODO(), node)
 	if err != nil {
-		appqosNode := &corev1.Node{}
-		err := r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: nodeName,
-		}, appqosNode)
-		if err != nil {
-			logger.Error(err, "Error getting AppQoS node")
-			return "", err
-		}
-
-		appqosPod, err = util.GetPodFromNodeAddresses(pods, appqosNode)
-		if err != nil {
-			return "", err
-		}
+		return err
 	}
 
-	addressPrefix := r.AppQoSClient.GetAddressPrefix()
-	podHostname := appqosPod.Spec.Hostname
-	podSubdomain := appqosPod.Spec.Subdomain
-	fullHostname := fmt.Sprintf("%s%s.%s:%d", addressPrefix, podHostname, podSubdomain, appqosPod.Spec.Containers[0].Ports[0].ContainerPort)
-
-	return fullHostname, nil
-
+	return nil
 }
 
 // SetupWithManager specifies how the controller is built and watch a CR and other resources that are owned and managed by the controller

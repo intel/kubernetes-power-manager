@@ -67,7 +67,7 @@ func NewOperatorAppQoSClient() (*AppQoSClient, error) {
 	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig:     tlsConfig,
-			TLSHandshakeTimeout: 700 * time.Millisecond,
+			TLSHandshakeTimeout: 2000 * time.Millisecond,
 		},
 	}
 

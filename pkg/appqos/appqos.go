@@ -22,6 +22,9 @@ const (
 
 	HttpPrefix  = "http://"
 	HttpsPrefix = "https://"
+
+	SharedPoolName = "Shared"
+	DefaultPoolName = "Default"
 )
 
 // GetPools /pools
@@ -84,28 +87,8 @@ func (ac *AppQoSClient) GetPool(address string, id int) (*Pool, error) {
 	return pool, nil
 }
 
-/*
-func (ac *AppQoSClient) GetPoolByName(address string, name string) (*Pool, bool, error) {
-	allPools, err := ac.GetPools(address)
-	if err != nil {
-		// Return true when there is an error as we don't know if the pool exists or not.
-		// Also allows whatever called GetPoolByName to handle the error
-		fmt.Println(err)
-
-		return &Pool{}, true, err
-	}
-
-	for _, pool := range allPools {
-		if *pool.Name == name {
-			return &pool, true, nil
-		}
-	}
-
-	return &Pool{}, false, nil
-}
-*/
-
 func (ac *AppQoSClient) GetPoolByName(address string, name string) (*Pool, error) {
+	fmt.Printf("In GetPoolByName for %s", name)
 	allPools, err := ac.GetPools(address)
 	if err != nil {
 		return &Pool{}, err
@@ -118,6 +101,28 @@ func (ac *AppQoSClient) GetPoolByName(address string, name string) (*Pool, error
 	}
 
 	return &Pool{}, nil
+}
+
+func (ac *AppQoSClient) GetSharedPool(address string) (*Pool, error) {
+	defaultPool := &Pool{}
+	allPools, err := ac.GetPools(address)
+	if err != nil {
+		return &Pool{}, err
+	}
+
+	// Search for the Shared pool first
+	for _, pool := range allPools {
+		if *pool.Name == SharedPoolName {
+			return &pool, nil
+		}
+
+		if *pool.Name == DefaultPoolName {
+			defaultPool = &pool
+		}
+	}
+
+	// Return the Default pool if the Shared pool is not found
+	return defaultPool, nil
 }
 
 // PostPool /pools

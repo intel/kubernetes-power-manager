@@ -28,8 +28,13 @@ type PowerConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// The version of the image used for the Operator
 	PowerImage        string            `json:"powerImage,omitempty"`
+
+	// The label on the Nodes you the Operator will look for to deploy the Node Agent
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
+
+	// The PowerProfiles that will be created by the Operator
 	PowerProfiles     []string          `json:"powerProfiles,omitempty"`
 }
 
@@ -38,6 +43,7 @@ type PowerConfigStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// The Nodes that the Node Agent has been deployed to
 	Nodes []string `json:"nodes,omitempty"`
 }
 

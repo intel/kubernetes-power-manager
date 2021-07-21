@@ -31,7 +31,6 @@ import (
 
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
-	//"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podstate"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	// +kubebuilder:scaffold:imports
 )
@@ -72,15 +71,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	/*
-		powerNodeState, err := podstate.NewState()
-		if err != nil {
-			setupLog.Error(err, "unable to create internal state")
-			os.Exit(1)
-		}
-	*/
-
-	//appQoSClient := &appqos.AppQoSClient{}
 	appQoSClient, err := appqos.NewOperatorAppQoSClient()
 	if err != nil {
 		setupLog.Error(err, "unable to create AppQoSClient")
@@ -90,16 +80,16 @@ func main() {
 	state := state.NewPowerNodeData()
 
 	/*
-		if err = (&controllers.PowerNodeReconciler{
-			Client: mgr.GetClient(),
-			Log:    ctrl.Log.WithName("controllers").WithName("PowerNode"),
-			Scheme: mgr.GetScheme(),
-			State:  *powerNodeState,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "PowerNode")
-			os.Exit(1)
-		}
+	if err = (&controllers.PowerNodeReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("PowerNode"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PowerNode")
+		os.Exit(1)
+	}
 	*/
+	/*
 	if err = (&controllers.PowerProfileReconciler{
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerProfile"),
@@ -110,6 +100,8 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
 		os.Exit(1)
 	}
+	*/
+	/*
 	if err = (&controllers.PowerWorkloadReconciler{
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerWorkload"),
@@ -120,6 +112,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerWorkload")
 		os.Exit(1)
 	}
+	*/
 	if err = (&controllers.PowerConfigReconciler{
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerConfig"),
