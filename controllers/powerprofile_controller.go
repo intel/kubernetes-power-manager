@@ -172,10 +172,21 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		}
 	}
 
+	// Create the Extended Resources for the base profile as well so the Pod controller can determine the Profile if necessary
+	err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp)
+	if err != nil {
+		logger.Error(err, "error creating extended resources for base profile")
+		return ctrl.Result{}, err
+	}
+
 	// TODO: Do check for update
 	if _, exists := extendedResourcePercentage[profileName]; !exists {
 		powerProfile := &appqos.PowerProfile{}
-		powerProfile.Name = &profileName
+		if profile.Spec.Epp == "power" {
+			powerProfile.Name = &profile.Spec.Name
+		} else {
+			powerProfile.Name = &profileName
+		}
 		powerProfile.Epp = &profile.Spec.Epp
 		if profile.Spec.Epp == "power" {
 			powerProfile.MinFreq = &profile.Spec.Min

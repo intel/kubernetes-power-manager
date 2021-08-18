@@ -143,27 +143,6 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				workload.Spec.Node.Containers = updatedWorkloadContainerList
 			}
 
-			/*
-			for i, node := range workload.Spec.Nodes {
-				if node.Name == powerPodState.Node {
-					updatedWorkloadCPUList := getNewWorkloadCPUList(cpus, node.CpuIds)
-
-					if len(updatedWorkloadCPUList) == 0 {
-						workload.Spec.Nodes = append(workload.Spec.Nodes[:i], workload.Spec.Nodes[i+1:]...)
-						break
-					} else {
-						workload.Spec.Nodes[i].CpuIds = updatedWorkloadCPUList
-					}
-
-					// We don't need to check if there's no containers because if there weren't, that would have been caught while checking the number of CPUs above
-					updatedWorkloadContainerList := getNewWorkloadContainerList(node.Containers, powerPodState.Containers)
-					workload.Spec.Nodes[i].Containers = updatedWorkloadContainerList
-
-					// TODO: Determine if we need a break statement here
-				}
-			}
-			*/
-
 			err = r.Client.Update(context.TODO(), workload)
 			if err != nil {
 				logger.Error(err, "Failed updating PowerWorkload")
@@ -210,7 +189,14 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	for profile, cores := range powerProfilesFromContainers {
-		workloadName := fmt.Sprintf("%s%s", profile, WorkloadNameSuffix)
+		profileName := profile
+		if _, exists := extendedResourcePercentage[profile]; exists {
+			// If the PowerProfile is a base profile, we need to get the correct Profile based on the node name
+
+			profileName = fmt.Sprintf("%s-%s", profile, pod.Spec.NodeName)
+		}
+
+		workloadName := fmt.Sprintf("%s%s", profileName, WorkloadNameSuffix)
 		workload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Namespace: req.NamespacedName.Namespace,
@@ -237,7 +223,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				workloadSpec := &powerv1alpha1.PowerWorkloadSpec{
 					Name:         workloadName,
 					Node: 	      *nodeInfo,
-					PowerProfile: profile,
+					PowerProfile: profileName,
 				}
 				workload = &powerv1alpha1.PowerWorkload{
 					ObjectMeta: metav1.ObjectMeta{
@@ -261,47 +247,6 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// PowerWorkload already exists so need to update it. If the Node already
 		// exists in the Workload, we update the Node's CPU list, if not we create
 		// the entry for the node
-
-		/*
-		nodeExisted := false
-		for i, node := range workload.Spec.Nodes {
-			if node.Name == pod.Spec.NodeName {
-				nodeExisted = true
-				workload.Spec.Nodes[i].CpuIds = appendIfUnique(node.CpuIds, cores)
-				sort.Ints(workload.Spec.Nodes[i].CpuIds)
-
-				containerList := make([]powerv1alpha1.Container, 0)
-				for _, container := range powerContainers {
-					workloadContainer := container
-					workloadContainer.Pod = pod.Name
-					containerList = append(containerList, workloadContainer)
-				}
-				workload.Spec.Nodes[i].Containers = append(workload.Spec.Nodes[i].Containers, containerList...)
-
-				break
-			}
-		}
-		*/
-
-		/*
-		if !nodeExisted {
-			containerList := make([]powerv1alpha1.Container, 0)
-			for _, container := range powerContainers {
-				workloadContainer := container
-				workloadContainer.Pod = pod.Name
-				containerList = append(containerList, workloadContainer)
-			}
-
-			nodeInfo := powerv1alpha1.NodeInfo{
-				Name:   pod.Spec.NodeName,
-				//Containers: containerInfoList,
-				Containers: containerList,
-				CpuIds: cores,
-			}
-
-			workload.Spec.Nodes = append(workload.Spec.Nodes, nodeInfo)
-		}
-		*/
 
 		workload.Spec.Node.CpuIds = appendIfUnique(workload.Spec.Node.CpuIds, cores)
 		sort.Ints(workload.Spec.Node.CpuIds)
@@ -336,42 +281,6 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func (r *PowerPodReconciler) getPodAddress(nodeName string) (string, error) {
-	_ = context.Background()
-	logger := r.Log.WithName("getPodAddress")
-
-	pods := &corev1.PodList{}
-	err := r.Client.List(context.TODO(), pods, client.MatchingLabels(client.MatchingLabels{"name": AppQoSPodLabel}))
-	if err != nil {
-		logger.Error(err, "Failed to list AppQoS pods")
-		return "", nil
-	}
-
-	appqosPod, err := util.GetPodFromNodeName(pods, nodeName)
-	if err != nil {
-		appqosNode := &corev1.Node{}
-		err := r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: nodeName,
-		}, appqosNode)
-		if err != nil {
-			logger.Error(err, "Error getting AppQoS node")
-			return "", err
-		}
-
-		appqosPod, err = util.GetPodFromNodeAddresses(pods, appqosNode)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	addressPrefix := r.AppQoSClient.GetAddressPrefix()
-	podHostname := appqosPod.Spec.Hostname
-	podSubdomain := appqosPod.Spec.Subdomain
-	fullHostname := fmt.Sprintf("%s%s.%s:%d", addressPrefix, podHostname, podSubdomain, appqosPod.Spec.Containers[0].Ports[0].ContainerPort)
-
-	return fullHostname, nil
 }
 
 func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []corev1.Container, profileCRs []powerv1alpha1.PowerProfile, pod *corev1.Pod) (map[string][]int, []powerv1alpha1.Container, error) {
