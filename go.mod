@@ -15,6 +15,6 @@ require (
 	k8s.io/client-go v0.20.2
 	k8s.io/klog/v2 v2.4.0
 	k8s.io/kubelet v0.20.2
-	sigs.k8s.io/controller-runtime v0.6.2
+	sigs.k8s.io/controller-runtime v0.6.3
 	sigs.k8s.io/controller-tools v0.4.1 // indirect
 )

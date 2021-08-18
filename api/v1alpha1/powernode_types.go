@@ -51,7 +51,6 @@ type PowerNodeStatus struct {
 
 	// The state of the Guaranteed Pods and Shared Pool in a cluster
 	PowerNodeCPUState `json:"powerNodeCPUState,omitempty"`
-	//Workloads         []WorkloadInfo `json:"workloads,omitempty"`
 }
 
 type PowerNodeCPUState struct {

@@ -30,7 +30,6 @@ import (
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
 
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	// +kubebuilder:scaffold:imports
 )
@@ -71,54 +70,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	appQoSClient, err := appqos.NewOperatorAppQoSClient()
-	if err != nil {
-		setupLog.Error(err, "unable to create AppQoSClient")
-		os.Exit(1)
-	}
-
 	state := state.NewPowerNodeData()
 
-	/*
-	if err = (&controllers.PowerNodeReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("PowerNode"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "PowerNode")
-		os.Exit(1)
-	}
-	*/
-	/*
-	if err = (&controllers.PowerProfileReconciler{
-		Client:       mgr.GetClient(),
-		Log:          ctrl.Log.WithName("controllers").WithName("PowerProfile"),
-		Scheme:       mgr.GetScheme(),
-		AppQoSClient: appQoSClient,
-		State:        state,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
-		os.Exit(1)
-	}
-	*/
-	/*
-	if err = (&controllers.PowerWorkloadReconciler{
-		Client:       mgr.GetClient(),
-		Log:          ctrl.Log.WithName("controllers").WithName("PowerWorkload"),
-		Scheme:       mgr.GetScheme(),
-		AppQoSClient: appQoSClient,
-		State:        state,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "PowerWorkload")
-		os.Exit(1)
-	}
-	*/
 	if err = (&controllers.PowerConfigReconciler{
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerConfig"),
 		Scheme:       mgr.GetScheme(),
 		State:        state,
-		AppQoSClient: appQoSClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerConfig")
 		os.Exit(1)

@@ -205,3 +205,13 @@ func NodeNameInNodeList(name string, nodeList []corev1.Node) bool {
 
 	return false
 }
+
+func StringInStringList(item string, itemList []string) bool {
+	for _, i := range itemList {
+		if i == item {
+			return true
+		}
+	}
+
+	return false
+}

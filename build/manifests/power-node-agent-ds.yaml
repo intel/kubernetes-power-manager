@@ -47,15 +47,16 @@ spec:
           ports:
           - containerPort: 5000
           volumeMounts:
-          - mountPath: /etc/certs
-            name: certs
           - mountPath: /appqos_workspace/appqos/ca
-            name: conf
+            name: appqoscerts
           - mountPath: /dev
             name: dev
           securityContext:
             privileged: true
       volumes:
+        - name: appqoscerts
+          hostPath:
+            path: /etc/certs/public/
         - name: cgroup
           hostPath:
             path: /sys/fs
@@ -65,9 +66,6 @@ spec:
         - name: kubesock
           hostPath:
             path: /var/lib/kubelet/pod-resources
-        - name: conf
-          hostPath:
-            path: /opt/intel/appqos_ca
         - name: dev
           hostPath:
             path: /dev
