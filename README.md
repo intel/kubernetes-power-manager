@@ -9,6 +9,9 @@ Table of Contents
 
    * [Intel Power Operator](#intel-power-operator)
       * [Kubernetes Operator for Dynamic Configuration of Intel Speed Select Technologies (SST).](#kubernetes-operator-for-dynamic-configuration-of-intel-speed-select-technologies-sst)
+      * [What is the Power Operator?](#What is the Power Operator?)
+      * [Power Operators main responsibilities](#Power Operators main responsibilities)
+      * [Use Cases](#Use Cases)
       * [Prerequisites](#prerequisites)
       * [Components](#components)
          * [AppQoS](#appqos)
@@ -76,6 +79,51 @@ The Power Operator bridges the gap between the container orchestration layer and
    A cloud may be interested in fast response time, but not in maximal response time, so may choose to spin up cores on demand and only those cores used, but want to remain in power-saving mode the rest of the time.  
 
 
+## Initial Release Functionality of the Power Operator
+
+- SST-BF - (Speed Select Technology - Base Frequency)
+	This feature allows the user to control the base frequency of certain cores.
+	The base frequency is a guaranteed level of performance on the CPU (a CPU will never go below its base frequency).
+	They can be set to a higher than a majority (priority CPUs) of the other cores on the system to which they can apply their critical workloads for a guaranteed performance.
+
+- SST-CP - (Speed Select Technology - Core Power)
+	This feature allows the user to group cores into levels of priority.
+	When there is power to spare on the system, it can be distributed among the cores based on their priority level.
+	There are four levels of priority available.
+
+1. Performances
+2. Balance Performances
+3. Balance Power
+4. Power
+
+The Priority level for a core is defined using its EPP (Energy Performance Preference) value, which is one of the options in the Power Profiles. If not all the power is utilized on the CPU, the CPU can put the higher priority cores up to Turbo Frequency (allows the CPUs to run faster).
+
+
+- Frequency Tuning
+
+Frequency tuning allows the individual cores on the system to be sped up or slowed down by changing their frequency.
+
+This tuning is done via the CommsPowerManagement python library which is utilized via AppQoS.
+
+The min and max values for a core are defined in the Power Profile and the tuning is done after the core has been assigned by the Native CPU Manager.
+
+How exactly the frequency of the cores is changed is by simply writing the new frequency value to the /sys/devices/device/system/cpu/cpuN/cpufreq/scaling_max|min_freq file for the given core.
+
+Note: In the future, we want to move away from the CommsPowerManagement library to create a Go Library that utilizes the Intel Pstate drive. The Pstate driver checks for overheating on the system.
+
+## Future planned additions to the Power Operator
+
+- SST-TF - Turbo Frequency
+
+This feature allows the user to set different “All-Core Turbo Frequency” (max freq all cores can be running at) values to individual cores based on their priority.
+		
+All-Core Turbo is the elevated frequency at which all cores can run on the system at the same time.
+
+The user can set certain cores to have a higher turbo frequency by lowering the value of other cores or setting them to no value at all.
+
+This feature is only useful when all cores on the system are being utilized, but the user still wants to be able to configure certain cores to get a higher performance than others.
+
+
 ## Prerequisites
 * Node Feature Discovery ([NFD](https://github.com/kubernetes-sigs/node-feature-discovery)) should be deployed in the cluster before running the operator. Once NFD has applied labels to nodes with capabilities. NFD is used to detect node-level features such as *Intel Speed Select Technology - Base Frequency (SST-BF)*. Once detected, the operator can take advantage of such features by configuring CPUs on the host to optimise performance for containerized workloads.
 Note: NFD is recommended, but not essential. Node labels can also be applied manually. See the [NFD repo](https://github.com/kubernetes-sigs/node-feature-discovery#feature-labels) for a full list of features labels.
@@ -83,18 +131,78 @@ Note: NFD is recommended, but not essential. Node labels can also be applied man
 
 ## Components
 ### AppQoS
-[AppQos](https://github.com/intel/intel-cmt-cat/appqos) is containerized application deployed by the power operator in a DaemonSet. AppQos is responsible for node level configuration of SST capabilities, as delegated to by the power operator via the AppQoS HTTP REST interface.
+[AppQos](https://github.com/intel/intel-cmt-cat/appqos), an alias for “Application Quality of Service”, is an Intel software suite that provides node level configuration of hardware capabilities such as SST. AppQoS is deployed on the host as a containerized application and exposes a REST interface to the orchestration layer. Using the Intel Comms Power libraries as a back end, AppQoS can perform host-level configurations of SST features based on API calls from the Power Operator.
 
 ### Node Agent
-The node agent is also a containerized application deployed by the power operator in a DaemonSet. The primary function of the node agent is to communicate with the node's Kubelet PodResources endpoint to discover the exact CPUs that are allocated per container.
-The node agent watches for Pods that are created in your cluster and examines them to determine which Power Profile they have requested and then sets off the chain of events that tunes the frequencies of the cores designated to the Pod.
+The node agent is also a containerized application deployed by the power operator in a DaemonSet. The primary function of the node agent is to communicate with the node's Kubelet PodResources endpoint to discover the exact CPUs that are allocated per container. The node agent watches for Pods that are created in your cluster and examines them to determine which Power Profile they have requested and then sets off the chain of events that tunes the frequencies of the cores designated to the Pod.
 
-### Power Operator
-The power operator is the main component of this project and is responsible for: 
-* Deploying the AppQoS and Node Agent DaemonSets.
-* Managing all associated custom resources.
-* Discovery and advertisement of Power Profile extended resources.
-* Sending HTTP requests to the AppQoS daemons for SST configuration.
+### Config Controller
+The Power Operator will wait for the Config  to be created by the user, in which the desired PowerProfiles will be specified.  The powerConfig holds different values: what image is required, what nodes the user wants to place the node agent on and what profile that is required. 
+* appQoSImage: This is the name/tag given to the AppQoS container image that will be deployed in a DaemonSet by the operator.
+* powerNodeSelector: This is a key/value map used for defining a list of node labels that a node must satisfy in order for AppQoS and the operator's node agent to be deployed.
+* powerProfiles: The list of PowerProfiles that the user ants available the nodes.
+
+Once the Config Controller sees that the powerConfig is created, it reads the values and then deploys the node agent and the AppQoS agent on to each of the nodes that are specified. It then creates the profiles and extended resources. Extended resources are resources created in the cluster that can request in the podSpec, the Kubelet can then keep track of these requests, it is important to us as it can specify how many CPUs on the system can be run at a higher frequency before hitting the heat threshold (kubelet does most of the work here).
+
+**Example:**
+````yaml
+apiVersion: "power.intel.com/v1alpha1"
+kind: PowerConfig
+metadata:
+   namee: power-config
+spec:
+   powerImage: "appqos:latest"
+   powerNodeSelector:
+      feature.node.kubernetes.io/appqos-node: "true"
+   powerProfiles:
+   - "performance"
+````
+
+## Workload Controller 
+The Workload Controller is responsible for the actual tuning of the CPUs. The Workload Controller contacts the AppQoS agent and requests that it creates powerProfiles in AppQoS. The powerProfiles hold the value of the maximum and minimum frequencies, the CPUs that need to be configured and then carries out the changes.
+		
+The PowerWorkload objects can be created automatically via the pod spec.  This action is undertaken by the Operator when a pod is crated with a container requesting exclusive CPUs and a Power Profile.
+		
+PowerWorkload objects can also be create directly by the user via the PowerWorkload spec.  This is only recommended for configuring the CPU Man
+		
+Example:
+````yaml
+apiVersion: "power.intel.com/v1alpha1"
+kind: PowerWorkload
+metadata:
+    name: performance-workload
+spec:
+   node:
+   - name: "ice-lake"
+     cpuIds:
+     - 5
+     - 6
+   powerProfile: "performance"
+````
+This workload assigns the performance Power Profile to CPUs 5 and 6 on the node "ice-lake"		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+* BREAK *
+
+
+
+
+
 
 ## Custom Resource Definitions (CRDs)
 ### PowerConfig
