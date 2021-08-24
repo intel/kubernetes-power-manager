@@ -45,6 +45,36 @@ Table of Contents
             * [Result](#result)
                * [Shared Pool](#shared-pool)
                * [Exclusively Allocated CPUs](#exclusively-allocated-cpus)
+ 
+## What is the Power Operator?
+
+In a container orchestration engine such as Kubernetes, the allocation of CPU resources from a pool of platforms is based solely on availability with now consideration of individual capabilities such as Intel Speed Select Technology(SST).
+
+The Intel Kubernetes Power Operator is a software solution designed to expose and utilize Intel specific power management technologies in a Kubernetes Environment.
+
+The SST is a powerful collection of features that offers more granular control over CPU performance and power consumption on a per-core basis. However, as a workload orchestrator, Kubernetes is internationally designed to provide a layer of abstraction between the workload and such hardware capabilities. This presents a challenge to Kubernetes users running performance critical workloads with specific requirements dependent on hardware capabilities.
+
+The Power Operator bridges the gap between the container orchestration layer and hardware features enablement, specifically Intel SST.
+
+
+### Power Operators main responsibilities:
+
+- Deploying the AppQoS and Node Agent DaemonSets
+- Managing all associated custom resources
+- Discovery and advertisement of the Power Profile extended resources.
+- Sending HTTO requests to the AppQoS daemons for SST configuration.
+    
+
+### Use Cases:
+
+- *High performance workload known at peak times.*
+   May want to pre-schedule nodes to move to a performance profile during peak times to minimize spin up.
+  At times not during peak, may want to move to a power saving profile.
+- *Unpredictable machine use.*
+   May use machine learning through monitoring to determine profiles that predict a peak need for a compute, to spin up ahead of  time.
+- *Power Optimization over Performance.*
+   A cloud may be interested in fast response time, but not in maximal response time, so may choose to spin up cores on demand and only those cores used, but want to remain in power-saving mode the rest of the time.  
+
 
 ## Prerequisites
 * Node Feature Discovery ([NFD](https://github.com/kubernetes-sigs/node-feature-discovery)) should be deployed in the cluster before running the operator. Once NFD has applied labels to nodes with capabilities. NFD is used to detect node-level features such as *Intel Speed Select Technology - Base Frequency (SST-BF)*. Once detected, the operator can take advantage of such features by configuring CPUs on the host to optimise performance for containerized workloads.
