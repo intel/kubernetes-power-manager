@@ -39,9 +39,11 @@ import (
 )
 
 const (
-	AppQoSClientAddress = "https://localhost:5000"
+	//AppQoSClientAddress = "https://localhost:5000"
 	MaxFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"
 )
+
+var AppQoSClientAddress = "https://localhost:5000"
 
 var extendedResourcePercentage map[string]float64 = map[string]float64{
         // performance          ===>  priority level 0
@@ -72,6 +74,8 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 	logger.Info("Reconciling PowerProfile")
 
+	nodeName := os.Getenv("NODE_NAME")
+
 	profile := &powerv1alpha1.PowerProfile{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, profile)
 	if err != nil {
@@ -93,6 +97,42 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 				return ctrl.Result{}, err
 			}
 
+			// Remove the Extended Resources for this PowerProfile from the Node
+			err = r.removeExtendedResources(nodeName, req.NamespacedName.Name)
+			if err != nil {
+				logger.Error(err, "error removing Extended Resources from node")
+				return ctrl.Result{}, err
+			}
+
+			if _, exists := extendedResourcePercentage[req.NamespacedName.Name]; exists {
+				// If this PowerProfile was a base profile, delete all appropriate extended profiles
+
+				profileList := &powerv1alpha1.PowerProfileList{}
+				err = r.Client.List(context.TODO(), profileList)
+				if err != nil {
+					logger.Error(err, "error retrieving PowerProfile list")
+					return ctrl.Result{}, err
+				}
+
+				for _, profileFromList := range profileList.Items {
+					if strings.HasPrefix(profileFromList.Name, req.NamespacedName.Name) {
+						// Only need to delete the PowerProfile CRD, profile will be deleted from AppQoS then
+
+						actualProfile := &powerv1alpha1.PowerProfile{}
+						err = r.Client.Get(context.TODO(), client.ObjectKey{
+							Name: profileFromList.Name,
+							Namespace: profileFromList.Namespace,
+						}, actualProfile)
+
+						err = r.Client.Delete(context.TODO(), actualProfile)
+						if err != nil {
+							logger.Error(err, "error deleting PowerProfile")
+							return ctrl.Result{}, err
+						}
+					}
+				}
+			}
+
 			return ctrl.Result{}, nil
 		}
 
@@ -105,8 +145,14 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
+	// Make sure the EPP value is one of the four correct ones
+	if _, exists := extendedResourcePercentage[profile.Spec.Epp]; !exists {
+		incorrectEppErr := errors.NewServiceUnavailable(fmt.Sprintf("EPP value not allowed: %v", profile.Spec.Epp))
+		logger.Error(incorrectEppErr, "error reconciling PowerProfile")
+		return ctrl.Result{}, nil
+	}
+
 	// Update the PowerProfile with the correct min/max values and name for the given node
-	nodeName := os.Getenv("NODE_NAME")
 	profileName := fmt.Sprintf("%s-%s", profile.Spec.Name, nodeName)
 
 	maximumFrequencyByte, err := ioutil.ReadFile(MaxFrequencyFile)
@@ -223,6 +269,33 @@ func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profil
 	extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
 	node.Status.Capacity[extendedResourceName] = *profilesAvailable
 
+	err = r.Client.Status().Update(context.TODO(), node)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *PowerProfileReconciler) removeExtendedResources(nodeName string, profileName string) error {
+	node := &corev1.Node{}
+	err := r.Client.Get(context.TODO(), client.ObjectKey{
+		Name: nodeName,
+	}, node)
+	if err != nil {
+		return err
+	}
+
+	newNodeCapacityList := make( map[corev1.ResourceName]resource.Quantity, 0)
+	extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
+	for resourceFromNode, numberOfResources := range node.Status.Capacity {
+		if resourceFromNode == extendedResourceName {
+			continue
+		}
+		newNodeCapacityList[resourceFromNode] = numberOfResources
+	}
+
+	node.Status.Capacity = newNodeCapacityList
 	err = r.Client.Status().Update(context.TODO(), node)
 	if err != nil {
 		return err
