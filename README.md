@@ -1,9 +1,5 @@
 # Intel Power Operator
 
-----------
-Kubernetes Operator for Dynamic Configuration of Intel Speed Select Technologies (SST).
-----------
-
 Table of Contents
 =================
 
@@ -17,30 +13,8 @@ Table of Contents
          * [AppQoS](#appqos)
          * [Node Agent](#node-agent)
          * [Power Operator](#power-operator)
-      * [Custom Resource Definitions (CRDs)](#custom-resource-definitions-crds)
-         * [PowerConfig](#powerconfig)
-            * [Example](#example)
-         * [PowerProfile](#powerprofile)
-            * [Examples](#examples)
-               * [High Performance (to be requested via pod spec)](#high-performance-to-be-requested-via-pod-spec)
-               * [Standard Performance (to be applied to CPU Manager's <em>Shared Pool</em>)](#standard-performance-to-be-applied-to-cpu-managers-shared-pool)
-         * [PowerWorkload](#powerworkload)
-            * [PowerWorkload Created Automatically by Operator](#powerworkload-created-automatically-by-operator)
-               * [Example - Specific Node and CPU IDs](#example---specific-node-and-cpu-ids)
-            * [PowerWorkload Created Directly by User](#powerworkload-created-directly-by-user)
-               * [Example - Shared Pool (Minus Reserved CPUs) Using PowerNodeSelector](#example---shared-pool-minus-reserved-cpus-using-powernodeselector)
-               * [Create PowerWorkload](#create-powerworkload)
-               * [List PowerWorkloads](#list-powerworkloads)
-               * [Display a particular PowerWorkload:](#display-a-particular-powerworkload)
-               * [Delete PowerWorkload](#delete-powerworkload)
-         * [PowerNode](#powernode)
-               * [List all PowerNodes on the cluster](#list-all-powernodes-on-the-cluster)
-               * [Display a particular PowerNode such as the example above](#display-a-particular-powernode-such-as-the-example-above)
-      * [Extended Resources](#extended-resources)
-      * [Recommended Approach for Use With the <a href="https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/" rel="nofollow">CPU Manager</a>](#recommended-approach-for-use-with-the-cpu-manager)
-            * [Result](#result)
-               * [Shared Pool](#shared-pool)
-               * [Exclusively Allocated CPUs](#exclusively-allocated-cpus)
+    
+
  
 ## What is the Power Operator?
 
@@ -256,34 +230,61 @@ The Pod Spec will contain the finer details of the deployment. It will list the 
 
 ## Dependencies and Installation 
 ### Dependencies
-- yum -y install yum-utils
-- yum install python3
-- yum install python-pip
-- pip install -U pip
-- pip install -U virtualenv
+
+`yum -y install yum-utils`
+
+`yum install python3`
+
+`yum install python-pip`
+
+`pip install -U pip`
+
+`pip install -U virtualenv`
 
  
 **Install JQ**
-- yum install epel-release -y
-- yum update -y
-- yum install jq -y
+ 
+ `yum install epel-release -y`
+ 
+ `yum update -y`
+ 
+ `yum install jq -y`
  
 
 
+## Step by step build
+
+### AppQoS
+- Clone AppQoS https://github.com/intel/intel-cmt-cat
+- cd into docker dictory
+- Run `./build_docker.sh`
+
+### Setting up the Power Operator 
+- Clone Power Operator https://gitlab.devtools.intel.com/OrchSW/CNO/power-operator
+- cd into config/rbac/
+- Apply the following:
+
+ `kubectl apply -f leader_election_role_binding.yaml`
+
+ `kubectl apply -f leader_election_role.yaml`
+
+ `kubectl apply -f role_binding.yaml`
+
+ `kubectl apply -f role.yaml`
+
+- `make generate`
+This will generate the CRDs templates.
+- `make manifests`
+This creates the Custom Resource Definitons.  The CRs are created int the config.crd/bases/*
+- `make install`
+This configures the powerconfigs, powernodes, powerpods, powerprofiles and powerworkload.
+- `make docker-build`
+This will build all the binaries needed.  This will also build the docker image.
+- `docker images`
+The output should include operator and intel-power-node-agent
 
 
 
 
 
-* BREAK *
-#### Result
-
-##### Shared Pool
-* The `reservedCPUs` on all `intel.power.node` nodes continue to run with default configuration and are not impacted by any power profile.
-* The allocatable CPUs (shared pool - reserved CPUs) on all `intel.power.node` nodes are configured with the `standard-performace` power profile.
-
-##### Exclusively Allocated CPUs
-* The `hp-critical` pod will be scheduled to a designated `intel.power.node` node.
-* The `hp-critical` pod's container will be allocated 3 exclusive CPUs by the CPU Manager.
-* The operator will configure these 3 CPUs with the settings of the `high-performance` power profile.
 
