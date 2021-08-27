@@ -88,7 +88,6 @@ func (ac *AppQoSClient) GetPool(address string, id int) (*Pool, error) {
 }
 
 func (ac *AppQoSClient) GetPoolByName(address string, name string) (*Pool, error) {
-	fmt.Printf("In GetPoolByName for %s", name)
 	allPools, err := ac.GetPools(address)
 	if err != nil {
 		return &Pool{}, err

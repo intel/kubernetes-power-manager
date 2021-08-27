@@ -107,12 +107,6 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			return ctrl.Result{}, err
 		}
 
-		if !util.NodeNameInNodeList(nodeName, labelledNodeList.Items) {
-			// Shared Workload is not meant for this Node
-
-			return ctrl.Result{}, nil
-		}
-
 		// If there were no Nodes that matched the provided labels, check the NodeInfo of the Workload for a name
 		if len(labelledNodeList.Items) == 0 {
 			if workload.Spec.Node.Name != nodeName {
@@ -120,6 +114,12 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 				return ctrl.Result{}, nil
 			}
+		}
+
+		if !util.NodeNameInNodeList(nodeName, labelledNodeList.Items) {
+			// Shared Workload is not meant for this Node
+
+			return ctrl.Result{}, nil
 		}
 	}
 
@@ -208,12 +208,20 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				logger.Error(err, appqosPostResponse)
 				return ctrl.Result{}, err
 			}
+
+			// Update the Status of the Shared PowerWorkload with the current Shared pool cores
+
+			workload.Status.SharedCores = sharedCores
+			err = r.Client.Status().Update(context.TODO(), workload)
+			if err != nil {
+				logger.Error(err, "error updating Shared PowerWorkload status")
+				return ctrl.Result{}, err
+			}
 		} else {
 			// Have to update the Shared pool before creating the pool for the newly created
 			// Power Workload
 
 			updatedSharedPool, id, err := r.removeCoresFromSharedPool(workload.Spec.Node.CpuIds, AppQoSClientAddress)
-			logger.Info(fmt.Sprintf("Updated Shared Core list: %v", *updatedSharedPool.Cores))
 			if err != nil {
 				logger.Error(err, "error retrieving Shared pool")
 				return ctrl.Result{}, err
@@ -226,6 +234,27 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				if err != nil {
 					logger.Error(err, appqosPutResponse)
 					return ctrl.Result{}, err
+				}
+
+				sharedWorkload := &powerv1alpha1.PowerWorkload{}
+				err = r.Client.Get(context.TODO(), client.ObjectKey{
+					// TODO: change to const value
+					Name: fmt.Sprintf("shared-%s-workload", workload.Spec.Node.Name), 
+					Namespace: req.NamespacedName.Namespace,
+				}, sharedWorkload)
+				if err != nil {
+					// If the Shared Workload is not found, we don't need to update the Status
+					if !errors.IsNotFound(err) {
+						logger.Error(err, "error retrieving Shared PowerWorkload")
+						return ctrl.Result{}, err
+					}
+				} else {
+					sharedWorkload.Status.SharedCores = *updatedSharedPool.Cores
+					err = r.Client.Status().Update(context.TODO(), sharedWorkload)
+					if err != nil {
+						logger.Error(err, "error updating status of Shared PowerWorkload")
+						return ctrl.Result{}, err
+					}
 				}
 			}
 
@@ -309,7 +338,6 @@ func (r *PowerWorkloadReconciler) removeCoresFromSharedPool(workloadCPUList []in
 	// no cores have been removed
 
 	sharedPool, err := r.AppQoSClient.GetSharedPool(nodeAddress)
-	fmt.Sprintf("Shared Pool name: %v\n", *sharedPool.Name)
 	if err != nil {
 		return &appqos.Pool{}, 0, err
 	}
