@@ -185,7 +185,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	powerProfilesFromContainers, powerContainers, err := r.getPowerProfileRequestsFromContainers(containersRequestingExclusiveCPUs, powerProfileCRs.Items, pod)
 	if err != nil {
 		logger.Error(err, "Error retrieving Power Profile from Pod requests")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, err
 	}
 
 	for profile, cores := range powerProfilesFromContainers {
