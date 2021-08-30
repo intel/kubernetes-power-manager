@@ -384,5 +384,98 @@ This will crate the shared profile
 powerProfiler controller will see that the shared profile is after being created and will create a corresponding profile in the AppQoS instance on each of the nodes.  The reason for this is because it is a “shared” profile.
 
 
+- **Shared workload**
+
+````yaml
+apiVersion: "power.intel.com/v1alpha1"
+kind: PowerWorkload
+metadata:
+  name: shared-workload
+spec:
+  name: "silpixa00399591-workload"
+  allCores: true
+  reservedCPUs:
+  - 0
+  - 1
+  nodes:
+  - name: "silpixa00399591"
+  powerProfile: "shared"
+ ````
+ `kubectl apply -f shared=workload.yaml`
+ 
+ The shard-workload is the only workload that has to be manually created.  This is because of its reservedCPUs.  These reservedCPUs have been specified when the cluster was created.  They have to match up the CPUs in the podSpec for the kubelet.  These CPUs corroborate to the k8s housekeeping cores.
+ 
+ Once created the workload controller will see its creation and create the corresponding pool in AppQoS and all of the cores on the system except for the reserveCPSs will be brought down to this low frequency level.
+ 
+ 
+- **Performance profile**
+
+````yaml
+apiVersion: "power.intel.com/v1alpha1"
+kind: PowerProfile
+metadata:
+  name: performance
+spec:
+  name: "Performance"
+  max: 3200
+  min: 2800
+  epp: "performance"
+````
+
+`kubectl apply -f performance-profile.yaml`
+
+This opereration will be carried out by the config controller.
+
+`kubectl get powerprofiles`
+
+Output will have "shared" and "performance" profiles created.
+
+- **Performance workload**
+
+````yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: one-containers
+spec:
+  containers:
+  - name: ubuntu-one-container
+    image: ubuntu
+    command: ["/bin/sh"]
+    args: ["-c", "sleep 15000"]
+    resources:
+      requests:
+        memory: "200Mi"
+        cpu: "4"
+        power.intel.com/performance: "4"
+      limits:
+        memory: "200Mi"
+        cpu: "4"
+        power.intel.com/performance: "4"
+````
+
+`kubetl apply -f one-container.yaml`
+
+one-container pod is created.  This will request 4 performances CPUs.  
+
+`kubectl get pods`
+
+The output will contain: appqos-pod-xxxx, controller-manager-xxxx-xxxx, one-container, power-node-agent-xxx
+
+`kubectl get powerworkloads`
+
+The output will contain:  performance-workload and shared-workload
+
+
+- **Delete Pods**
+
+`kubectl get pods`
+
+`kubectl delete pods <name>`
+
+The powerworkload workload will be deleted.
+
+The AppQoS instance pool for the associated workload will also get deleted.
+The cores that were returned from that pool will be re-tuned to the shared frequencies.
 
 
