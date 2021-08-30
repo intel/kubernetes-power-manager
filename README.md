@@ -1,19 +1,5 @@
 # Intel Power Operator
 
-Table of Contents
-=================
-
-   * [Intel Power Operator](#intel-power-operator)
-      * [Kubernetes Operator for Dynamic Configuration of Intel Speed Select Technologies (SST).](#kubernetes-operator-for-dynamic-configuration-of-intel-speed-select-technologies-sst)
-      * [What is the Power Operator?](#What-is-the-Power-Operator?)
-      * [Power Operators main responsibilities](#Power-Operators-main-responsibilities)
-      * [Use Cases](#Use-Cases)
-      * [Prerequisites](#prerequisites)
-      * [Components](#components)
-         * [AppQoS](#appqos)
-         * [Node Agent](#node-agent)
-         * [Power Operator](#power-operator)
-    
 
  
 ## What is the Power Operator?
@@ -283,7 +269,119 @@ This will build all the binaries needed.  This will also build the docker image.
 - `docker images`
 The output should include operator and intel-power-node-agent
 
+### Running the Power Operator 
+- **Applying the manager**
 
+This is located in config/manager/manager.yaml
+````yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: default
+  labels:
+    control-plane: controller-manager
+spec:
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        control-plane: controller-manager
+    spec:
+      serviceAccountName: default
+      containers:
+      - command:
+        - /manager
+        args:
+        - --enable-leader-election
+        imagePullPolicy: Never
+        image: operator:latest
+        name: manager
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+        volumeMounts:
+        - mountPath: /sys/fs
+          name: cgroup
+          mountPropagation: HostToContainer
+        - mountPath: /etc/certs
+          name: certs
+          mountPropagation: HostToContainer
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: cgroup
+        hostPath:
+          path: /sys/fs
+      - name: certs
+        hostPath:
+          path: /etc/certs
+      nodeSelector:
+        kubernetes.io/hostname: silpixa00399591
+````
+`kubectl apply -f manager.yaml`
+
+The controller-manager-xxxx-xxxx pod is created.
+
+- **Power Config**
+
+````yaml
+apiVersion: "power.intel.com/v1alpha1"
+kind: PowerConfig
+metadata:
+  name: power-config
+spec:
+  powerImage: "appqos:latest"
+  powerNodeSelector:
+    feature.node.kubernetes.io/appqos-node: "true"
+  powerProfiles:
+  - "performance"
+  ````
+  
+  `kubectl apply -f powerconfig.yaml`
+  
+Once deployed the controller-manager pod will see it via the config controller and create a AppQoS instance and a Node Agent instance on nodes specified with the “performance” label.  
+
+The appqos-pod-xxxxxx gets created
+
+Note: if deleted it will not reconcile and come back as the name is specific to the pod
+
+The power-node-agent-xxx deployment is also created
+
+
+- **Shared Profile**
+
+````yaml
+apiVersion: "power.intel.com/v1alpha1"
+kind: PowerProfile
+metadata:
+  name: shared
+spec:
+  name: "Shared"
+  max: 1500
+  min: 1000
+  epp: "power"
+ ````
+`kubectl apply -f shared-profile.yaml`
+
+This will crate the shared profile
+
+`kubectl get powerprofiles`
+
+powerProfiler controller will see that the shared profile is after being created and will create a corresponding profile in the AppQoS instance on each of the nodes.  The reason for this is because it is a “shared” profile.
 
 
 
