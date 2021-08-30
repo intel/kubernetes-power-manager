@@ -193,13 +193,15 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		return ctrl.Result{}, err
 	}
 
-	// Check PowerProfiles for any that are no longer requested
+	// Check PowerProfiles for any that are no longer requested; only check base profiles
 	for _, profile := range powerProfiles.Items {
-		if !util.StringInStringList(profile.Spec.Name, config.Spec.PowerProfiles) {
-			err = r.Client.Delete(context.TODO(), &profile)
-			if err != nil {
-                                logger.Error(err, fmt.Sprintf("error deleting PowerProfile '%s'", profile.Spec.Name))
-				return ctrl.Result{}, err
+		if _, exists := extendedResourcePercentage[profile.Spec.Name]; exists {
+			if !util.StringInStringList(profile.Spec.Name, config.Spec.PowerProfiles) {
+				err = r.Client.Delete(context.TODO(), &profile)
+				if err != nil {
+					logger.Error(err, fmt.Sprintf("error deleting PowerProfile '%s'", profile.Spec.Name))
+					return ctrl.Result{}, err
+				}
 			}
 		}
 	}

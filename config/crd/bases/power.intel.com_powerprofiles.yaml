@@ -50,8 +50,6 @@ spec:
               type: string
           required:
           - epp
-          - max
-          - min
           - name
           type: object
         status:
