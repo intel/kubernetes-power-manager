@@ -32,10 +32,10 @@ type PowerProfileSpec struct {
 	Name string `json:"name"`
 
 	// The maximum frequency the core is allowed go
-	Max int `json:"max"`
+	Max int `json:"max,omitempty"`
 
 	// The minimum frequency the core is allowed go
-	Min int `json:"min"`
+	Min int `json:"min,omitempty"`
 
 	// The priority value associated with this Power Profile
 	Epp string `json:"epp"`

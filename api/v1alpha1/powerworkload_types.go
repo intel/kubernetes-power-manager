@@ -65,7 +65,7 @@ type PowerWorkloadStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Shared Cores is the Core List that represents the Shared Cores on the node, only used by a Shared PowerWorkload
-	SharedCores []int `json:sharedCores,omitempty"`
+	SharedCores []int `json:"sharedCores,omitempty"`
 }
 
 // +kubebuilder:object:root=true

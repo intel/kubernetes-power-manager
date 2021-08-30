@@ -92,7 +92,7 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		workloadName := fmt.Sprintf("%s-workload", profile.Name)
 		for _, workload := range workloads.Items {
-			if workload.Name == workloadName {
+			if workload.Name == workloadName && workload.Spec.Node.Name == req.NamespacedName.Name {
 				powerProfilesInUse[profile.Name] = true
 				
 				workloadInfo := &powerv1alpha1.WorkloadInfo{}
