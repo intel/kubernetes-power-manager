@@ -53,5 +53,3 @@ spec:
       - name: certs
         hostPath:
           path: /etc/certs
-      nodeSelector:
-        kubernetes.io/hostname: silpixa00401062

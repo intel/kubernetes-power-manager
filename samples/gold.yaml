@@ -1,9 +1,0 @@
-apiVersion: "power.intel.com/v1alpha1"
-kind: Profile
-metadata:
-  name: gold
-spec:
-  name: "Gold"
-  max: 3200
-  min: 2800
-  cstate: True

@@ -1,7 +1,8 @@
 apiVersion: "power.intel.com/v1alpha1"
 kind: PowerWorkload
 metadata:
-  name: shared-silpixa00401062-workload
+  # Replace <NODE_NAME> with the Node you intend this PowerWorkload to be associated with
+  name: shared-<NODE_NAME>-workload
 spec:
   # Replace <NODE_NAME> with the Node you intend this PowerWorkload to be associated with
   name: "shared-<NODE_NAME>-workload"
