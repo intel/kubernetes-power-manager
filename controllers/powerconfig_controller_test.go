@@ -17,7 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	controllers "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
+	//controllers "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/api/core/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -29,7 +29,8 @@ const (
 	PowerConfigNamespace = "default"
 )
 
-func createReconcileObject(powerConfig *powerv1alpha1.PowerConfig) (*controllers.PowerConfigReconciler, error) {
+func createReconcileObject(powerConfig *powerv1alpha1.PowerConfig) (*PowerConfigReconciler, error) {
+//func createReconcileObject(powerConfig *powerv1alpha1.PowerConfig) (*controllers.PowerConfigReconciler, error) {
 	s := scheme.Scheme
 	
 	if err := powerv1alpha1.AddToScheme(s); err != nil {
@@ -46,7 +47,8 @@ func createReconcileObject(powerConfig *powerv1alpha1.PowerConfig) (*controllers
 		PowerNodeList: []string{},
 	}
 
-	r := &controllers.PowerConfigReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerConfig"), Scheme: s, State: powerNodeData}
+	r := &PowerConfigReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerConfig"), Scheme: s, State: powerNodeData}
+	//r := &controllers.PowerConfigReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerConfig"), Scheme: s, State: powerNodeData}
 
 	return r, nil
 }
@@ -259,7 +261,8 @@ func TestPowerConfigReconciler(t *testing.T) {
 	}
 
 	for _, tc := range tcases {
-		controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+		//controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
 
 		r, err := createReconcileObject(tc.powerConfig)
 		if err != nil {
@@ -325,7 +328,8 @@ func TestPowerConfigReconciler(t *testing.T) {
 
 		nodeAgentDS := &appsv1.DaemonSet{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: controllers.NodeAgentDSName,
+			//Name: controllers.NodeAgentDSName,
+			Name: NodeAgentDSName,
 			Namespace: PowerConfigNamespace,
 		}, nodeAgentDS)
 		if err != nil {
@@ -404,7 +408,8 @@ func TestMultiplePowerConfigs(t *testing.T) {
 	}
 
 	for _, tc := range tcases {
-		controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+		//controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
 		configName := "InitialPowerConfig"
 
 		initialPowerConfig := &powerv1alpha1.PowerConfig{
@@ -546,7 +551,8 @@ func TestUnusedProfileRemoval(t *testing.T) {
 	}
 
 	for _, tc := range tcases {
-		controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+		//controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
 
 		r, err := createReconcileObject(tc.powerConfig)
 		if err != nil {
@@ -641,7 +647,8 @@ func TestPowerConfigStatusUpdate(t *testing.T) {
 	}
 
 	for _, tc := range tcases {
-		controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+		//controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
 
                 r, err := createReconcileObject(tc.powerConfig)
                 if err != nil {

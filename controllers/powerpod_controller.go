@@ -44,6 +44,7 @@ import (
 const (
 	PowerProfileAnnotation = "PowerProfile"
 	ResourcePrefix         = "power.intel.com/"
+	CPUResource	       = "cpu"
 )
 
 // PowerPodReconciler reconciles a PowerPod object
@@ -374,7 +375,6 @@ func appendIfUnique(cpuList []int, cpus []int) []int {
 	return cpuList
 }
 
-//func getNewWorkloadContainerList(nodeContainers []powerv1alpha1.ContainerInfo, podStateContainers []powerv1alpha1.Container) []powerv1alpha1.ContainerInfo {
 func getNewWorkloadContainerList(nodeContainers []powerv1alpha1.Container, podStateContainers []powerv1alpha1.Container) []powerv1alpha1.Container {
 	newNodeContainers := make([]powerv1alpha1.Container, 0)
 
@@ -400,6 +400,7 @@ func tempIsContainerInList(name string, containers []powerv1alpha1.Container) bo
 func getContainerProfileFromRequests(container corev1.Container) (string, error) {
 	profileName := ""
 	moreThanOneProfileError := errors.NewServiceUnavailable("Cannot have more than one Power Profile per Container")
+	resourceRequestsMismatchError := errors.NewServiceUnavailable("Mismatch between CPU requests and PowerProfile Requests")
 
 	for resource, _ := range container.Resources.Requests {
 		if strings.HasPrefix(string(resource), ResourcePrefix) {
@@ -410,6 +411,16 @@ func getContainerProfileFromRequests(container corev1.Container) (string, error)
 				return "", moreThanOneProfileError
 			}
 		}
+	}
+
+	// Check if there is a mismatch in CPU requests and PowerProfile requests
+	powerProfileResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ResourcePrefix, profileName))
+	numRequestsPowerProfile := container.Resources.Requests[powerProfileResourceName]
+	numLimitsPowerProfile := container.Resources.Limits[powerProfileResourceName]
+	numRequestsCPU := container.Resources.Requests[CPUResource]
+	numLimistCPU := container.Resources.Limits[CPUResource]
+	if numRequestsCPU != numRequestsPowerProfile || numLimistCPU != numLimitsPowerProfile {
+		return "", resourceRequestsMismatchError
 	}
 
 	return profileName, nil
@@ -434,7 +445,7 @@ func exclusiveCPUs(pod *corev1.Pod, container *corev1.Container) bool {
 	cpuQuantity := container.Resources.Requests[corev1.ResourceCPU]
 	if cpuQuantity.Value()*1000 != cpuQuantity.MilliValue() {
 		return false
-	}
+		}
 
 	return true
 }

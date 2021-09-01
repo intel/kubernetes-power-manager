@@ -18,7 +18,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	controllers "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
+	//controllers "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
@@ -27,10 +27,11 @@ import (
 const (
 	PowerWorkloadName = "TestPowerWorkload"
 	PowerWorkloadNamespace = "default"
-	AppQoSAddress = "127.0.0.1:5000"
+	//AppQoSAddress = "127.0.0.1:5000"
 )
 
-func createPowerWorkloadReconcilerObject(powerWorkload *powerv1alpha1.PowerWorkload) (*controllers.PowerWorkloadReconciler, error) {
+//func createPowerWorkloadReconcilerObject(powerWorkload *powerv1alpha1.PowerWorkload) (*controllers.PowerWorkloadReconciler, error) {
+func createPowerWorkloadReconcilerObject(powerWorkload *powerv1alpha1.PowerWorkload) (*PowerWorkloadReconciler, error) {
 	s := scheme.Scheme
 
 	if err  := powerv1alpha1.AddToScheme(s); err != nil {
@@ -45,12 +46,13 @@ func createPowerWorkloadReconcilerObject(powerWorkload *powerv1alpha1.PowerWorkl
 
 	appqosCl := appqos.NewDefaultAppQoSClient()
 
-	r := &controllers.PowerWorkloadReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerWorkload"), Scheme: s, AppQoSClient: appqosCl}
+	//r := &controllers.PowerWorkloadReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerWorkload"), Scheme: s, AppQoSClient: appqosCl}
+	r := &PowerWorkloadReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerWorkload"), Scheme: s, AppQoSClient: appqosCl}
 
 	return r, nil
 }
 
-func createListeners(appqosPools []appqos.Pool, appqosPowerProfiles []appqos.PowerProfile) (*httptest.Server, error) {
+func createPowerWorkloadListeners(appqosPools []appqos.Pool, appqosPowerProfiles []appqos.PowerProfile) (*httptest.Server, error) {
 	var err error
 
 	newListener, err := net.Listen("tcp", AppQoSAddress)
@@ -247,7 +249,8 @@ func TestPowerWorkloadReconciler(t *testing.T) {
 
 	for _, tc := range tcases {
 		t.Setenv("NODE_NAME", tc.node.Name)
-		controllers.AppQoSClientAddress = "http://127.0.0.1:5000"
+		//controllers.AppQoSClientAddress = "http://127.0.0.1:5000"
+		AppQoSClientAddress = "http://127.0.0.1:5000"
 
 		id := 1
 		appqosPools := []appqos.Pool{
@@ -284,7 +287,7 @@ func TestPowerWorkloadReconciler(t *testing.T) {
 			t.Fatal("error creating reconciler object")
 		}
 
-		server, err := createListeners(appqosPools, appqosPowerProfiles)
+		server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
 		if err != nil {
 			t.Error(err)
 			t.Fatal("error creating Listeners")
@@ -387,7 +390,8 @@ func TestSharedWorkloadCreation(t *testing.T) {
 
 	for _, tc := range tcases {
 		t.Setenv("NODE_NAME", tc.node.Name)
-                controllers.AppQoSClientAddress = "http://127.0.0.1:5000"
+                //controllers.AppQoSClientAddress = "http://127.0.0.1:5000"
+                AppQoSClientAddress = "http://127.0.0.1:5000"
 
                 id := 1
                 appqosPools := []appqos.Pool{
@@ -411,7 +415,7 @@ func TestSharedWorkloadCreation(t *testing.T) {
                         t.Fatal("error creating reconciler object")
                 }
 
-                server, err := createListeners(appqosPools, appqosPowerProfiles)
+                server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
                 if err != nil {
                         t.Error(err)
                         t.Fatal("error creating Listeners")
@@ -535,7 +539,8 @@ func TestStatusSharedCoresUpdated(t *testing.T) {
 
 	for _, tc := range tcases {
 		t.Setenv("NODE_NAME", tc.node.Name)
-                controllers.AppQoSClientAddress = "http://127.0.0.1:5000"
+                //controllers.AppQoSClientAddress = "http://127.0.0.1:5000"
+                AppQoSClientAddress = "http://127.0.0.1:5000"
 
                 id := 1
                 appqosPools := []appqos.Pool{
@@ -568,7 +573,7 @@ func TestStatusSharedCoresUpdated(t *testing.T) {
                         t.Fatal("error creating reconciler object")
                 }
 
-                server, err := createListeners(appqosPools, appqosPowerProfiles)
+                server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
                 if err != nil {
                         t.Error(err)
                         t.Fatal("error creating Listeners")
@@ -751,7 +756,8 @@ func TestSharedPoolAlreadyExistsInAppQoS(t *testing.T) {
 
 	for _, tc := range tcases {
 		t.Setenv("NODE_NAME", tc.node.Name)
-                controllers.AppQoSClientAddress = "http://127.0.0.1:5000"
+		//controllers.AppQoSClientAddress = "http://127.0.0.1:5000"
+                AppQoSClientAddress = "http://127.0.0.1:5000"
 
                 id := 1
                 appqosPools := []appqos.Pool{
@@ -775,7 +781,7 @@ func TestSharedPoolAlreadyExistsInAppQoS(t *testing.T) {
                         t.Fatal("error creating reconciler object")
                 }
 
-                server, err := createListeners(appqosPools, appqosPowerProfiles)
+                server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
                 if err != nil {
                         t.Error(err)
                         t.Fatal("error creating Listeners")

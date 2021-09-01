@@ -20,7 +20,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	controllers "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
+	//controllers "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	//corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
@@ -31,7 +31,8 @@ const (
 	AppQoSAddress = "127.0.0.1:5000"
 )
 
-func createPowerNodeReconcileObject(powerNode *powerv1alpha1.PowerNode) (*controllers.PowerNodeReconciler, error) {
+//func createPowerNodeReconcileObject(powerNode *powerv1alpha1.PowerNode) (*controllers.PowerNodeReconciler, error) {
+func createPowerNodeReconcileObject(powerNode *powerv1alpha1.PowerNode) (*PowerNodeReconciler, error) {
 	s := scheme.Scheme
 	
 	if err := powerv1alpha1.AddToScheme(s); err != nil {
@@ -46,7 +47,8 @@ func createPowerNodeReconcileObject(powerNode *powerv1alpha1.PowerNode) (*contro
 
 	appqosCl := appqos.NewDefaultAppQoSClient()
 
-	r := &controllers.PowerNodeReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
+	//r := &controllers.PowerNodeReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
+	r := &PowerNodeReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
 
 	return r, nil
 }
@@ -792,7 +794,8 @@ func TestPowerNodeReconciler(t *testing.T) {
 	}
 
 	for _, tc := range tcases {
-		controllers.AppQoSClientAddress = "http://127.0.0.1:5000"
+		//controllers.AppQoSClientAddress = "http://127.0.0.1:5000"
+		AppQoSClientAddress = "http://127.0.0.1:5000"
 
 		appqosPools := make([]appqos.Pool, 0)
 		for name, cores := range tc.pools {

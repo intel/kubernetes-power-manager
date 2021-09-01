@@ -1,0 +1,15 @@
+apiVersion: "power.intel.com/v1alpha1"
+kind: PowerConfig
+metadata:
+  name: power-config
+spec:
+  powerImage: "appqos:latest"
+  powerNodeSelector:
+    # Add labels here for the Nodes you want the PowerNodeAgent to be applied to
+    feature.node.kubernetes.io/appqos-node: "true"
+  powerProfiles:
+  # Add wanted PowerProfiles here; valid entries are as follows:
+  # performance
+  # balance_performance
+  # balance_power
+  - "performance"

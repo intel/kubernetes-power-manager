@@ -36,8 +36,10 @@ spec:
           volumeMounts:
             - mountPath: /sys/fs
               name: cgroup
+              readOnly: true
             - mountPath: /etc/certs/
               name: certs
+              readOnly: true
             - mountPath: /var/lib/kubelet/pod-resources/
               name: kubesock
               readOnly: false
@@ -49,8 +51,10 @@ spec:
           volumeMounts:
           - mountPath: /appqos_workspace/appqos/ca
             name: appqoscerts
+            readOnly: true
           - mountPath: /dev
             name: dev
+            readOnly: true
           securityContext:
             privileged: true
       volumes:
@@ -69,5 +73,3 @@ spec:
         - name: dev
           hostPath:
             path: /dev
-      nodeSelector:
-        "feature.node.kubernetes.io/appqos-node": "true"

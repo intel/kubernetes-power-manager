@@ -39,7 +39,6 @@ import (
 )
 
 const (
-	//AppQoSClientAddress = "https://localhost:5000"
 	MaxFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"
 )
 
@@ -53,7 +52,7 @@ var extendedResourcePercentage map[string]float64 = map[string]float64{
 
         "performance":         .40,
         "balance_performance": .80,
-        "balance_power":       1.0,
+        "balance_power":       .90,
         "power":               1.0,
 }
 
@@ -170,7 +169,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
         maximumFrequency = maximumFrequency/1000
         minimumFrequency := maximumFrequency-400
 
-	// Check to see if this PowerProfile has already been created for this Node
+	// Check to see if the extended PowerProfile has already been created for this Node
 	profileForNode := &powerv1alpha1.PowerProfile{}
 	err = r.Client.Get(context.TODO(), client.ObjectKey{
 		Namespace: req.NamespacedName.Namespace,
@@ -219,10 +218,13 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	// Create the Extended Resources for the base profile as well so the Pod controller can determine the Profile if necessary
-	err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp)
-	if err != nil {
-		logger.Error(err, "error creating extended resources for base profile")
-		return ctrl.Result{}, err
+	// Don't need to repeat if the PowerProfile is a shared one (epp == "power")
+	if profile.Spec.Epp != "power" {
+		err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp)
+		if err != nil {
+			logger.Error(err, "error creating extended resources for base profile")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// TODO: Do check for update
