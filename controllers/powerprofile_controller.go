@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"strconv"
 	"strings"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -51,9 +52,27 @@ var extendedResourcePercentage map[string]float64 = map[string]float64{
         // power                ===>  priority level 3
 
         "performance":         .40,
-        "balance_performance": .80,
-        "balance_power":       .90,
+        "balance-performance": .80,
+        "balance-power":       .90,
         "power":               1.0,
+}
+
+var basePowerProfileToEppValue map[string]string = map[string]string{
+	// The Kubernetes CRD naming convention doesn't allow underscores
+
+	"performance": "performance",
+	"balance-performance": "balance_performance",
+	"balance-power": "balance_power",
+	"power": "power",
+}
+
+var allowedEppValues map[string]struct{} = map[string]struct{}{
+	// Empty structs hold no memory value
+
+	"performance": struct{}{},
+	"balance_performance": struct{}{},
+	"balance_power": struct{}{},
+	"power": struct{}{},
 }
 
 // PowerProfileReconciler reconciles a PowerProfile object
@@ -84,16 +103,40 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			// frequency resets of the effected CPUs to the PowerWorkload controller. We also need to check to see
 			// if there are any AppQoS instances on other nodes
 
+			workloadName := fmt.Sprintf("%s%s", req.NamespacedName.Name, WorkloadNameSuffix)
+			powerWorkload := &powerv1alpha1.PowerWorkload{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name: workloadName,
+				Namespace: req.NamespacedName.Namespace,
+			}, powerWorkload)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					logger.Info("No PowerWorkload associated with this PowerProfile")
+				} else {
+					logger.Error(err, "error retrieving PowerWorkload")
+					return ctrl.Result{}, err
+				}
+			} else {
+				err = r.Client.Delete(context.TODO(), powerWorkload)
+				if err != nil {
+					logger.Error(err, "error deleting PowerWorkload")
+					return ctrl.Result{}, err
+				}
+			}
+
 			profileFromAppQoS, err := r.AppQoSClient.GetProfileByName(req.NamespacedName.Name, AppQoSClientAddress)
 			if err != nil {
 				logger.Error(err, "error retrieving PowerProfile from AppQoS instance")
 				return ctrl.Result{}, err
 			}
 
-			err = r.AppQoSClient.DeletePowerProfile(AppQoSClientAddress, *profileFromAppQoS.ID)
-			if err != nil {
-				logger.Error(err, "error deleting PowerProfile from AppQoS instance")
-				return ctrl.Result{}, err
+			// Make sure the profile existed in AppQoS, if not we don't have to delete it
+			if !reflect.DeepEqual(*profileFromAppQoS, appqos.PowerProfile{}) {
+				err = r.AppQoSClient.DeletePowerProfile(AppQoSClientAddress, *profileFromAppQoS.ID)
+				if err != nil {
+					logger.Error(err, "error deleting PowerProfile from AppQoS instance")
+					return ctrl.Result{}, err
+				}
 			}
 
 			// Remove the Extended Resources for this PowerProfile from the Node
@@ -114,7 +157,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 				}
 
 				for _, profileFromList := range profileList.Items {
-					if strings.HasPrefix(profileFromList.Name, req.NamespacedName.Name) {
+					if profileFromList.Spec.Epp == basePowerProfileToEppValue[req.NamespacedName.Name] {
 						// Only need to delete the PowerProfile CRD, profile will be deleted from AppQoS then
 
 						actualProfile := &powerv1alpha1.PowerProfile{}
@@ -139,15 +182,22 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
-	if _, exists := extendedResourcePercentage[profile.Spec.Name]; !exists && profile.Spec.Epp != "power" {
-		logger.Info("PowerProfile is not a base profile or designated as a Shared Profile, skipping...")
+	// Make sure the EPP value is one of the four correct ones
+	if _, exists := allowedEppValues[profile.Spec.Epp]; !exists {
+		incorrectEppErr := errors.NewServiceUnavailable(fmt.Sprintf("EPP value not allowed: %v - deleting PowerProfile CRD", profile.Spec.Epp))
+		logger.Error(incorrectEppErr, "error reconciling PowerProfile")
+
+		err = r.Client.Delete(context.TODO(), profile)
+		if err != nil {
+			logger.Error(err, fmt.Sprintf("error deleting PowerProfile %s with incorrect EPP value %s", profile.Spec.Name, profile.Spec.Epp))
+			return ctrl.Result{}, err
+		}
+
 		return ctrl.Result{}, nil
 	}
 
-	// Make sure the EPP value is one of the four correct ones
-	if _, exists := extendedResourcePercentage[profile.Spec.Epp]; !exists {
-		incorrectEppErr := errors.NewServiceUnavailable(fmt.Sprintf("EPP value not allowed: %v", profile.Spec.Epp))
-		logger.Error(incorrectEppErr, "error reconciling PowerProfile")
+	if _, exists := extendedResourcePercentage[profile.Spec.Name]; !exists && profile.Spec.Epp != "power" {
+		logger.Info("PowerProfile is not a base profile or designated as a Shared Profile, skipping...")
 		return ctrl.Result{}, nil
 	}
 
@@ -170,15 +220,15 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
         minimumFrequency := maximumFrequency-400
 
 	// Check to see if the extended PowerProfile has already been created for this Node
-	profileForNode := &powerv1alpha1.PowerProfile{}
-	err = r.Client.Get(context.TODO(), client.ObjectKey{
-		Namespace: req.NamespacedName.Namespace,
-		Name: profileName,
-	}, profileForNode)
+	if profile.Spec.Epp != "power" {
+		profileForNode := &powerv1alpha1.PowerProfile{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Namespace: req.NamespacedName.Namespace,
+			Name: profileName,
+		}, profileForNode)
 
-	if err != nil {
-		if errors.IsNotFound(err) {
-			if profile.Spec.Epp != "power" {
+		if err != nil {
+			if errors.IsNotFound(err) {
 				powerProfile := &powerv1alpha1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: req.NamespacedName.Namespace,
@@ -206,25 +256,16 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 					return ctrl.Result{}, err
 				}
 			} else {
-				err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp)
-				if err != nil {
-                                        logger.Error(err, "error creating Extended resources")
-                                        return ctrl.Result{}, err
-                                }
+				return ctrl.Result{}, err
 			}
-		} else {
-			return ctrl.Result{}, err
 		}
 	}
 
 	// Create the Extended Resources for the base profile as well so the Pod controller can determine the Profile if necessary
-	// Don't need to repeat if the PowerProfile is a shared one (epp == "power")
-	if profile.Spec.Epp != "power" {
-		err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp)
-		if err != nil {
-			logger.Error(err, "error creating extended resources for base profile")
-			return ctrl.Result{}, err
-		}
+	err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp)
+	if err != nil {
+		logger.Error(err, "error creating extended resources for base profile")
+		return ctrl.Result{}, err
 	}
 
 	// TODO: Do check for update
