@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	//"bytes"
 	"context"
 	"testing"
 	"encoding/json"
@@ -21,7 +20,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	//controllers "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
@@ -30,11 +28,9 @@ import (
 const (
 	PowerProfileName = "TestPowerProfile"
 	PowerProfileNamespace = "default"
-	//AppQoSAddress = "127.0.0.1:5000"
 )
 
 func createPowerProfileReconcileObject(powerProfile *powerv1alpha1.PowerProfile) (*PowerProfileReconciler, error) {
-//func createPowerProfileReconcileObject(powerProfile *powerv1alpha1.PowerProfile) (*controllers.PowerProfileReconciler, error) {
 	s := scheme.Scheme
 	
 	if err := powerv1alpha1.AddToScheme(s); err != nil {
@@ -50,16 +46,35 @@ func createPowerProfileReconcileObject(powerProfile *powerv1alpha1.PowerProfile)
 	appqosCl := appqos.NewDefaultAppQoSClient()
 
 	r := &PowerProfileReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
-	//r := &controllers.PowerProfileReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
 
 	return r, nil
+}
+
+func createPP(objs []runtime.Object) (*PowerProfileReconciler, error) {
+	s := scheme.Scheme
+
+        if err := powerv1alpha1.AddToScheme(s); err != nil {
+                return nil, err
+        }
+
+        //objs := []runtime.Object{}
+
+        s.AddKnownTypes(powerv1alpha1.GroupVersion)
+
+        cl := fake.NewFakeClient(objs...)
+
+        appqosCl := appqos.NewDefaultAppQoSClient()
+
+        r := &PowerProfileReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
+        //r := &controllers.PowerProfileReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
+
+        return r, nil
 }
 
 func createPowerProfileListeners(appqosPowerProfiles []appqos.PowerProfile) (*httptest.Server, error) {
 	var err error
 
 	newListener, err := net.Listen("tcp", "127.0.0.1:5000")
-	//newListener, err := net.Listen("tcp", "http://localhost:5000")
 	if err != nil {
 		fmt.Errorf("Failed to create Listerner")
 	}
@@ -1795,14 +1810,6 @@ func TestBasePowerProfileDeletion(t *testing.T) {
                         t.Fatal(fmt.Sprintf("%s - error creating Node object", tc.testCase))
                 }
 
-		for _, workload := range tc.powerWorkloads.Items {
-			err = r.Client.Create(context.TODO(), &workload)
-			if err != nil {
-				t.Error(err)
-				t.Fatal(fmt.Sprintf("%s - error creating PowerWorkload object", tc.testCase))
-			}
-		}
-
 		for _, extendedProfile := range tc.extendedPowerProfiles.Items {
 			err = r.Client.Create(context.TODO(), &extendedProfile)
 			if err != nil {
@@ -1894,17 +1901,6 @@ func TestBasePowerProfileDeletion(t *testing.T) {
 			}
 		}
 
-		for _, powerWorkloadName := range tc.expectedWorkloadsToNotExist {
-			workload := &powerv1alpha1.PowerWorkload{}
-			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name: powerWorkloadName,
-				Namespace: PowerProfileNamespace,
-			}, workload)
-			if !errors.IsNotFound(err) {
-				t.Errorf("%s - Failed: Expected PowerWorkload '%s' to not exist", tc.testCase, powerWorkloadName)
-			}
-		}
-
 		powerProfileList := &powerv1alpha1.PowerProfileList{}
 		err = r.Client.List(context.TODO(), powerProfileList)
 		if err != nil {
@@ -1921,10 +1917,6 @@ func TestBasePowerProfileDeletion(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkload list", tc.testCase))
-		}
-
-		if len(powerWorkloadList.Items) != tc.expectedNumberOfPowerWorkloads {
-			t.Errorf("%s - Failed: Expected number of PowerWorkloads to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerWorkloads, len(powerWorkloadList.Items))
 		}
 	}
 }

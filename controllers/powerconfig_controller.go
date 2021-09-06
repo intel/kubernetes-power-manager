@@ -70,22 +70,54 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		return ctrl.Result{}, err
 	}
 
-	if len(configs.Items) > 1 {
-		moreThanOneConfigError := errors.NewServiceUnavailable("Cannot have more than one PowerConfig")
-		logger.Error(moreThanOneConfigError, "error reconciling PowerConfig")
-		return ctrl.Result{}, nil
-	}
-
 	config := &powerv1alpha1.PowerConfig{}
 	err = r.Client.Get(context.TODO(), req.NamespacedName, config)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			logger.Info("PowerConfig not found")
+			// PowerConfig was deleted, if the number PowerConfigs is > 0, don't delete the PowerProfiles
+			if len(configs.Items) == 0 {
+				powerProfiles := &powerv1alpha1.PowerProfileList{}
+				err = r.Client.List(context.TODO(), powerProfiles)
+				if err != nil {
+					logger.Error(err, "error getting PowerProfiles")
+					return ctrl.Result{}, err
+				}
+
+				for _, profile := range powerProfiles.Items {
+					actualProfile := &powerv1alpha1.PowerProfile{}
+					err = r.Client.Get(context.TODO(), client.ObjectKey{
+						Name: profile.Name,
+						Namespace: profile.Namespace,
+					}, actualProfile)
+					if err != nil {
+						return ctrl.Result{}, err
+					}
+
+					err = r.Client.Delete(context.TODO(), actualProfile)
+					if err != nil {
+						return ctrl.Result{}, err
+					}
+				}
+			}
+
 			return ctrl.Result{}, nil
 		}
 
 		logger.Error(err, "Error retreiving PowerConfig")
 		return ctrl.Result{}, err
+	}
+
+	if len(configs.Items) > 1 {
+		moreThanOneConfigError := errors.NewServiceUnavailable("Cannot have more than one PowerConfig")
+		logger.Error(moreThanOneConfigError, "error reconciling PowerConfig")
+
+		err = r.Client.Delete(context.TODO(), config)
+		if err != nil {
+			logger.Error(err, "error deleting PowerConfig")
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, nil
 	}
 
 	// Create PowerNodeAgent DaemonSet
@@ -164,7 +196,7 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				
 				powerProfileSpec := &powerv1alpha1.PowerProfileSpec{
 					Name: profile,
-					Epp: profile,
+					Epp: basePowerProfileToEppValue[profile],
 				}
 				powerProfile := &powerv1alpha1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{

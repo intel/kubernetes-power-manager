@@ -2,76 +2,100 @@ package controllers
 
 import (
 	"context"
-
-	//. "github.com/onsi/ginkgo"
-	//. "github.com/onsi/gomega"
+	"fmt"
 
 	"testing"
 
-	//"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	//controllers "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/api/core/v1"
-	appsv1 "k8s.io/api/apps/v1"
+	//appsv1 "k8s.io/api/apps/v1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 )
 
 const (
-	PowerConfigName = "TestPowerConfig"
+	PowerConfigName = "power-config"
 	PowerConfigNamespace = "default"
 )
 
-func createReconcileObject(powerConfig *powerv1alpha1.PowerConfig) (*PowerConfigReconciler, error) {
-//func createReconcileObject(powerConfig *powerv1alpha1.PowerConfig) (*controllers.PowerConfigReconciler, error) {
+func createPowerConfigReconcilerObject(objs []runtime.Object) (*PowerConfigReconciler, error) {
 	s := scheme.Scheme
-	
-	if err := powerv1alpha1.AddToScheme(s); err != nil {
-		return nil, err
-	}
 
-	objs := []runtime.Object{powerConfig}
+        if err := powerv1alpha1.AddToScheme(s); err != nil {
+                return nil, err
+        }
 
 	s.AddKnownTypes(powerv1alpha1.GroupVersion)
-	
-	cl := fake.NewFakeClient(objs...)
 
-	powerNodeData := &state.PowerNodeData{
-		PowerNodeList: []string{},
-	}
+        cl := fake.NewFakeClient(objs...)
 
-	r := &PowerConfigReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerConfig"), Scheme: s, State: powerNodeData}
-	//r := &controllers.PowerConfigReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerConfig"), Scheme: s, State: powerNodeData}
+        powerNodeData := &state.PowerNodeData{
+                PowerNodeList: []string{},
+        }
+
+        r := &PowerConfigReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerConfig"), Scheme: s, State: powerNodeData}
 
 	return r, nil
 }
 
-func TestPowerConfigReconciler(t *testing.T) {
+func TestNumberOfConfigsGreaterThanOne(t *testing.T) {
 	tcases := []struct{
-		powerConfig *powerv1alpha1.PowerConfig
+		testCase string
+		secondConfigName string
+		powerConfigs *powerv1alpha1.PowerConfigList
 		nodeList *corev1.NodeList
+		powerProfiles *powerv1alpha1.PowerProfileList
+		expectedPowerConfigName string
 		expectedNumberOfNodes int
-		expectedNumberOfProfiles int
+		expectedNumberOfPowerProfiles int
+		expectedPowerProfiles []string
 	}{
 		{
-			powerConfig: &powerv1alpha1.PowerConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
-					Namespace: PowerConfigNamespace,
-				},
-				Spec: powerv1alpha1.PowerConfigSpec{
-					PowerNodeSelector: map[string]string{
-						"test-node": "true",
+			testCase: "Test Case 1",
+			secondConfigName: "power-config2",
+			powerConfigs: &powerv1alpha1.PowerConfigList{
+				Items: []powerv1alpha1.PowerConfig{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "power-config",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerConfigSpec{
+							PowerNodeSelector: map[string]string{
+								"example-node": "true",
+							},
+							PowerProfiles: []string{
+								"performance",
+							},
+						},
+						Status: powerv1alpha1.PowerConfigStatus{
+							Nodes: []string{
+								"example-node1",
+							},
+						},
 					},
-					PowerProfiles: []string{
-						"performance",
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "power-config2",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerConfigSpec{
+							PowerNodeSelector: map[string]string{
+								"incorrect-label": "true",
+							},
+							PowerProfiles: []string{
+								"performance",
+								"balance_performance",
+							},
+						},
 					},
 				},
 			},
@@ -81,211 +105,530 @@ func TestPowerConfigReconciler(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "example-node1",
 							Labels: map[string]string{
-								"test-node": "true",
+								"example-node": "true",
+								"incorrect-label": "true",
 							},
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node2",
-							Labels: map[string]string{
-								"test-node": "true",
-							},
+                                                        Name: "example-node2",
+                                                        Labels: map[string]string{
+                                                                "incorrect-label": "true",
+                                                        },
+                                                },
+					},
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance",
+							Epp: "performance",
 						},
 					},
 				},
 			},
-			expectedNumberOfNodes: 2,
-			expectedNumberOfProfiles: 1,
-		},
-		{
-			powerConfig: &powerv1alpha1.PowerConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
-					Namespace: PowerConfigNamespace,
-				},
-				Spec: powerv1alpha1.PowerConfigSpec{
-					PowerNodeSelector: map[string]string{
-						"test-node": "true",
-					},
-					PowerProfiles: []string{
-						"performance",
-					},
-				},
-			},
-			nodeList: &corev1.NodeList{
-				Items: []corev1.Node{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node1",
-							Labels: map[string]string{
-								"test-node": "true",
-							},
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node2",
-							Labels: map[string]string{
-								"test-node": "true",
-							},
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node3",
-							Labels: map[string]string{},
-						},
-					},
-				},
-			},
-			expectedNumberOfNodes: 2,
-			expectedNumberOfProfiles: 1,
-		},
-		{
-			powerConfig: &powerv1alpha1.PowerConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
-					Namespace: PowerConfigNamespace,
-				},
-				Spec: powerv1alpha1.PowerConfigSpec{
-					PowerNodeSelector: map[string]string{
-						"test-node": "true",
-					},
-					PowerProfiles: []string{
-						"performance",
-					},
-				},
-			},
-			nodeList: &corev1.NodeList{
-				Items: []corev1.Node{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node1",
-							Labels: map[string]string{
-								"test-node": "true",
-							},
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node2",
-							Labels: map[string]string{},
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node3",
-							Labels: map[string]string{},
-						},
-					},
-				},
-			},
+			expectedPowerConfigName: "power-config",
 			expectedNumberOfNodes: 1,
-			expectedNumberOfProfiles: 1,
-		},
-		{
-			powerConfig: &powerv1alpha1.PowerConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
-					Namespace: PowerConfigNamespace,
-				},
-				Spec: powerv1alpha1.PowerConfigSpec{
-					PowerNodeSelector: map[string]string{
-						"test-node": "true",
-					},
-					PowerProfiles: []string{
-						"performance",
-					},
-				},
+			expectedNumberOfPowerProfiles: 1,
+			expectedPowerProfiles: []string{
+				"performance",
 			},
-			nodeList: &corev1.NodeList{
-				Items: []corev1.Node{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node1",
-							Labels: map[string]string{},
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node2",
-							Labels: map[string]string{},
-						},
-					},
-				},
-			},
-			expectedNumberOfNodes: 0,
-			expectedNumberOfProfiles: 1,
-		},
-		{
-			powerConfig: &powerv1alpha1.PowerConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
-					Namespace: PowerConfigNamespace,
-				},
-				Spec: powerv1alpha1.PowerConfigSpec{
-					PowerNodeSelector: map[string]string{
-						"test-node": "true",
-					},
-					PowerProfiles: []string{
-						"performance",
-						"incorrect-profile",
-					},
-				},
-			},
-			nodeList: &corev1.NodeList{
-				Items: []corev1.Node{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node1",
-							Labels: map[string]string{
-								"test-node": "true",
-							},
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node2",
-							Labels: map[string]string{
-								"test-node": "true",
-							},
-						},
-					},
-				},
-				
-			},
-			expectedNumberOfNodes: 2,
-			expectedNumberOfProfiles: 1,
 		},
 	}
 
 	for _, tc := range tcases {
 		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
-		//controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
 
-		r, err := createReconcileObject(tc.powerConfig)
-		if err != nil {
-			t.Fatal("error creating Reconcile object")
+		objs := make([]runtime.Object, 0)
+		for i := range tc.powerConfigs.Items {
+			objs = append(objs, &tc.powerConfigs.Items[i])
+		}
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
+		for i := range tc.powerProfiles.Items {
+			objs = append(objs, &tc.powerProfiles.Items[i])
 		}
 
-		for i := range tc.nodeList.Items {
-			node := &corev1.Node{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind: "Node",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: tc.nodeList.Items[i].Name,
-					Labels: tc.nodeList.Items[i].Labels,
-				},
-			}
+		r, err := createPowerConfigReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconcile object", tc.testCase))
+		}
 
-			err = r.Client.Create(context.TODO(), node)
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name: tc.secondConfigName,
+				Namespace: PowerConfigNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling PowerConfig object", tc.testCase))
+		}
+
+		powerConfigs := &powerv1alpha1.PowerConfigList{}
+		err = r.Client.List(context.TODO(), powerConfigs)
+		if err != nil {
+			t.Error(err)
+                        t.Fatal(fmt.Sprintf("%s - error retrieving PowerConfig list object", tc.testCase))
+		}
+
+		if len(powerConfigs.Items) != 1 {
+			t.Errorf("%s - Failed: Expected number of PowerConfigs to be 1, got %v", tc.testCase, len(powerConfigs.Items))
+		}
+
+		powerConfig := &powerv1alpha1.PowerConfig{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name: PowerConfigName,
+			Namespace: PowerConfigNamespace,
+		}, powerConfig)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerConfig object", tc.testCase))
+		}
+
+		if powerConfig.Name != tc.expectedPowerConfigName {
+			t.Errorf("%s - Failed: Expected PowerConfig name to be %v, got %v", tc.testCase, tc.expectedPowerConfigName, powerConfig.Name)
+		}
+
+		if len(powerConfig.Status.Nodes) != tc.expectedNumberOfNodes {
+			t.Errorf("%s - Failed: Expected number of node in PowerConfig status to be %v, got %v", tc.testCase, tc.expectedNumberOfNodes, len(powerConfig.Status.Nodes))
+		}
+
+		powerProfiles := &powerv1alpha1.PowerProfileList{}
+		err = r.Client.List(context.TODO(), powerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile list object", tc.testCase))
+		}
+
+		if len(powerProfiles.Items) != tc.expectedNumberOfPowerProfiles {
+			t.Errorf("%s - Failed: Expected number of PowerProfiles ot be %v, got %v", tc.testCase, tc.expectedNumberOfPowerProfiles, len(powerProfiles.Items))
+		}
+
+		for _, profileName := range tc.expectedPowerProfiles {
+			profile := &powerv1alpha1.PowerProfile{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name: profileName,
+				Namespace: PowerConfigNamespace,
+			}, profile)
 			if err != nil {
-				t.Errorf("Error: %v", err)
-				t.Fatal("error creating Node")
+				if errors.IsNotFound(err) {
+					t.Errorf("%s - Failed: Expected PowerProfile '%s' to exist", tc.testCase, profileName)
+				} else {
+					t.Error(err)
+					t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile object", tc.testCase))
+				}
 			}
+		}
+	}
+}
+
+func TestPowerConfigCreation(t *testing.T) {
+	tcases := []struct{
+		testCase string
+		powerConfig *powerv1alpha1.PowerConfig
+		nodeList *corev1.NodeList
+		expectedNumberOfNodes int
+		expectedNumberOfPowerNodes int
+		expectedPowerNodes []string
+		expectedNumberOfPowerProfiles int
+		expectedPowerProfiles []string
+	}{
+		{
+			testCase: "Test Case 1",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			expectedNumberOfNodes: 1,
+			expectedNumberOfPowerNodes: 1,
+			expectedPowerNodes: []string{
+				"example-node1",
+			},
+			expectedNumberOfPowerProfiles: 1,
+			expectedPowerProfiles: []string{
+				"performance",
+			},
+		},
+		{
+			testCase: "Test Case 2",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node2",
+							Labels: map[string]string{
+								"example-node": "false",
+							},
+						},
+					},
+				},
+			},
+			expectedNumberOfNodes: 1,
+			expectedNumberOfPowerNodes: 1,
+			expectedPowerNodes: []string{
+				"example-node1",
+			},
+			expectedNumberOfPowerProfiles: 1,
+			expectedPowerProfiles: []string{
+				"performance",
+			},
+		},
+		{
+			testCase: "Test Case 3",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node2",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			expectedNumberOfNodes: 2,
+			expectedNumberOfPowerNodes: 2,
+			expectedPowerNodes: []string{
+				"example-node1",
+				"example-node2",
+			},
+			expectedNumberOfPowerProfiles: 1,
+			expectedPowerProfiles: []string{
+				"performance",
+			},
+		},
+		{
+			testCase: "Test Case 4",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+						"balance-performance",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			expectedNumberOfNodes: 1,
+			expectedNumberOfPowerNodes: 1,
+			expectedPowerNodes: []string{
+				"example-node1",
+			},
+			expectedNumberOfPowerProfiles: 2,
+			expectedPowerProfiles: []string{
+				"performance",
+				"balance-performance",
+			},
+		},
+		{
+			testCase: "Test Case 5",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+						"balance-performance",
+						"balance-power",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			expectedNumberOfNodes: 1,
+			expectedNumberOfPowerNodes: 1,
+			expectedPowerNodes: []string{
+				"example-node1",
+			},
+			expectedNumberOfPowerProfiles: 3,
+			expectedPowerProfiles: []string{
+				"performance",
+				"balance-performance",
+				"balance-power",
+			},
+		},
+		{
+			testCase: "Test Case 6",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+						"balance-performance",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node2",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			expectedNumberOfNodes: 2,
+			expectedNumberOfPowerNodes: 2,
+			expectedPowerNodes: []string{
+				"example-node1",
+				"example-node2",
+			},
+			expectedNumberOfPowerProfiles: 2,
+			expectedPowerProfiles: []string{
+				"performance",
+				"balance-performance",
+			},
+		},
+		{
+			testCase: "Test Case 7",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+						"balance-performance",
+						"balance-power",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node2",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			expectedNumberOfNodes: 2,
+			expectedNumberOfPowerNodes: 2,
+			expectedPowerNodes: []string{
+				"example-node1",
+				"example-node2",
+			},
+			expectedNumberOfPowerProfiles: 3,
+			expectedPowerProfiles: []string{
+				"performance",
+				"balance-performance",
+				"balance-power",
+			},
+		},
+		{
+			testCase: "Test Case 8",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node2",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node3",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			expectedNumberOfNodes: 3,
+			expectedNumberOfPowerNodes: 3,
+			expectedPowerNodes: []string{
+				"example-node1",
+				"example-node2",
+				"example-node3",
+			},
+			expectedNumberOfPowerProfiles: 1,
+			expectedPowerProfiles: []string{
+				"performance",
+			},
+		},
+	}
+
+	for _, tc := range tcases {
+		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.powerConfig)
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
+
+		r, err := createPowerConfigReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
 		}
 
 		req := reconcile.Request{
@@ -301,70 +644,143 @@ func TestPowerConfigReconciler(t *testing.T) {
 			t.Fatal("error reconciling PowerConfig object")
 		}
 
-		createdPowerConfig := &powerv1alpha1.PowerConfig{}
+		powerConfig := &powerv1alpha1.PowerConfig{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name: PowerConfigName,
 			Namespace: PowerConfigNamespace,
-		}, createdPowerConfig)
-		if err != nil {
-			t.Errorf("Error: %v", err)
-			t.Fatal("error retrieving power config")
-		}
-
-		if len(createdPowerConfig.Status.Nodes) != tc.expectedNumberOfNodes {
-			t.Errorf("Failed: %v Expected Nodes, got %v", tc.expectedNumberOfNodes, len(createdPowerConfig.Status.Nodes))
-		}
-
-		profiles := &powerv1alpha1.PowerProfileList{}
-		err = r.Client.List(context.TODO(), profiles)
-		if err != nil {
-			t.Errorf("Error: %v", err)
-			t.Fatal("error retrieving PowerProfiles")
-		}
-
-		if len(profiles.Items) != tc.expectedNumberOfProfiles {
-			t.Errorf("Failed: %v Expected profiles, got %v", tc.expectedNumberOfProfiles, len(profiles.Items))
-		}
-
-		nodeAgentDS := &appsv1.DaemonSet{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			//Name: controllers.NodeAgentDSName,
-			Name: NodeAgentDSName,
-			Namespace: PowerConfigNamespace,
-		}, nodeAgentDS)
-		if err != nil {
-			t.Errorf("Failed: Expected Power Node Agent to be created - %v", err)
-		}
-
-		powerNodeList := &powerv1alpha1.PowerNodeList{}
-		err = r.Client.List(context.TODO(), powerNodeList)
+		}, powerConfig)
 		if err != nil {
 			t.Error(err)
-			t.Fatal("error retrieving PowerNode List")
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerConfig object", tc.testCase))
 		}
 
-		if len(powerNodeList.Items) != tc.expectedNumberOfNodes {
-			t.Errorf("Failed: Expected %v PowerNodes, got %v", tc.expectedNumberOfNodes, len(powerNodeList.Items))
+		if len(powerConfig.Status.Nodes) != tc.expectedNumberOfNodes {
+			t.Errorf("%s - Failed: Expected number of nodes in PowerConfig status to be %v, got %v", tc.testCase, tc.expectedNumberOfNodes, len(powerConfig.Status.Nodes))
+		}
+
+		powerNodes := &powerv1alpha1.PowerNodeList{}
+		err = r.Client.List(context.TODO(), powerNodes)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerNode list object", tc.testCase))
+		}
+
+		if len(powerNodes.Items) != tc.expectedNumberOfPowerNodes {
+			t.Errorf("%s - Failed: Expected number of PowerNodes to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerNodes, len(powerNodes.Items))
+		}
+
+		for _, powerNodeName := range tc.expectedPowerNodes {
+			powerNode := &powerv1alpha1.PowerNode{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name: powerNodeName,
+				Namespace: PowerConfigNamespace,
+			}, powerNode)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					t.Errorf("%s - Failed: Expected PowerNode '%s' to exist", tc.testCase, powerNodeName)
+				} else {
+					t.Error(err)
+					t.Fatal(fmt.Sprintf("%s - error retrieving PowerNode object", tc.testCase))
+				}
+			}
+		}
+
+		powerProfiles := &powerv1alpha1.PowerProfileList{}
+		err = r.Client.List(context.TODO(), powerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile list object", tc.testCase))
+		}
+
+		if len(powerProfiles.Items) != tc.expectedNumberOfPowerProfiles {
+			t.Errorf("%s - Failed: Expected number of PowerProfiles to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerProfiles, len(powerProfiles.Items))
+		}
+
+		for _, powerProfileName := range tc.expectedPowerProfiles {
+			powerProfile := &powerv1alpha1.PowerProfile{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name: powerProfileName,
+				Namespace: PowerConfigNamespace,
+			}, powerProfile)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					t.Errorf("%s - Failed: Expected PowerProfile '%s' to exist", tc.testCase, powerProfileName)
+				} else {
+					t.Error(err)
+					t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile object", tc.testCase))
+				}
+			}
 		}
 	}
 }
 
-func TestMultiplePowerConfigs(t *testing.T) {
+func TestUnusedProfileRemoval(t *testing.T) {
 	tcases := []struct{
-		secondConfig *powerv1alpha1.PowerConfig
+		testCase string
+		powerConfig *powerv1alpha1.PowerConfig
 		nodeList *corev1.NodeList
-		expectedNumberOfNodes int
-		expectedNumberOfProfiles int
+		powerProfiles *powerv1alpha1.PowerProfileList
+		expectedNumberOfPowerProfiles int
+		expectedPowerProfileNotExists map[string]bool
 	}{
 		{
-			secondConfig: &powerv1alpha1.PowerConfig{
+			testCase: "Test Case 1",
+			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
 					PowerNodeSelector: map[string]string{
-						"unselected-label": "true",
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "balance-performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance",
+							Epp: "balance_performance",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerProfiles: 1,
+			expectedPowerProfileNotExists: map[string]bool{
+				"performance": false,
+				"balance-performance": true,
+			},
+		},
+		{
+			testCase: "Test Case 2",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
 					},
 					PowerProfiles: []string{
 						"performance",
@@ -378,300 +794,150 @@ func TestMultiplePowerConfigs(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "example-node1",
 							Labels: map[string]string{
-								"correct-label": "true",
-								"unselected-label": "true",
-							},
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node2",
-							Labels: map[string]string{
-								"correct-label": "true",
-                                                                "unselected-label": "true",
-							},
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node3",
-							Labels: map[string]string{
-                                                                "unselected-label": "true",
+								"example-node": "true",
 							},
 						},
 					},
 				},
 			},
-			expectedNumberOfNodes: 0,
-			expectedNumberOfProfiles: 1,
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "balance-power",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-power",
+							Epp: "balance_power",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerProfiles: 2,
+			expectedPowerProfileNotExists: map[string]bool{
+				"performance": false,
+				"balance-performance": false,
+				"balance-power": true,
+			},
 		},
-	}
-
-	for _, tc := range tcases {
-		//controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
-		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
-		configName := "InitialPowerConfig"
-
-		initialPowerConfig := &powerv1alpha1.PowerConfig{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: configName,
-				Namespace: PowerConfigNamespace,
-			},
-			Spec: powerv1alpha1.PowerConfigSpec{
-				PowerNodeSelector: map[string]string{
-					"correct-label": "true",
-				},
-				PowerProfiles: []string{
-					"performance",
-				},
-			},
-		}
-
-		r, err := createReconcileObject(initialPowerConfig)
-		if err != nil {
-			t.Fatal("error creating Reconcile object")
-		}
-
-		for i := range tc.nodeList.Items {
-			node := &corev1.Node{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind: "Node",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: tc.nodeList.Items[i].Name,
-					Labels: tc.nodeList.Items[i].Labels,
-				},
-			}
-
-			err = r.Client.Create(context.TODO(), node)
-			if err != nil {
-				t.Errorf("Error: %v", err)
-				t.Fatal("error creating Node")
-			}
-		}
-
-		initialReq := reconcile.Request{
-			NamespacedName: client.ObjectKey{
-				Name: configName,
-				Namespace: PowerConfigNamespace,
-			},
-		}
-
-		_, err = r.Reconcile(initialReq)
-		if err != nil {
-			t.Error(err)
-			t.Fatal("error reconciling initail object")
-		}
-
-		err = r.Client.Create(context.TODO(), tc.secondConfig)
-		if err != nil {
-			t.Error(err)
-			t.Fatal("error creating second object")
-		}
-
-		secondReq := reconcile.Request{
-			NamespacedName: client.ObjectKey{
-				Name: PowerConfigName,
-				Namespace: PowerConfigNamespace,
-			},
-		}
-
-		_, err = r.Reconcile(secondReq)
-		if err != nil {
-			t.Error(err)
-			t.Fatal("error reconciling second object")
-		}
-
-		initialCreatedPowerConfig := &powerv1alpha1.PowerConfig{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: configName,
-			Namespace: PowerConfigNamespace,
-		}, initialCreatedPowerConfig)
-		if err != nil {
-			t.Error(err)
-			t.Fatal("error retrieving intitial object")
-		}
-
-		if len(initialCreatedPowerConfig.Status.Nodes) != 2 {
-			t.Errorf("Failed: Expected 2 Nodes, got %v", len(initialCreatedPowerConfig.Status.Nodes))
-		}
-
-		secondCreatedPowerConfig := &powerv1alpha1.PowerConfig{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: PowerConfigName,
-			Namespace: PowerConfigNamespace,
-		}, secondCreatedPowerConfig)
-		if err != nil {
-			t.Error(err)
-			t.Fatal("error retrieving second object")
-		}
-
-		if len(secondCreatedPowerConfig.Status.Nodes) != tc.expectedNumberOfNodes {
-			t.Errorf("Failed: Expected %v Nodes, got %v", tc.expectedNumberOfNodes, len(secondCreatedPowerConfig.Status.Nodes))
-		}
-
-		profiles := &powerv1alpha1.PowerProfileList{}
-		err = r.Client.List(context.TODO(), profiles)
-		if err != nil {
-			t.Error(err)
-			t.Fatal("error retrieving PowerProfiles")
-		}
-
-		if len(profiles.Items) != tc.expectedNumberOfProfiles {
-			t.Errorf("Failed: Expected %v PowerProfiles, got %v", tc.expectedNumberOfProfiles, len(profiles.Items))
-		}
-	}
-}
-
-func TestUnusedProfileRemoval(t *testing.T) {
-	tcases := []struct{
-		powerConfig *powerv1alpha1.PowerConfig
-		oldProfileList []string
-		expectedNumberOfProfiles int
-	}{
 		{
+			testCase: "Test Case 3",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
 					PowerProfiles: []string{
-						"performance",
+						"balance-performance",
+						"balance-power",
 					},
 				},
 			},
-			oldProfileList: []string{
-				"performance",
-				"balance_performance",
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
 			},
-			expectedNumberOfProfiles: 1,
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance",
+							Epp: "performance",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerProfiles: 2,
+			expectedPowerProfileNotExists: map[string]bool{
+				"performance": true,
+				"balance-performance": false,
+				"balance-power": false,
+			},
 		},
-	}
-
-	for _, tc := range tcases {
-		//controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
-		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
-
-		r, err := createReconcileObject(tc.powerConfig)
-		if err != nil {
-			t.Fatal("error creating Reconcile object")
-		}
-
-		for _, profile := range tc.oldProfileList {
-			powerProfile := &powerv1alpha1.PowerProfile{
+		{
+			testCase: "Test Case 4",
+			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: profile,
+					Name: PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: profile,
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+						"balance-performance",
+						"balance-power",
+					},
 				},
-			}
-
-			err := r.Client.Create(context.TODO(), powerProfile)
-			if err != nil {
-				t.Error(err)
-				t.Fatal("error creating PowerProfile object")
-			}
-		}
-
-		req := reconcile.Request{
-			client.ObjectKey{
-				Name: PowerConfigName,
-				Namespace: PowerConfigNamespace,
 			},
-		}
-
-		_, err = r.Reconcile(req)
-		if err != nil {
-			t.Error(err)
-			t.Fatal("error reconciling object")
-		}
-
-		profiles := &powerv1alpha1.PowerProfileList{}
-		err = r.Client.List(context.TODO(), profiles)
-		if err != nil {
-			t.Error(err)
-			t.Fatal("error retrieving PowerProfile objects")
-		}
-
-		if len(profiles.Items) != tc.expectedNumberOfProfiles {
-			t.Errorf("Failed: Expected %v PowerProfiles, got %v", tc.expectedNumberOfProfiles, len(profiles.Items))
-		}
-	}
-}
-
-/*
-func TestPowerConfigStatusUpdate(t *testing.T) {
-	tcases := []struct{
-		powerConfig *powerv1alpha1.PowerConfig
-		nodeList *corev1.NodeList
-	}{
-		{
-			powerConfig: &powerv1alpha1.PowerConfig{
-                                ObjectMeta: metav1.ObjectMeta{
-                                        Name: PowerConfigName,
-                                        Namespace: PowerConfigNamespace,
-                                },
-                                Spec: powerv1alpha1.PowerConfigSpec{
-                                        PowerNodeSelector: map[string]string{
-                                                "test-node": "true",
-                                        },
-                                },
-                        },
-                        nodeList: &corev1.NodeList{
-                                Items: []corev1.Node{
-                                        {
-                                                ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "example-node1",
-                                                        Labels: map[string]string{
-                                                                "test-node": "true",
-								"secondary-label": "true",
-                                                        },
-                                                },
-                                        },
-                                        {
-                                                ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "example-node2",
-                                                        Labels: map[string]string{
-								"secondary-label": "true",
-                                                        },
-                                                },
-                                        },
-                                },
-
-                        },
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "power",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "power",
+							Epp: "power",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerProfiles: 3,
+			expectedPowerProfileNotExists: map[string]bool{
+				"performance": false,
+				"balance-performance": false,
+				"balance-power": false,
+				"power": true,
+			},
 		},
 	}
 
 	for _, tc := range tcases {
-		//controllers.NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
 		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
 
-                r, err := createReconcileObject(tc.powerConfig)
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.powerConfig)
+		for i := range tc.powerProfiles.Items {
+			objs = append(objs, &tc.powerProfiles.Items[i])
+		}
+
+		r, err := createPowerConfigReconcilerObject(objs)
                 if err != nil {
-                        t.Fatal("error creating Reconcile object")
-                }
-
-                for i := range tc.nodeList.Items {
-                        node := &corev1.Node{
-                                TypeMeta: metav1.TypeMeta{
-                                        APIVersion: "v1",
-                                        Kind: "Node",
-                                },
-                                ObjectMeta: metav1.ObjectMeta{
-                                        Name: tc.nodeList.Items[i].Name,
-                                        Labels: tc.nodeList.Items[i].Labels,
-                                },
-                        }
-
-                        err = r.Client.Create(context.TODO(), node)
-                        if err != nil {
-                                t.Errorf("Error: %v", err)
-                                t.Fatal("error creating Node")
-                        }
+                        t.Error(err)
+                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
                 }
 
                 req := reconcile.Request{
@@ -687,50 +953,409 @@ func TestPowerConfigStatusUpdate(t *testing.T) {
                         t.Fatal("error reconciling PowerConfig object")
                 }
 
-		createdPowerConfig := &powerv1alpha1.PowerConfig{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: PowerConfigName,
-			Namespace: PowerConfigNamespace,
-		}, createdPowerConfig)
+		powerProfiles := &powerv1alpha1.PowerProfileList{}
+		err = r.Client.List(context.TODO(), powerProfiles)
 		if err != nil {
 			t.Error(err)
-			t.Fatal("error retrieving PowerConfig object")
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile list object", tc.testCase))
 		}
 
-		if len(createdPowerConfig.Status.Nodes) != 1 {
-			t.Errorf("Failed: %v Expected Nodes, got %v", 1, len(createdPowerConfig.Status.Nodes))
+		if len(powerProfiles.Items) != tc.expectedNumberOfPowerProfiles {
+			t.Errorf("%s - Failed: Expected number of PowerProfiles to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerProfiles, len(powerProfiles.Items))
 		}
 
-		createdPowerConfig.Spec.PowerNodeSelector = map[string]string{}
-		createdPowerConfig.Spec.PowerNodeSelector = map[string]string{
-			"secondary-label": "true",
+		for powerProfileName, exists := range tc.expectedPowerProfileNotExists {
+			profile := &powerv1alpha1.PowerProfile{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name: powerProfileName,
+				Namespace: PowerConfigNamespace,
+			}, profile)
+			if errors.IsNotFound(err) != exists {
+				t.Errorf("%s - Failed: Expected PowerProfile '%s' to exist to be %v, got %v", tc.testCase, powerProfileName, exists, errors.IsNotFound(err))
+			}
+
+			if err != nil && !errors.IsNotFound(err) {
+				t.Error(err)
+				t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile object", tc.testCase))
+			}
+		}
+	}
+}
+
+func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
+	tcases := []struct{
+		testCase string
+		powerConfig *powerv1alpha1.PowerConfig
+		nodeList *corev1.NodeList
+		powerProfiles *powerv1alpha1.PowerProfileList
+		expectedNumberOfPowerProfiles int
+		expectedProfiles []string
+	}{
+		{
+			testCase: "Test Case 1",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance",
+							Epp: "performance",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerProfiles: 1,
+			expectedProfiles: []string{
+				"performance",
+			},
+		},
+		{
+			testCase: "Test Case 2",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+						"balance-performance",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance",
+							Epp: "performance",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerProfiles: 2,
+			expectedProfiles: []string{
+				"performance",
+				"balance-performance",
+			},
+		},
+		{
+			testCase: "Test Case 3",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+						"balance-performance",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance",
+							Epp: "performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "balance-performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance",
+							Epp: "balance-performance",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerProfiles: 2,
+			expectedProfiles: []string{
+				"performance",
+				"balance-performance",
+			},
+		},
+		{
+			testCase: "Test Case 4",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+						"balance-performance",
+						"balance-power",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance",
+							Epp: "performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "balance-performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance",
+							Epp: "balance-performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "balance-power",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-power",
+							Epp: "balance-power",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerProfiles: 3,
+			expectedProfiles: []string{
+				"performance",
+				"balance-performance",
+				"balance-power",
+			},
+		},
+		{
+			testCase: "Test Case 5",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+						"balance-performance",
+						"balance-power",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance",
+							Epp: "performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "balance-performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance",
+							Epp: "balance-performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "balance-power",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-power",
+							Epp: "balance-power",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "power",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "power",
+							Epp: "power",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerProfiles: 3,
+			expectedProfiles: []string{
+				"performance",
+				"balance-performance",
+				"balance-power",
+			},
+		},
+	}
+
+	for _, tc := range tcases {
+		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.powerConfig)
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
+		for i := range tc.powerProfiles.Items {
+			objs = append(objs, &tc.powerProfiles.Items[i])
 		}
 
-		err = r.Client.Update(context.TODO(), createdPowerConfig)
-		if err != nil {
-			t.Error(err)
-			t.Fatal("error updating PowerConfig object")
-		}
+		r, err := createPowerConfigReconcilerObject(objs)
+                if err != nil {
+                        t.Error(err)
+                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+                }
 
-		 _, err = r.Reconcile(req)
+                req := reconcile.Request{
+                        NamespacedName: client.ObjectKey{
+                                Name: PowerConfigName,
+                                Namespace: PowerConfigNamespace,
+                        },
+                }
+
+                _, err = r.Reconcile(req)
                 if err != nil {
                         t.Errorf("Error: %v", err)
                         t.Fatal("error reconciling PowerConfig object")
                 }
 
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-                        Name: PowerConfigName,
-                        Namespace: PowerConfigNamespace,
-                }, createdPowerConfig)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal("error retrieving PowerConfig object")
-                }
+		powerProfiles := &powerv1alpha1.PowerProfileList{}
+		err = r.Client.List(context.TODO(), powerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile list object", tc.testCase))
+		}
 
-		 if len(createdPowerConfig.Status.Nodes) != 6 {
-                        t.Errorf("Failed: %v Expected Nodes, got %v", 2, len(createdPowerConfig.Status.Nodes))
-			t.Errorf("Nodes: %v", createdPowerConfig)
-                }
+		if len(powerProfiles.Items) != tc.expectedNumberOfPowerProfiles {
+			t.Errorf("%s - Failed: Expected number of PowerProfiles to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerProfiles, len(powerProfiles.Items))
+		}
+
+		for _, powerProfileName := range tc.expectedProfiles {
+			powerProfile := &powerv1alpha1.PowerProfile{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name: powerProfileName,
+				Namespace: PowerConfigNamespace,
+			}, powerProfile)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					t.Errorf("%s - Failed: Expected PowerProfile '%s' to exist", tc.testCase, powerProfileName)
+				} else {
+					t.Error(err)
+					t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile list object", tc.testCase))
+				}
+			}
+		}
 	}
 }
-*/
