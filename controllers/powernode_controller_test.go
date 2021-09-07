@@ -31,6 +31,24 @@ const (
 	AppQoSAddress = "127.0.0.1:5000"
 )
 
+func createPowerNodeReconcilerObject(objs []runtime.Object) (*PowerNodeReconciler, error) {
+	s := scheme.Scheme
+
+        if err := powerv1alpha1.AddToScheme(s); err != nil {
+                return nil, err
+        }
+
+	s.AddKnownTypes(powerv1alpha1.GroupVersion)
+
+        cl := fake.NewFakeClient(objs...)
+
+        appqosCl := appqos.NewDefaultAppQoSClient()
+
+	r := &PowerNodeReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
+
+        return r, nil
+}
+
 //func createPowerNodeReconcileObject(powerNode *powerv1alpha1.PowerNode) (*controllers.PowerNodeReconciler, error) {
 func createPowerNodeReconcileObject(powerNode *powerv1alpha1.PowerNode) (*PowerNodeReconciler, error) {
 	s := scheme.Scheme
@@ -85,6 +103,7 @@ func createListeners(appqosPools []appqos.Pool) (*httptest.Server, error) {
 
 func TestPowerNodeReconciler(t *testing.T) {
 	tcases := []struct{
+		testCase string
 		powerNode *powerv1alpha1.PowerNode
 		pools map[string][]int
 		powerProfileList *powerv1alpha1.PowerProfileList
@@ -95,6 +114,7 @@ func TestPowerNodeReconciler(t *testing.T) {
 		expectedSharedPools []powerv1alpha1.SharedPoolInfo
 	}{
 		{
+			testCase: "Test Case 1",
 			powerNode: &powerv1alpha1.PowerNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "example-node1",
@@ -176,6 +196,7 @@ func TestPowerNodeReconciler(t *testing.T) {
 			},
 		},
 		{
+			testCase: "Test Case 2",
 			powerNode: &powerv1alpha1.PowerNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "example-node2",
@@ -227,6 +248,7 @@ func TestPowerNodeReconciler(t *testing.T) {
 			},
 		},
 		{
+			testCase: "Test Case 3",
 			powerNode: &powerv1alpha1.PowerNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "example-node3",
@@ -341,6 +363,7 @@ func TestPowerNodeReconciler(t *testing.T) {
 			},
 		},
 		{
+			testCase: "Test Case 4",
 			powerNode: &powerv1alpha1.PowerNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "example-node4",
@@ -468,6 +491,7 @@ func TestPowerNodeReconciler(t *testing.T) {
 			},
 		},
 		{
+			testCase: "Test Case 5",
 			powerNode: &powerv1alpha1.PowerNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "example-node5",
@@ -495,11 +519,11 @@ func TestPowerNodeReconciler(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "balance_performance",
+                                                        Name: "balance-performance",
                                                         Namespace: PowerNodeNamespace,
                                                 },
                                                 Spec: powerv1alpha1.PowerProfileSpec{
-                                                        Name: "balance_performance",
+                                                        Name: "balance-performance",
                                                         Epp: "balance_performance",
                                                 },
 					},
@@ -641,6 +665,7 @@ func TestPowerNodeReconciler(t *testing.T) {
 			},
 		},
 		{
+			testCase: "Test Case 6",
 			powerNode: &powerv1alpha1.PowerNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "example-node6",
@@ -794,7 +819,6 @@ func TestPowerNodeReconciler(t *testing.T) {
 	}
 
 	for _, tc := range tcases {
-		//controllers.AppQoSClientAddress = "http://127.0.0.1:5000"
 		AppQoSClientAddress = "http://127.0.0.1:5000"
 
 		appqosPools := make([]appqos.Pool, 0)
@@ -811,12 +835,23 @@ func TestPowerNodeReconciler(t *testing.T) {
 			appqosPools = append(appqosPools, pool)
 		}
 
-		r, err := createPowerNodeReconcileObject(tc.powerNode)
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.powerNode)
+		for i := range tc.powerProfileList.Items {
+			objs = append(objs, &tc.powerProfileList.Items[i])
+		}
+		for i := range tc.powerWorkloadList.Items {
+			objs = append(objs, &tc.powerWorkloadList.Items[i])
+		}
+
+		//r, err := createPowerNodeReconcileObject(tc.powerNode)
+		r, err := createPowerNodeReconcilerObject(objs)
 		if err != nil {
 			t.Error(err)
 			t.Fatal("error creating reconcile object")
 		}
 
+		/*
 		for i := range tc.powerProfileList.Items {
 			err = r.Client.Create(context.TODO(), &tc.powerProfileList.Items[i])
 			if err != nil {
@@ -832,11 +867,12 @@ func TestPowerNodeReconciler(t *testing.T) {
 				t.Fatal("error creating PowerWorkload object")
 			}
 		}
+		*/
 
 		server, err := createListeners(appqosPools)
 		if err != nil {
 			t.Error(err)
-			t.Fatal("error creating Listeners")
+			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
 		}
 
 		req := reconcile.Request{
@@ -849,7 +885,7 @@ func TestPowerNodeReconciler(t *testing.T) {
 		_, err = r.Reconcile(req)
 		if err != nil {
 			t.Error(err)
-			t.Fatal("error reconciling PowerWorkload object")
+			t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object", tc.testCase))
 		}
 
 		server.Close()
@@ -861,23 +897,23 @@ func TestPowerNodeReconciler(t *testing.T) {
 		}, powerNode)
 		if err != nil {
 			t.Error(err)
-			t.Fatal("error retrieving PowerNode object")
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerNode object", tc.testCase))
 		}
 
 		if !reflect.DeepEqual(powerNode.Spec.ActiveProfiles, tc.expectedActiveProfiles) {
-			t.Errorf("Failed: Expected Active Profiles to be %v, got %v", tc.expectedActiveProfiles, powerNode.Spec.ActiveProfiles)
+			t.Errorf("%s - Failed: Expected Active Profiles to be %v, got %v", tc.testCase, tc.expectedActiveProfiles, powerNode.Spec.ActiveProfiles)
 		}
 
 		if !reflect.DeepEqual(powerNode.Spec.ActiveWorkloads, tc.expectedActiveWorkloads) {
-			t.Errorf("Failed: Expected Active Workloads to be %v, got %v", tc.expectedActiveWorkloads, powerNode.Spec.ActiveWorkloads)
+			t.Errorf("%s - Failed: Expected Active Workloads to be %v, got %v", tc.testCase, tc.expectedActiveWorkloads, powerNode.Spec.ActiveWorkloads)
 		}
 
 		if !reflect.DeepEqual(powerNode.Spec.PowerContainers, tc.expectedPowerContainers) {
-			t.Errorf("Failed: Expected Power Containers to be %v, got %v", tc.expectedPowerContainers, powerNode.Spec.PowerContainers)
+			t.Errorf("%s - Failed: Expected Power Containers to be %v, got %v", tc.testCase, tc.expectedPowerContainers, powerNode.Spec.PowerContainers)
 		}
 
 		if !reflect.DeepEqual(powerNode.Spec.SharedPools, tc.expectedSharedPools) {
-			t.Errorf("Failed: Expected Shared Pools to be %v, got %v", tc.expectedSharedPools, powerNode.Spec.SharedPools)
+			t.Errorf("%s - Failed: Expected Shared Pools to be %v, got %v", tc.testCase, tc.expectedSharedPools, powerNode.Spec.SharedPools)
 		}
 	}
 }

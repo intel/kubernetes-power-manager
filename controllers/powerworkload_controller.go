@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"reflect"
 	"sort"
 	"os"
@@ -56,13 +57,20 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
 
+	nodeName := os.Getenv("NODE_NAME")
 	workload := &powerv1alpha1.PowerWorkload{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, workload)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Assume PowerWorkload has been deleted. Check each Power Node to delete from each AppQoS instance
 
-			pool, err := r.AppQoSClient.GetPoolByName(AppQoSClientAddress, req.NamespacedName.Name)
+			pool := &appqos.Pool{}
+
+			if strings.HasPrefix(req.NamespacedName.Name, "shared") {
+				pool, err = r.AppQoSClient.GetSharedPool(AppQoSClientAddress)
+			} else {
+				pool, err = r.AppQoSClient.GetPoolByName(AppQoSClientAddress, req.NamespacedName.Name)
+			}
 			if err != nil {
 				logger.Error(err, "error retrieving Pool from AppQoS instance")
 				return ctrl.Result{}, err
@@ -86,6 +94,27 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				return ctrl.Result{}, err
 			}
 
+			sharedWorkload := powerv1alpha1.PowerWorkload{}
+			powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
+			err = r.Client.List(context.TODO(), powerWorkloads)
+			if err != nil {
+				logger.Error(err, "error retrieving PowerWorkload list")
+				return ctrl.Result{}, err
+			} else if len(powerWorkloads.Items) > 0 {
+				for _, powerWorkload := range powerWorkloads.Items {
+					if powerWorkload.Status.Node == nodeName {
+						sharedWorkload = powerWorkload
+					}
+				}
+	
+				sharedWorkload.Status.SharedCores = *updatedSharedPool.Cores
+				err = r.Client.Status().Update(context.TODO(), &sharedWorkload)
+				if err != nil {
+					logger.Error(err, "error updating SharedWorkload")
+					return ctrl.Result{}, err
+				}
+			}
+
 			return ctrl.Result{}, nil
 		}
 
@@ -95,8 +124,6 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	// The only time the PowerWorkload can be on the wrong Node is if it is a Shared Workload, as that is created by the user
 	if workload.Spec.AllCores {
-		nodeName := os.Getenv("NODE_NAME")
-
 		labelledNodeList := &corev1.NodeList{}
 		listOption := client.MatchingLabels{}
 		listOption = workload.Spec.PowerNodeSelector
@@ -212,6 +239,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			// Update the Status of the Shared PowerWorkload with the current Shared pool cores
 
 			workload.Status.SharedCores = sharedCores
+			workload.Status.Node = nodeName
 			err = r.Client.Status().Update(context.TODO(), workload)
 			if err != nil {
 				logger.Error(err, "error updating Shared PowerWorkload status")
@@ -275,6 +303,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	} else {
 		// The pool already exists in AppQoS, so need to retrieve and update it
 
+		// TODO: SharedWorkloadName is wrong
 		if req.NamespacedName.Name == SharedWorkloadName {
 			// TODO:
 			// Figure out this. May need to do some housekeeping to see if anything
@@ -302,6 +331,26 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			if err != nil {
 				logger.Error(err, appqosPutResponse)
 				return ctrl.Result{}, err
+			}
+
+			sharedWorkload := &powerv1alpha1.PowerWorkload{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name: fmt.Sprintf("shared-%s-workload", workload.Spec.Node.Name),
+				Namespace: req.NamespacedName.Namespace,
+			}, sharedWorkload)
+			if err != nil {
+				// The Shared Workload is not found, we don't need to update the Status
+				if !errors.IsNotFound(err) {
+					logger.Error(err, "error retrieving Shared PowerWorkload")
+					return ctrl.Result{}, err
+				}
+			} else {
+				sharedWorkload.Status.SharedCores = *updatedSharedPool.Cores
+				err = r.Client.Status().Update(context.TODO(), sharedWorkload)
+				if err != nil {
+					logger.Error(err, "error updating Shared PowerWorkload Status")
+					return ctrl.Result{}, err
+				}
 			}
 		}
 
