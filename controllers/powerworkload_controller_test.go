@@ -81,9 +81,6 @@ func createPowerWorkloadListeners(appqosPools []appqos.Pool, appqosPowerProfiles
 					appqosPools[i].Cores = p.Cores
 				}
 			}
-			for i := range appqosPools {
-				fmt.Printf("PUT: %v -- %v -- %v\n", *appqosPools[i].Name, *appqosPools[i].Cores, *appqosPools[i].ID)
-			}
 		} else if r.Method == "DELETE" {
 			path := strings.Split(r.URL.Path, "/")
 			id, _ := strconv.Atoi(path[len(path)-1])
@@ -125,9 +122,6 @@ func createPowerWorkloadListeners(appqosPools []appqos.Pool, appqosPowerProfiles
 			newId := len(appqosPools)+1
 			p.ID = &newId
 			appqosPools = append(appqosPools, p)
-			for i := range appqosPools {
-                                fmt.Printf("POST: %v -- %v -- %v\n", *appqosPools[i].Name, *appqosPools[i].Cores, *appqosPools[i].ID)
-                        }
 
 			b, err := json.Marshal("okay")
                         if err == nil {

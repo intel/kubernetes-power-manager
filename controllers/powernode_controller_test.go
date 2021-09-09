@@ -49,7 +49,6 @@ func createPowerNodeReconcilerObject(objs []runtime.Object) (*PowerNodeReconcile
         return r, nil
 }
 
-//func createPowerNodeReconcileObject(powerNode *powerv1alpha1.PowerNode) (*controllers.PowerNodeReconciler, error) {
 func createPowerNodeReconcileObject(powerNode *powerv1alpha1.PowerNode) (*PowerNodeReconciler, error) {
 	s := scheme.Scheme
 	
@@ -65,7 +64,6 @@ func createPowerNodeReconcileObject(powerNode *powerv1alpha1.PowerNode) (*PowerN
 
 	appqosCl := appqos.NewDefaultAppQoSClient()
 
-	//r := &controllers.PowerNodeReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
 	r := &PowerNodeReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
 
 	return r, nil

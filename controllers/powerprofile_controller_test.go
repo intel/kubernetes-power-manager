@@ -57,8 +57,6 @@ func createPP(objs []runtime.Object) (*PowerProfileReconciler, error) {
                 return nil, err
         }
 
-        //objs := []runtime.Object{}
-
         s.AddKnownTypes(powerv1alpha1.GroupVersion)
 
         cl := fake.NewFakeClient(objs...)
@@ -66,7 +64,6 @@ func createPP(objs []runtime.Object) (*PowerProfileReconciler, error) {
         appqosCl := appqos.NewDefaultAppQoSClient()
 
         r := &PowerProfileReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
-        //r := &controllers.PowerProfileReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
 
         return r, nil
 }
