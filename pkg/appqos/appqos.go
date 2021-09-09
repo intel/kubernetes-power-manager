@@ -110,13 +110,13 @@ func (ac *AppQoSClient) GetSharedPool(address string) (*Pool, error) {
 	}
 
 	// Search for the Shared pool first
-	for _, pool := range allPools {
-		if *pool.Name == SharedPoolName {
-			return &pool, nil
-		}
+	for i := range allPools {
+		if *allPools[i].Name == SharedPoolName {
+                        return &allPools[i], nil
+                }
 
-		if *pool.Name == DefaultPoolName {
-			defaultPool = &pool
+		if *allPools[i].Name == DefaultPoolName {
+			defaultPool = &allPools[i]
 		}
 	}
 

@@ -186,6 +186,18 @@ func CPUListDifference(cpusToRemove []int, cpuList []int) []int {
 	return updatedList
 }
 
+func CommonCPUs(cpuListOne []int, cpuListTwo []int) []int {
+	commonCPUs := make([]int, 0)
+
+	for _, cpu := range cpuListTwo {
+		if CPUInCPUList(cpu, cpuListOne) {
+			commonCPUs = append(commonCPUs, cpu)
+		}
+	}
+	
+	return commonCPUs
+}
+
 func CPUInCPUList(cpu int, cpuList []int) bool {
 	for _, cpuListID := range cpuList {
 		if cpuListID == cpu {
