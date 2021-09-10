@@ -68,7 +68,7 @@ type PowerWorkloadStatus struct {
 	SharedCores []int `json:"sharedCores,omitempty"`
 
 	// The Node that this Shared PowerWorkload is associated with
-	Node string
+	Node string `json:"node:,omitempty"`
 }
 
 // +kubebuilder:object:root=true

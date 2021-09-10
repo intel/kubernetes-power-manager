@@ -84,6 +84,7 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				}
 
 				for _, profile := range powerProfiles.Items {
+					/*
 					actualProfile := &powerv1alpha1.PowerProfile{}
 					err = r.Client.Get(context.TODO(), client.ObjectKey{
 						Name: profile.Name,
@@ -92,9 +93,60 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 					if err != nil {
 						return ctrl.Result{}, err
 					}
+					*/
 
-					err = r.Client.Delete(context.TODO(), actualProfile)
+					//err = r.Client.Delete(context.TODO(), actualProfile)
+					err = r.Client.Delete(context.TODO(), &profile)
 					if err != nil {
+						return ctrl.Result{}, err
+					}
+				}
+
+				// Make sure all PowerWorkloads have been removed
+				powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
+				err = r.Client.List(context.TODO(), powerWorkloads)
+				if err != nil {
+					logger.Error(err, "error retrieving PowerWorkloads")
+					return ctrl.Result{}, err
+				}
+
+				for _, workload := range powerWorkloads.Items {
+					err = r.Client.Delete(context.TODO(), &workload)
+					if err != nil {
+						logger.Error(err, "error deleting PowerWorkload")
+						return ctrl.Result{}, err
+					}
+				}
+
+				powerNodes := &powerv1alpha1.PowerNodeList{}
+				err = r.Client.List(context.TODO(), powerNodes)
+				if err != nil {
+					logger.Error(err, "error retrieving PowerNodes")
+					return ctrl.Result{}, err
+				}
+
+				for _, node := range powerNodes.Items {
+					err = r.Client.Delete(context.TODO(), &node)
+					if err != nil {
+						logger.Error(err, "error deleting PowerNode")
+						return ctrl.Result{}, err
+					}
+				}
+
+				daemonSet := &appsv1.DaemonSet{}
+				err = r.Client.Get(context.TODO(), client.ObjectKey{
+					Name: NodeAgentDSName,
+					Namespace: req.NamespacedName.Namespace,
+				}, daemonSet)
+				if err != nil {
+					if !errors.IsNotFound(err) {
+						logger.Error(err, "error retrieving Power Node Agent DaemonSet")
+						return ctrl.Result{}, err
+					}
+				} else {
+					err = r.Client.Delete(context.TODO(), daemonSet)
+					if err != nil {
+						logger.Error(err, "error deleting Power Node Agent Daemonset")
 						return ctrl.Result{}, err
 					}
 				}
@@ -244,23 +296,28 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 func (r *PowerConfigReconciler) createDaemonSetIfNotPresent(powerConfig *powerv1alpha1.PowerConfig, path string) error {
 	logger := r.Log.WithName("createDaemonSetIfNotPresent")
 
-	daemonSet, err := newDaemonSet(path)
-	if err != nil {
-		logger.Error(err, "Error creating DaemonSet")
-		return err
-	}
-	if len(powerConfig.Spec.PowerNodeSelector) != 0 {
-		daemonSet.Spec.Template.Spec.NodeSelector = powerConfig.Spec.PowerNodeSelector
-	}
+	daemonSet := &appsv1.DaemonSet{}
+	var err error
 
 	err = r.Client.Get(context.TODO(), client.ObjectKey{
-		Namespace: daemonSet.GetObjectMeta().GetNamespace(),
-		Name:      daemonSet.GetObjectMeta().GetName(),
+		//Namespace: daemonSet.GetObjectMeta().GetNamespace(),
+		//Name:      daemonSet.GetObjectMeta().GetName(),
+		Name: NodeAgentDSName,
+		Namespace: powerConfig.Namespace,
 	}, daemonSet)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			daemonSet, err = newDaemonSet(path)
+			if err != nil {
+				logger.Error(err, "Error creating DaemonSet")
+				return err
+			}
+			if len(powerConfig.Spec.PowerNodeSelector) != 0 {
+				daemonSet.Spec.Template.Spec.NodeSelector = powerConfig.Spec.PowerNodeSelector
+			}
 			err = r.Client.Create(context.TODO(), daemonSet)
 			if err != nil {
+				return errors.NewServiceUnavailable("here for some reason")
 				logger.Error(err, "Error creating DaemonSet")
 				return err
 			}
