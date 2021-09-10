@@ -42,14 +42,8 @@ spec:
         - mountPath: /sys/fs
           name: cgroup
           mountPropagation: HostToContainer
-        - mountPath: /etc/certs
-          name: certs
-          mountPropagation: HostToContainer
       terminationGracePeriodSeconds: 10
       volumes:
       - name: cgroup
         hostPath:
           path: /sys/fs
-      - name: certs
-        hostPath:
-          path: /etc/certs

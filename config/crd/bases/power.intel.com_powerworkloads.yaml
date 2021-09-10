@@ -105,6 +105,9 @@ spec:
         status:
           description: PowerWorkloadStatus defines the observed state of PowerWorkload
           properties:
+            'node:':
+              description: The Node that this Shared PowerWorkload is associated with
+              type: string
             sharedCores:
               description: Shared Cores is the Core List that represents the Shared
                 Cores on the node, only used by a Shared PowerWorkload

@@ -7,7 +7,6 @@ spec:
   selector:
     matchLabels:
       name: power-node-agent-pod
-  replicas: 1
   template:
     metadata:
       labels:
@@ -16,10 +15,10 @@ spec:
       containers:
         - image: 'intel-power-node-agent:latest'
           imagePullPolicy: IfNotPresent
-          #securityContext:
-          #  allowPrivilegeEscalation: false
-          #  capabilities:
-          #    drop: ["ALL"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           name: power-node-agent
           env:
             - name: NODE_NAME
@@ -52,7 +51,7 @@ spec:
           - mountPath: /appqos_workspace/appqos/ca
             name: appqoscerts
             readOnly: true
-          - mountPath: /dev
+          - mountPath: /dev/cpu/0
             name: dev
             readOnly: true
           securityContext:
@@ -72,4 +71,4 @@ spec:
             path: /var/lib/kubelet/pod-resources
         - name: dev
           hostPath:
-            path: /dev
+            path: /dev/cpu/0

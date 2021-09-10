@@ -20,14 +20,11 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager 
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-##FROM gcr.io/distroless/static:nonroot
 FROM clearlinux:latest
 WORKDIR /
 COPY --from=builder /workspace/manager .
 COPY build/manifests/ /power-manifests/
-#RUN swupd bundle-add curl
 #USER nonroot:nonroot
+USER 1001
 
 ENTRYPOINT ["/manager"]
-
-USER 1001
