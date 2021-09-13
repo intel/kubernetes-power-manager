@@ -25,13 +25,13 @@ import (
 
 type NodeInfo struct {
 	// The name of the node associated with these containers and CPUs
-	Name   string `json:"name,omitempty"`
+	Name string `json:"name,omitempty"`
 
 	// The containers that are utilizing this workload
 	Containers []Container `json:"containers,omitempty"`
 
 	// All of the CPUs accross each container
-	CpuIds []int  `json:"cpuIds,omitempty"`
+	CpuIds []int `json:"cpuIds,omitempty"`
 }
 
 // PowerWorkloadSpec defines the desired state of PowerWorkload

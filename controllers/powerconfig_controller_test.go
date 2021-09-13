@@ -7,66 +7,66 @@ import (
 
 	"testing"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1 "k8s.io/api/core/v1"
-	appsv1 "k8s.io/api/apps/v1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	PowerConfigName = "power-config"
+	PowerConfigName      = "power-config"
 	PowerConfigNamespace = "default"
 )
 
 func createPowerConfigReconcilerObject(objs []runtime.Object) (*PowerConfigReconciler, error) {
 	s := scheme.Scheme
 
-        if err := powerv1alpha1.AddToScheme(s); err != nil {
-                return nil, err
-        }
+	if err := powerv1alpha1.AddToScheme(s); err != nil {
+		return nil, err
+	}
 
 	s.AddKnownTypes(powerv1alpha1.GroupVersion)
 
-        cl := fake.NewFakeClient(objs...)
+	cl := fake.NewFakeClient(objs...)
 
-        powerNodeData := &state.PowerNodeData{
-                PowerNodeList: []string{},
-        }
+	powerNodeData := &state.PowerNodeData{
+		PowerNodeList: []string{},
+	}
 
-        r := &PowerConfigReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerConfig"), Scheme: s, State: powerNodeData}
+	r := &PowerConfigReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerConfig"), Scheme: s, State: powerNodeData}
 
 	return r, nil
 }
 
 func TestNumberOfConfigsGreaterThanOne(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		secondConfigName string
-		powerConfigs *powerv1alpha1.PowerConfigList
-		nodeList *corev1.NodeList
-		powerProfiles *powerv1alpha1.PowerProfileList
-		expectedPowerConfigName string
-		expectedNumberOfNodes int
+	tcases := []struct {
+		testCase                      string
+		secondConfigName              string
+		powerConfigs                  *powerv1alpha1.PowerConfigList
+		nodeList                      *corev1.NodeList
+		powerProfiles                 *powerv1alpha1.PowerProfileList
+		expectedPowerConfigName       string
+		expectedNumberOfNodes         int
 		expectedNumberOfPowerProfiles int
-		expectedPowerProfiles []string
+		expectedPowerProfiles         []string
 	}{
 		{
-			testCase: "Test Case 1",
+			testCase:         "Test Case 1",
 			secondConfigName: "power-config2",
 			powerConfigs: &powerv1alpha1.PowerConfigList{
 				Items: []powerv1alpha1.PowerConfig{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "power-config",
+							Name:      "power-config",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerConfigSpec{
@@ -85,7 +85,7 @@ func TestNumberOfConfigsGreaterThanOne(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "power-config2",
+							Name:      "power-config2",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerConfigSpec{
@@ -106,18 +106,18 @@ func TestNumberOfConfigsGreaterThanOne(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "example-node1",
 							Labels: map[string]string{
-								"example-node": "true",
+								"example-node":    "true",
 								"incorrect-label": "true",
 							},
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "example-node2",
-                                                        Labels: map[string]string{
-                                                                "incorrect-label": "true",
-                                                        },
-                                                },
+							Name: "example-node2",
+							Labels: map[string]string{
+								"incorrect-label": "true",
+							},
+						},
 					},
 				},
 			},
@@ -125,18 +125,18 @@ func TestNumberOfConfigsGreaterThanOne(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance",
+							Name:      "performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "performance",
-							Epp: "performance",
+							Epp:  "performance",
 						},
 					},
 				},
 			},
-			expectedPowerConfigName: "power-config",
-			expectedNumberOfNodes: 1,
+			expectedPowerConfigName:       "power-config",
+			expectedNumberOfNodes:         1,
 			expectedNumberOfPowerProfiles: 1,
 			expectedPowerProfiles: []string{
 				"performance",
@@ -166,7 +166,7 @@ func TestNumberOfConfigsGreaterThanOne(t *testing.T) {
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name: tc.secondConfigName,
+				Name:      tc.secondConfigName,
 				Namespace: PowerConfigNamespace,
 			},
 		}
@@ -181,7 +181,7 @@ func TestNumberOfConfigsGreaterThanOne(t *testing.T) {
 		err = r.Client.List(context.TODO(), powerConfigs)
 		if err != nil {
 			t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error retrieving PowerConfig list object", tc.testCase))
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerConfig list object", tc.testCase))
 		}
 
 		if len(powerConfigs.Items) != 1 {
@@ -190,7 +190,7 @@ func TestNumberOfConfigsGreaterThanOne(t *testing.T) {
 
 		powerConfig := &powerv1alpha1.PowerConfig{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: PowerConfigName,
+			Name:      PowerConfigName,
 			Namespace: PowerConfigNamespace,
 		}, powerConfig)
 		if err != nil {
@@ -220,7 +220,7 @@ func TestNumberOfConfigsGreaterThanOne(t *testing.T) {
 		for _, profileName := range tc.expectedPowerProfiles {
 			profile := &powerv1alpha1.PowerProfile{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name: profileName,
+				Name:      profileName,
 				Namespace: PowerConfigNamespace,
 			}, profile)
 			if err != nil {
@@ -236,23 +236,23 @@ func TestNumberOfConfigsGreaterThanOne(t *testing.T) {
 }
 
 func TestPowerConfigCreation(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		powerConfig *powerv1alpha1.PowerConfig
-		nodeList *corev1.NodeList
-		expectedNumberOfNodes int
-		expectedNumberOfPowerNodes int
-		expectedPowerNodes []string
+	tcases := []struct {
+		testCase                      string
+		powerConfig                   *powerv1alpha1.PowerConfig
+		nodeList                      *corev1.NodeList
+		expectedNumberOfNodes         int
+		expectedNumberOfPowerNodes    int
+		expectedPowerNodes            []string
 		expectedNumberOfPowerProfiles int
-		expectedPowerProfiles []string
-		expectedDaemonSetToBeCreated bool
+		expectedPowerProfiles         []string
+		expectedDaemonSetToBeCreated  bool
 		expectedDaemonSetNodeSelector map[string]string
 	}{
 		{
 			testCase: "Test Case 1",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -276,7 +276,7 @@ func TestPowerConfigCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedNumberOfNodes: 1,
+			expectedNumberOfNodes:      1,
 			expectedNumberOfPowerNodes: 1,
 			expectedPowerNodes: []string{
 				"example-node1",
@@ -293,7 +293,7 @@ func TestPowerConfigCreation(t *testing.T) {
 			testCase: "Test Case 2",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -325,7 +325,7 @@ func TestPowerConfigCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedNumberOfNodes: 1,
+			expectedNumberOfNodes:      1,
 			expectedNumberOfPowerNodes: 1,
 			expectedPowerNodes: []string{
 				"example-node1",
@@ -342,7 +342,7 @@ func TestPowerConfigCreation(t *testing.T) {
 			testCase: "Test Case 3",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -374,7 +374,7 @@ func TestPowerConfigCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedNumberOfNodes: 2,
+			expectedNumberOfNodes:      2,
 			expectedNumberOfPowerNodes: 2,
 			expectedPowerNodes: []string{
 				"example-node1",
@@ -392,7 +392,7 @@ func TestPowerConfigCreation(t *testing.T) {
 			testCase: "Test Case 4",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -417,7 +417,7 @@ func TestPowerConfigCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedNumberOfNodes: 1,
+			expectedNumberOfNodes:      1,
 			expectedNumberOfPowerNodes: 1,
 			expectedPowerNodes: []string{
 				"example-node1",
@@ -435,7 +435,7 @@ func TestPowerConfigCreation(t *testing.T) {
 			testCase: "Test Case 5",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -461,7 +461,7 @@ func TestPowerConfigCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedNumberOfNodes: 1,
+			expectedNumberOfNodes:      1,
 			expectedNumberOfPowerNodes: 1,
 			expectedPowerNodes: []string{
 				"example-node1",
@@ -480,7 +480,7 @@ func TestPowerConfigCreation(t *testing.T) {
 			testCase: "Test Case 6",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -513,7 +513,7 @@ func TestPowerConfigCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedNumberOfNodes: 2,
+			expectedNumberOfNodes:      2,
 			expectedNumberOfPowerNodes: 2,
 			expectedPowerNodes: []string{
 				"example-node1",
@@ -532,7 +532,7 @@ func TestPowerConfigCreation(t *testing.T) {
 			testCase: "Test Case 7",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -566,7 +566,7 @@ func TestPowerConfigCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedNumberOfNodes: 2,
+			expectedNumberOfNodes:      2,
 			expectedNumberOfPowerNodes: 2,
 			expectedPowerNodes: []string{
 				"example-node1",
@@ -586,7 +586,7 @@ func TestPowerConfigCreation(t *testing.T) {
 			testCase: "Test Case 8",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -626,7 +626,7 @@ func TestPowerConfigCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedNumberOfNodes: 3,
+			expectedNumberOfNodes:      3,
 			expectedNumberOfPowerNodes: 3,
 			expectedPowerNodes: []string{
 				"example-node1",
@@ -660,7 +660,7 @@ func TestPowerConfigCreation(t *testing.T) {
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name: PowerConfigName,
+				Name:      PowerConfigName,
 				Namespace: PowerConfigNamespace,
 			},
 		}
@@ -673,7 +673,7 @@ func TestPowerConfigCreation(t *testing.T) {
 
 		powerConfig := &powerv1alpha1.PowerConfig{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: PowerConfigName,
+			Name:      PowerConfigName,
 			Namespace: PowerConfigNamespace,
 		}, powerConfig)
 		if err != nil {
@@ -699,7 +699,7 @@ func TestPowerConfigCreation(t *testing.T) {
 		for _, powerNodeName := range tc.expectedPowerNodes {
 			powerNode := &powerv1alpha1.PowerNode{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name: powerNodeName,
+				Name:      powerNodeName,
 				Namespace: PowerConfigNamespace,
 			}, powerNode)
 			if err != nil {
@@ -726,7 +726,7 @@ func TestPowerConfigCreation(t *testing.T) {
 		for _, powerProfileName := range tc.expectedPowerProfiles {
 			powerProfile := &powerv1alpha1.PowerProfile{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name: powerProfileName,
+				Name:      powerProfileName,
 				Namespace: PowerConfigNamespace,
 			}, powerProfile)
 			if err != nil {
@@ -741,7 +741,7 @@ func TestPowerConfigCreation(t *testing.T) {
 
 		daemonSet := &appsv1.DaemonSet{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: NodeAgentDSName,
+			Name:      NodeAgentDSName,
 			Namespace: PowerConfigNamespace,
 		}, daemonSet)
 		if err != nil {
@@ -760,11 +760,11 @@ func TestPowerConfigCreation(t *testing.T) {
 }
 
 func TestUnusedProfileRemoval(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		powerConfig *powerv1alpha1.PowerConfig
-		nodeList *corev1.NodeList
-		powerProfiles *powerv1alpha1.PowerProfileList
+	tcases := []struct {
+		testCase                      string
+		powerConfig                   *powerv1alpha1.PowerConfig
+		nodeList                      *corev1.NodeList
+		powerProfiles                 *powerv1alpha1.PowerProfileList
 		expectedNumberOfPowerProfiles int
 		expectedPowerProfileNotExists map[string]bool
 	}{
@@ -772,7 +772,7 @@ func TestUnusedProfileRemoval(t *testing.T) {
 			testCase: "Test Case 1",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -800,19 +800,19 @@ func TestUnusedProfileRemoval(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-performance",
+							Name:      "balance-performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "balance-performance",
-							Epp: "balance_performance",
+							Epp:  "balance_performance",
 						},
 					},
 				},
 			},
 			expectedNumberOfPowerProfiles: 1,
 			expectedPowerProfileNotExists: map[string]bool{
-				"performance": false,
+				"performance":         false,
 				"balance-performance": true,
 			},
 		},
@@ -820,7 +820,7 @@ func TestUnusedProfileRemoval(t *testing.T) {
 			testCase: "Test Case 2",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -849,28 +849,28 @@ func TestUnusedProfileRemoval(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-power",
+							Name:      "balance-power",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "balance-power",
-							Epp: "balance_power",
+							Epp:  "balance_power",
 						},
 					},
 				},
 			},
 			expectedNumberOfPowerProfiles: 2,
 			expectedPowerProfileNotExists: map[string]bool{
-				"performance": false,
+				"performance":         false,
 				"balance-performance": false,
-				"balance-power": true,
+				"balance-power":       true,
 			},
 		},
 		{
 			testCase: "Test Case 3",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -899,28 +899,28 @@ func TestUnusedProfileRemoval(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance",
+							Name:      "performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "performance",
-							Epp: "performance",
+							Epp:  "performance",
 						},
 					},
 				},
 			},
 			expectedNumberOfPowerProfiles: 2,
 			expectedPowerProfileNotExists: map[string]bool{
-				"performance": true,
+				"performance":         true,
 				"balance-performance": false,
-				"balance-power": false,
+				"balance-power":       false,
 			},
 		},
 		{
 			testCase: "Test Case 4",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -950,22 +950,22 @@ func TestUnusedProfileRemoval(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "power",
+							Name:      "power",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "power",
-							Epp: "power",
+							Epp:  "power",
 						},
 					},
 				},
 			},
 			expectedNumberOfPowerProfiles: 3,
 			expectedPowerProfileNotExists: map[string]bool{
-				"performance": false,
+				"performance":         false,
 				"balance-performance": false,
-				"balance-power": false,
-				"power": true,
+				"balance-power":       false,
+				"power":               true,
 			},
 		},
 	}
@@ -980,23 +980,23 @@ func TestUnusedProfileRemoval(t *testing.T) {
 		}
 
 		r, err := createPowerConfigReconcilerObject(objs)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
 
-                req := reconcile.Request{
-                        NamespacedName: client.ObjectKey{
-                                Name: PowerConfigName,
-                                Namespace: PowerConfigNamespace,
-                        },
-                }
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      PowerConfigName,
+				Namespace: PowerConfigNamespace,
+			},
+		}
 
-                _, err = r.Reconcile(req)
-                if err != nil {
-                        t.Errorf("Error: %v", err)
-                        t.Fatal("error reconciling PowerConfig object")
-                }
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+			t.Fatal("error reconciling PowerConfig object")
+		}
 
 		powerProfiles := &powerv1alpha1.PowerProfileList{}
 		err = r.Client.List(context.TODO(), powerProfiles)
@@ -1012,7 +1012,7 @@ func TestUnusedProfileRemoval(t *testing.T) {
 		for powerProfileName, exists := range tc.expectedPowerProfileNotExists {
 			profile := &powerv1alpha1.PowerProfile{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name: powerProfileName,
+				Name:      powerProfileName,
 				Namespace: PowerConfigNamespace,
 			}, profile)
 			if errors.IsNotFound(err) != exists {
@@ -1028,19 +1028,19 @@ func TestUnusedProfileRemoval(t *testing.T) {
 }
 
 func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		powerConfig *powerv1alpha1.PowerConfig
-		nodeList *corev1.NodeList
-		powerProfiles *powerv1alpha1.PowerProfileList
+	tcases := []struct {
+		testCase                      string
+		powerConfig                   *powerv1alpha1.PowerConfig
+		nodeList                      *corev1.NodeList
+		powerProfiles                 *powerv1alpha1.PowerProfileList
 		expectedNumberOfPowerProfiles int
-		expectedProfiles []string
+		expectedProfiles              []string
 	}{
 		{
 			testCase: "Test Case 1",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -1068,12 +1068,12 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance",
+							Name:      "performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "performance",
-							Epp: "performance",
+							Epp:  "performance",
 						},
 					},
 				},
@@ -1087,7 +1087,7 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 			testCase: "Test Case 2",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -1116,12 +1116,12 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance",
+							Name:      "performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "performance",
-							Epp: "performance",
+							Epp:  "performance",
 						},
 					},
 				},
@@ -1136,7 +1136,7 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 			testCase: "Test Case 3",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -1165,22 +1165,22 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance",
+							Name:      "performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "performance",
-							Epp: "performance",
+							Epp:  "performance",
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-performance",
+							Name:      "balance-performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "balance-performance",
-							Epp: "balance-performance",
+							Epp:  "balance-performance",
 						},
 					},
 				},
@@ -1195,7 +1195,7 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 			testCase: "Test Case 4",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -1225,32 +1225,32 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance",
+							Name:      "performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "performance",
-							Epp: "performance",
+							Epp:  "performance",
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-performance",
+							Name:      "balance-performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "balance-performance",
-							Epp: "balance-performance",
+							Epp:  "balance-performance",
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-power",
+							Name:      "balance-power",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "balance-power",
-							Epp: "balance-power",
+							Epp:  "balance-power",
 						},
 					},
 				},
@@ -1266,7 +1266,7 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 			testCase: "Test Case 5",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -1296,42 +1296,42 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance",
+							Name:      "performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "performance",
-							Epp: "performance",
+							Epp:  "performance",
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-performance",
+							Name:      "balance-performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "balance-performance",
-							Epp: "balance-performance",
+							Epp:  "balance-performance",
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-power",
+							Name:      "balance-power",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "balance-power",
-							Epp: "balance-power",
+							Epp:  "balance-power",
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "power",
+							Name:      "power",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "power",
-							Epp: "power",
+							Epp:  "power",
 						},
 					},
 				},
@@ -1358,23 +1358,23 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 		}
 
 		r, err := createPowerConfigReconcilerObject(objs)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
 
-                req := reconcile.Request{
-                        NamespacedName: client.ObjectKey{
-                                Name: PowerConfigName,
-                                Namespace: PowerConfigNamespace,
-                        },
-                }
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      PowerConfigName,
+				Namespace: PowerConfigNamespace,
+			},
+		}
 
-                _, err = r.Reconcile(req)
-                if err != nil {
-                        t.Errorf("Error: %v", err)
-                        t.Fatal("error reconciling PowerConfig object")
-                }
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+			t.Fatal("error reconciling PowerConfig object")
+		}
 
 		powerProfiles := &powerv1alpha1.PowerProfileList{}
 		err = r.Client.List(context.TODO(), powerProfiles)
@@ -1390,7 +1390,7 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 		for _, powerProfileName := range tc.expectedProfiles {
 			powerProfile := &powerv1alpha1.PowerProfile{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name: powerProfileName,
+				Name:      powerProfileName,
 				Namespace: PowerConfigNamespace,
 			}, powerProfile)
 			if err != nil {
@@ -1406,23 +1406,23 @@ func TestPowerConfigCreatedProfilesAlreadyExist(t *testing.T) {
 }
 
 func TestPowerConfigDeletion(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		powerConfig *powerv1alpha1.PowerConfig
-		powerProfiles *powerv1alpha1.PowerProfileList
-		powerWorkloads *powerv1alpha1.PowerWorkloadList
-		powerNodes *powerv1alpha1.PowerNodeList
-		nodeList *corev1.NodeList
-		daemonSet *appsv1.DaemonSet
-		expectedNumberOfPowerProfiles int
-		expectedNumberOfPowerNodes int
+	tcases := []struct {
+		testCase                       string
+		powerConfig                    *powerv1alpha1.PowerConfig
+		powerProfiles                  *powerv1alpha1.PowerProfileList
+		powerWorkloads                 *powerv1alpha1.PowerWorkloadList
+		powerNodes                     *powerv1alpha1.PowerNodeList
+		nodeList                       *corev1.NodeList
+		daemonSet                      *appsv1.DaemonSet
+		expectedNumberOfPowerProfiles  int
+		expectedNumberOfPowerNodes     int
 		expectedNumberOfPowerWorkloads int
 	}{
 		{
 			testCase: "Test Case 1",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -1443,24 +1443,24 @@ func TestPowerConfigDeletion(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance",
+							Name:      "performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "performance",
-							Epp: "performance",
+							Epp:  "performance",
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1",
+							Name:      "shared-example-node1",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "shared-example-node1",
-							Max: 1500,
-							Min: 1100,
-							Epp: "power",
+							Max:  1500,
+							Min:  1100,
+							Epp:  "power",
 						},
 					},
 				},
@@ -1469,7 +1469,7 @@ func TestPowerConfigDeletion(t *testing.T) {
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerConfigNamespace,
 						},
 					},
@@ -1479,7 +1479,7 @@ func TestPowerConfigDeletion(t *testing.T) {
 				Items: []powerv1alpha1.PowerNode{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node1",
+							Name:      "example-node1",
 							Namespace: PowerConfigNamespace,
 						},
 					},
@@ -1499,19 +1499,19 @@ func TestPowerConfigDeletion(t *testing.T) {
 			},
 			daemonSet: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: NodeAgentDSName,
+					Name:      NodeAgentDSName,
 					Namespace: PowerConfigNamespace,
 				},
 			},
-			expectedNumberOfPowerProfiles: 0,
-        	        expectedNumberOfPowerNodes: 0,
-	                expectedNumberOfPowerWorkloads: 0,
+			expectedNumberOfPowerProfiles:  0,
+			expectedNumberOfPowerNodes:     0,
+			expectedNumberOfPowerWorkloads: 0,
 		},
 		{
 			testCase: "Test Case 2",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -1532,53 +1532,53 @@ func TestPowerConfigDeletion(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance",
+							Name:      "performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "performance",
-							Epp: "performance",
+							Epp:  "performance",
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1",
+							Name:      "shared-example-node1",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "shared-example-node1",
-							Max: 1500,
-							Min: 1100,
-							Epp: "power",
+							Max:  1500,
+							Min:  1100,
+							Epp:  "power",
 						},
 					},
 					{
-                                                ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "performance-example-node1",
-                                                        Namespace: PowerConfigNamespace,
-                                                },
-                                                Spec: powerv1alpha1.PowerProfileSpec{
-                                                        Name: "performance-example-node1",
-							Max: 3700,
-							Min: 3400,
-                                                        Epp: "performance",
-                                                },
-                                        },
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3700,
+							Min:  3400,
+							Epp:  "performance",
+						},
+					},
 				},
 			},
 			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerConfigNamespace,
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "performance-example-node1-workload",
-                                                        Namespace: PowerConfigNamespace,
-                                                },
+							Name:      "performance-example-node1-workload",
+							Namespace: PowerConfigNamespace,
+						},
 					},
 				},
 			},
@@ -1586,7 +1586,7 @@ func TestPowerConfigDeletion(t *testing.T) {
 				Items: []powerv1alpha1.PowerNode{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node1",
+							Name:      "example-node1",
 							Namespace: PowerConfigNamespace,
 						},
 					},
@@ -1606,19 +1606,19 @@ func TestPowerConfigDeletion(t *testing.T) {
 			},
 			daemonSet: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: NodeAgentDSName,
+					Name:      NodeAgentDSName,
 					Namespace: PowerConfigNamespace,
 				},
 			},
-			expectedNumberOfPowerProfiles: 0,
-        	        expectedNumberOfPowerNodes: 0,
-	                expectedNumberOfPowerWorkloads: 0,
+			expectedNumberOfPowerProfiles:  0,
+			expectedNumberOfPowerNodes:     0,
+			expectedNumberOfPowerWorkloads: 0,
 		},
 		{
 			testCase: "Test Case 3",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -1640,81 +1640,81 @@ func TestPowerConfigDeletion(t *testing.T) {
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance",
+							Name:      "performance",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "performance",
-							Epp: "performance",
+							Epp:  "performance",
 						},
 					},
-					{
-                                                ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "balance-performance",
-                                                        Namespace: PowerConfigNamespace,
-                                                },
-                                                Spec: powerv1alpha1.PowerProfileSpec{
-                                                        Name: "balance-performance",
-                                                        Epp: "balance-performance",
-                                                },
-                                        },
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1",
+							Name:      "balance-performance",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance",
+							Epp:  "balance-performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "shared-example-node1",
 							Namespace: PowerConfigNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "shared-example-node1",
-							Max: 1500,
-							Min: 1100,
-							Epp: "power",
+							Max:  1500,
+							Min:  1100,
+							Epp:  "power",
 						},
 					},
 					{
-                                                ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "performance-example-node1",
-                                                        Namespace: PowerConfigNamespace,
-                                                },
-                                                Spec: powerv1alpha1.PowerProfileSpec{
-                                                        Name: "performance-example-node1",
-							Max: 3700,
-							Min: 3400,
-                                                        Epp: "performance",
-                                                },
-                                        },
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3700,
+							Min:  3400,
+							Epp:  "performance",
+						},
+					},
 					{
-                                                ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "balance-performance-example-node1",
-                                                        Namespace: PowerConfigNamespace,
-                                                },
-                                                Spec: powerv1alpha1.PowerProfileSpec{
-                                                        Name: "balance-performance-example-node1",
-							Max: 3200,
-							Min: 2800,
-                                                        Epp: "balance-performance",
-                                                },
-                                        },
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "balance-performance-example-node1",
+							Namespace: PowerConfigNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "balance-performance",
+						},
+					},
 				},
 			},
 			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerConfigNamespace,
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "performance-example-node1-workload",
-                                                        Namespace: PowerConfigNamespace,
-                                                },
+							Name:      "performance-example-node1-workload",
+							Namespace: PowerConfigNamespace,
+						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "balance-performance-example-node1-workload",
-                                                        Namespace: PowerConfigNamespace,
-                                                },
+							Name:      "balance-performance-example-node1-workload",
+							Namespace: PowerConfigNamespace,
+						},
 					},
 				},
 			},
@@ -1722,7 +1722,7 @@ func TestPowerConfigDeletion(t *testing.T) {
 				Items: []powerv1alpha1.PowerNode{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "example-node1",
+							Name:      "example-node1",
 							Namespace: PowerConfigNamespace,
 						},
 					},
@@ -1742,13 +1742,13 @@ func TestPowerConfigDeletion(t *testing.T) {
 			},
 			daemonSet: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: NodeAgentDSName,
+					Name:      NodeAgentDSName,
 					Namespace: PowerConfigNamespace,
 				},
 			},
-			expectedNumberOfPowerProfiles: 0,
-        	        expectedNumberOfPowerNodes: 0,
-	                expectedNumberOfPowerWorkloads: 0,
+			expectedNumberOfPowerProfiles:  0,
+			expectedNumberOfPowerNodes:     0,
+			expectedNumberOfPowerWorkloads: 0,
 		},
 	}
 
@@ -1772,10 +1772,10 @@ func TestPowerConfigDeletion(t *testing.T) {
 		objs = append(objs, tc.daemonSet)
 
 		r, err := createPowerConfigReconcilerObject(objs)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
 
 		err = r.Client.Delete(context.TODO(), tc.powerConfig)
 		if err != nil {
@@ -1784,17 +1784,17 @@ func TestPowerConfigDeletion(t *testing.T) {
 		}
 
 		req := reconcile.Request{
-                        NamespacedName: client.ObjectKey{
-                                Name: PowerConfigName,
-                                Namespace: PowerConfigNamespace,
-                        },
-                }
+			NamespacedName: client.ObjectKey{
+				Name:      PowerConfigName,
+				Namespace: PowerConfigNamespace,
+			},
+		}
 
-                _, err = r.Reconcile(req)
-                if err != nil {
-                        t.Errorf("Error: %v", err)
-                        t.Fatal("error reconciling PowerConfig object")
-                }
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+			t.Fatal("error reconciling PowerConfig object")
+		}
 
 		powerProfiles := &powerv1alpha1.PowerProfileList{}
 		err = r.Client.List(context.TODO(), powerProfiles)
@@ -1831,7 +1831,7 @@ func TestPowerConfigDeletion(t *testing.T) {
 
 		daemonSet := &appsv1.DaemonSet{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: NodeAgentDSName,
+			Name:      NodeAgentDSName,
 			Namespace: PowerConfigNamespace,
 		}, daemonSet)
 		if err != nil {
@@ -1846,17 +1846,17 @@ func TestPowerConfigDeletion(t *testing.T) {
 }
 
 func TestPowerConfigNodeSelectorChange(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		powerConfig *powerv1alpha1.PowerConfig
-		nodeList *corev1.NodeList
+	tcases := []struct {
+		testCase        string
+		powerConfig     *powerv1alpha1.PowerConfig
+		nodeList        *corev1.NodeList
 		newNodeSelector map[string]string
 	}{
 		{
 			testCase: "Test Case 1",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -1888,7 +1888,7 @@ func TestPowerConfigNodeSelectorChange(t *testing.T) {
 			testCase: "Test Case 2",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -1914,7 +1914,7 @@ func TestPowerConfigNodeSelectorChange(t *testing.T) {
 			},
 			newNodeSelector: map[string]string{
 				"new-node-selector": "true",
-				"other-label": "true",
+				"other-label":       "true",
 			},
 		},
 	}
@@ -1936,7 +1936,7 @@ func TestPowerConfigNodeSelectorChange(t *testing.T) {
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name: PowerConfigName,
+				Name:      PowerConfigName,
 				Namespace: PowerConfigNamespace,
 			},
 		}
@@ -1949,7 +1949,7 @@ func TestPowerConfigNodeSelectorChange(t *testing.T) {
 
 		powerConfig := &powerv1alpha1.PowerConfig{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: PowerConfigName,
+			Name:      PowerConfigName,
 			Namespace: PowerConfigNamespace,
 		}, powerConfig)
 		if err != nil {
@@ -1965,21 +1965,21 @@ func TestPowerConfigNodeSelectorChange(t *testing.T) {
 		}
 
 		req = reconcile.Request{
-                        NamespacedName: client.ObjectKey{
-                                Name: PowerConfigName,
-                                Namespace: PowerConfigNamespace,
-                        },
-                }
+			NamespacedName: client.ObjectKey{
+				Name:      PowerConfigName,
+				Namespace: PowerConfigNamespace,
+			},
+		}
 
-                _, err = r.Reconcile(req)
-                if err != nil {
-                        t.Errorf("Error: %v", err)
-                        t.Fatal("error reconciling PowerConfig object")
-                }
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+			t.Fatal("error reconciling PowerConfig object")
+		}
 
 		daemonSet := &appsv1.DaemonSet{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: NodeAgentDSName,
+			Name:      NodeAgentDSName,
 			Namespace: PowerConfigNamespace,
 		}, daemonSet)
 		if err != nil {
@@ -1994,18 +1994,18 @@ func TestPowerConfigNodeSelectorChange(t *testing.T) {
 }
 
 func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		powerConfig *powerv1alpha1.PowerConfig
-		daemonSet *appsv1.DaemonSet
-		nodeList *corev1.NodeList
+	tcases := []struct {
+		testCase               string
+		powerConfig            *powerv1alpha1.PowerConfig
+		daemonSet              *appsv1.DaemonSet
+		nodeList               *corev1.NodeList
 		expectedDSNodeSelector map[string]string
 	}{
 		{
 			testCase: "Test Case 1",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -2019,7 +2019,7 @@ func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
 			},
 			daemonSet: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: NodeAgentDSName,
+					Name:      NodeAgentDSName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: appsv1.DaemonSetSpec{
@@ -2049,7 +2049,7 @@ func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
 			testCase: "Test Case 2",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -2063,7 +2063,7 @@ func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
 			},
 			daemonSet: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: NodeAgentDSName,
+					Name:      NodeAgentDSName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: appsv1.DaemonSetSpec{
@@ -2093,12 +2093,12 @@ func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
 			testCase: "Test Case 3",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
 					PowerNodeSelector: map[string]string{
-						"example-node": "true",
+						"example-node":      "true",
 						"new-node-selector": "true",
 					},
 					PowerProfiles: []string{
@@ -2108,7 +2108,7 @@ func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
 			},
 			daemonSet: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: NodeAgentDSName,
+					Name:      NodeAgentDSName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: appsv1.DaemonSetSpec{
@@ -2131,7 +2131,7 @@ func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
 				},
 			},
 			expectedDSNodeSelector: map[string]string{
-				"example-node": "true",
+				"example-node":      "true",
 				"new-node-selector": "true",
 			},
 		},
@@ -2139,7 +2139,7 @@ func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
 			testCase: "Test Case 4",
 			powerConfig: &powerv1alpha1.PowerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: PowerConfigName,
+					Name:      PowerConfigName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: powerv1alpha1.PowerConfigSpec{
@@ -2154,7 +2154,7 @@ func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
 			},
 			daemonSet: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: NodeAgentDSName,
+					Name:      NodeAgentDSName,
 					Namespace: PowerConfigNamespace,
 				},
 				Spec: appsv1.DaemonSetSpec{
@@ -2201,7 +2201,7 @@ func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name: PowerConfigName,
+				Name:      PowerConfigName,
 				Namespace: PowerConfigNamespace,
 			},
 		}
@@ -2214,7 +2214,7 @@ func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
 
 		daemonSet := &appsv1.DaemonSet{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: NodeAgentDSName,
+			Name:      NodeAgentDSName,
 			Namespace: PowerConfigNamespace,
 		}, daemonSet)
 		if err != nil {

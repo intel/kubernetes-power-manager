@@ -23,7 +23,7 @@ const (
 	HttpPrefix  = "http://"
 	HttpsPrefix = "https://"
 
-	SharedPoolName = "Shared"
+	SharedPoolName  = "Shared"
 	DefaultPoolName = "Default"
 )
 
@@ -112,8 +112,8 @@ func (ac *AppQoSClient) GetSharedPool(address string) (*Pool, error) {
 	// Search for the Shared pool first
 	for i := range allPools {
 		if *allPools[i].Name == SharedPoolName {
-                        return &allPools[i], nil
-                }
+			return &allPools[i], nil
+		}
 
 		if *allPools[i].Name == DefaultPoolName {
 			defaultPool = &allPools[i]

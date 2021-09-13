@@ -1,3 +1,4 @@
+//go:build freebsd || linux || darwin
 // +build freebsd linux darwin
 
 /*
@@ -194,7 +195,7 @@ func CommonCPUs(cpuListOne []int, cpuListTwo []int) []int {
 			commonCPUs = append(commonCPUs, cpu)
 		}
 	}
-	
+
 	return commonCPUs
 }
 

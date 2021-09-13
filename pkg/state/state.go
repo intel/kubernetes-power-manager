@@ -5,12 +5,12 @@ import (
 )
 
 type PowerNodeData struct {
-	PowerNodeList      []string
+	PowerNodeList []string
 }
 
 func NewPowerNodeData() *PowerNodeData {
 	return &PowerNodeData{
-		PowerNodeList:      []string{},
+		PowerNodeList: []string{},
 	}
 }
 

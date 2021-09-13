@@ -27,14 +27,22 @@ all: manager
 
 # Run tests
 ENVTEST_ASSETS_DIR = $(shell pwd)/testbin
+#test: generate fmt vet manifests
+#	mkdir -p $(ENVTEST_ASSETS_DIR)
+#	test -f $(ENVTEST_ASSETS_DIR)/setup-envtest.sh || curl -sSLo $(ENVTEST_ASSETS_DIR)/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.6.3/hack/setup-envtest.sh
+#	source $(ENVTEST_ASSETS_DIR)/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test ./... -coverprofile cover.out
 test: generate fmt vet manifests
-	mkdir -p $(ENVTEST_ASSETS_DIR)
-	test -f $(ENVTEST_ASSETS_DIR)/setup-envtest.sh || curl -sSLo $(ENVTEST_ASSETS_DIR)/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.6.3/hack/setup-envtest.sh
-	source $(ENVTEST_ASSETS_DIR)/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test ./... -coverprofile cover.out
+	go test -v ./... -coverprofile cover.out
 
 # Build manager binary
-manager: generate fmt vet
-	go build -o bin/manager main.go
+#manager: generate fmt vet manifests install
+build: generate manifests install
+	go build -ldflags "-s -w" -buildmode=pie -o build/_output/bin/intel-rmd-node-agent cmd/nodeagent/main.go
+	go build -ldflags "-s -w" -buildmode=pie -o build/_output/bin/intel-rmd-operator cmd/manager/main.go
+
+images: generate manifests install
+	docker build -f build/Dockerfile -t intel-power-operator .
+	docker build -f build/Dockerfile.nodeagent -t intel-power-node-agent .
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
@@ -74,13 +82,12 @@ generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 # Build the docker image
-#docker-build: test
 docker-build:
-	docker build -f build/Dockerfile -t operator .
+	docker build -f build/Dockerfile -t intel-power-operator .
 	docker build -f build/Dockerfile.nodeagent -t intel-power-node-agent .
 
 build-controller:
-	docker build -f build/Dockerfile -t operator .
+	docker build -f build/Dockerfile -t intel-power-operator .
 
 build-agent:
 	docker build -f build/Dockerfile.nodeagent -t intel-power-node-agent .

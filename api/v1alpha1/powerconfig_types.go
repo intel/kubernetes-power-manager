@@ -29,13 +29,13 @@ type PowerConfigSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// The version of the image used for the Operator
-	PowerImage        string            `json:"powerImage,omitempty"`
+	PowerImage string `json:"powerImage,omitempty"`
 
 	// The label on the Nodes you the Operator will look for to deploy the Node Agent
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
 
 	// The PowerProfiles that will be created by the Operator
-	PowerProfiles     []string          `json:"powerProfiles,omitempty"`
+	PowerProfiles []string `json:"powerProfiles,omitempty"`
 }
 
 // PowerConfigStatus defines the observed state of PowerConfig

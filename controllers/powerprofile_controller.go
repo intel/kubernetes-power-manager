@@ -19,17 +19,17 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"os"
-	rt "runtime"
 	"io/ioutil"
+	"os"
+	"reflect"
+	rt "runtime"
 	"strconv"
 	"strings"
-	"reflect"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -46,33 +46,33 @@ const (
 var AppQoSClientAddress = "https://localhost:5000"
 
 var extendedResourcePercentage map[string]float64 = map[string]float64{
-        // performance          ===>  priority level 0
-        // balance_performance  ===>  priority level 1
-        // balance_power        ===>  priority level 2
-        // power                ===>  priority level 3
+	// performance          ===>  priority level 0
+	// balance_performance  ===>  priority level 1
+	// balance_power        ===>  priority level 2
+	// power                ===>  priority level 3
 
-        "performance":         .40,
-        "balance-performance": .80,
-        "balance-power":       .90,
-        "power":               1.0,
+	"performance":         .40,
+	"balance-performance": .80,
+	"balance-power":       .90,
+	"power":               1.0,
 }
 
 var basePowerProfileToEppValue map[string]string = map[string]string{
 	// The Kubernetes CRD naming convention doesn't allow underscores
 
-	"performance": "performance",
+	"performance":         "performance",
 	"balance-performance": "balance_performance",
-	"balance-power": "balance_power",
-	"power": "power",
+	"balance-power":       "balance_power",
+	"power":               "power",
 }
 
 var allowedEppValues map[string]struct{} = map[string]struct{}{
 	// Empty structs hold no memory value
 
-	"performance": struct{}{},
+	"performance":         struct{}{},
 	"balance_performance": struct{}{},
-	"balance_power": struct{}{},
-	"power": struct{}{},
+	"balance_power":       struct{}{},
+	"power":               struct{}{},
 }
 
 // PowerProfileReconciler reconciles a PowerProfile object
@@ -106,7 +106,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			workloadName := fmt.Sprintf("%s%s", req.NamespacedName.Name, WorkloadNameSuffix)
 			powerWorkload := &powerv1alpha1.PowerWorkload{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name: workloadName,
+				Name:      workloadName,
 				Namespace: req.NamespacedName.Namespace,
 			}, powerWorkload)
 			if err != nil {
@@ -162,7 +162,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 						actualProfile := &powerv1alpha1.PowerProfile{}
 						err = r.Client.Get(context.TODO(), client.ObjectKey{
-							Name: profileFromList.Name,
+							Name:      profileFromList.Name,
 							Namespace: profileFromList.Namespace,
 						}, actualProfile)
 
@@ -205,26 +205,26 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	profileName := fmt.Sprintf("%s-%s", profile.Spec.Name, nodeName)
 
 	maximumFrequencyByte, err := ioutil.ReadFile(MaxFrequencyFile)
-        if err != nil {
-                logger.Error(err, "error reading maximum frequency from file")
-                return ctrl.Result{}, err
-        }
+	if err != nil {
+		logger.Error(err, "error reading maximum frequency from file")
+		return ctrl.Result{}, err
+	}
 
-        maximumFrequencyString := string(maximumFrequencyByte)
-        maximumFrequency, err := strconv.Atoi(strings.Split(maximumFrequencyString, "\n")[0])
-        if err != nil {
-                logger.Error(err, "error reading maximum frequency value")
-        }
+	maximumFrequencyString := string(maximumFrequencyByte)
+	maximumFrequency, err := strconv.Atoi(strings.Split(maximumFrequencyString, "\n")[0])
+	if err != nil {
+		logger.Error(err, "error reading maximum frequency value")
+	}
 
-        maximumFrequency = maximumFrequency/1000
-        minimumFrequency := maximumFrequency-400
+	maximumFrequency = maximumFrequency / 1000
+	minimumFrequency := maximumFrequency - 400
 
 	// Check to see if the extended PowerProfile has already been created for this Node
 	if profile.Spec.Epp != "power" {
 		profileForNode := &powerv1alpha1.PowerProfile{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Namespace: req.NamespacedName.Namespace,
-			Name: profileName,
+			Name:      profileName,
 		}, profileForNode)
 
 		if err != nil {
@@ -232,15 +232,15 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 				powerProfile := &powerv1alpha1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: req.NamespacedName.Namespace,
-						Name: profileName,
+						Name:      profileName,
 					},
 				}
 
 				powerProfileSpec := &powerv1alpha1.PowerProfileSpec{
 					Name: profileName,
-					Max: maximumFrequency,
-					Min: minimumFrequency,
-					Epp: profile.Spec.Epp,
+					Max:  maximumFrequency,
+					Min:  minimumFrequency,
+					Epp:  profile.Spec.Epp,
 				}
 
 				powerProfile.Spec = *powerProfileSpec
@@ -329,7 +329,7 @@ func (r *PowerProfileReconciler) removeExtendedResources(nodeName string, profil
 		return err
 	}
 
-	newNodeCapacityList := make( map[corev1.ResourceName]resource.Quantity, 0)
+	newNodeCapacityList := make(map[corev1.ResourceName]resource.Quantity, 0)
 	extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
 	for resourceFromNode, numberOfResources := range node.Status.Capacity {
 		if resourceFromNode == extendedResourceName {

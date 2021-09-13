@@ -91,15 +91,15 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.PowerProfileReconciler{
-                Client:       mgr.GetClient(),
-                Log:          ctrl.Log.WithName("controllers").WithName("PowerProfile"),
-                Scheme:       mgr.GetScheme(),
-                AppQoSClient: appQoSClient,
-                //State:        state,
-        }).SetupWithManager(mgr); err != nil {
-                setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
-                os.Exit(1)
-        }
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName("controllers").WithName("PowerProfile"),
+		Scheme:       mgr.GetScheme(),
+		AppQoSClient: appQoSClient,
+		//State:        state,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
+		os.Exit(1)
+	}
 	if err = (&controllers.PowerWorkloadReconciler{
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerWorkload"),
@@ -111,9 +111,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.PowerNodeReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("PowerNode"),
-		Scheme: mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName("controllers").WithName("PowerNode"),
+		Scheme:       mgr.GetScheme(),
 		AppQoSClient: appQoSClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerNode")

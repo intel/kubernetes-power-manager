@@ -55,7 +55,7 @@ type PowerNodeStatus struct {
 
 type PowerNodeCPUState struct {
 	// The CPUs that are currently part of the Shared pool on a Node
-	SharedPool     []int        `json:"sharedPool,omitempty"`
+	SharedPool []int `json:"sharedPool,omitempty"`
 
 	// Pods that are requesting CPUs in the Guaranteed QoS class
 	GuaranteedPods []GuaranteedPod `json:"guaranteedPods,omitempty"`
@@ -63,13 +63,13 @@ type PowerNodeCPUState struct {
 
 type GuaranteedPod struct {
 	// The name of the Node the Pod is running on
-	Node       string      `json:"node,omitempty"`
+	Node string `json:"node,omitempty"`
 
 	// The name of the Pod
-	Name       string      `json:"name,omitempty"`
+	Name string `json:"name,omitempty"`
 
 	// The UID of the Pod
-	UID        string      `json:"uid,omitempty"`
+	UID string `json:"uid,omitempty"`
 
 	// The Containers that are running in the Pod
 	Containers []Container `json:"containers,omitempty"`
@@ -77,19 +77,19 @@ type GuaranteedPod struct {
 
 type Container struct {
 	// The name of the Container
-	Name          string `json:"name,omitempty"`
+	Name string `json:"name,omitempty"`
 
 	// The ID of the Container
-	Id            string `json:"id,omitempty"`
+	Id string `json:"id,omitempty"`
 
 	// The name of the Pod the Container is running on
-	Pod	      string `json:"pod,omitempty"`
+	Pod string `json:"pod,omitempty"`
 
 	// The exclusive CPUs given to this Container
-	ExclusiveCPUs []int  `json:"exclusiveCpus,omitempty"`
+	ExclusiveCPUs []int `json:"exclusiveCpus,omitempty"`
 
 	// The PowerProfile that the Container is utilizing
-	PowerProfile  string `json:"powerProfile,omitempty"`
+	PowerProfile string `json:"powerProfile,omitempty"`
 
 	// The PowerWorkload that the Container is utilizing
 	Workload string `json:"workload,omitempty"`
@@ -97,10 +97,10 @@ type Container struct {
 
 type WorkloadInfo struct {
 	// The name of the PowerWorkload
-	Name         string          `json:"name,omitempty"`
+	Name string `json:"name,omitempty"`
 
 	// The CPUs that are utilizing the PowerWorkload
-	CpuIds        []int           `json:"cores,omitempty"`
+	CpuIds []int `json:"cores,omitempty"`
 }
 
 type SharedPoolInfo struct {

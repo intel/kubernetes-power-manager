@@ -10,7 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/apimachinery/pkg/runtime"

@@ -2,53 +2,53 @@ package controllers
 
 import (
 	"context"
-	"testing"
-	"strings"
-	"strconv"
-	"reflect"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"k8s.io/client-go/kubernetes/scheme"
+	"reflect"
+	"strconv"
+	"strings"
+	"testing"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
+	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 )
 
 const (
-	PowerWorkloadName = "TestPowerWorkload"
+	PowerWorkloadName      = "TestPowerWorkload"
 	PowerWorkloadNamespace = "default"
 )
 
-type AppQoSPool struct{
-	Node string
-	Name string
-	Id int
-	Cores []int
+type AppQoSPool struct {
+	Node         string
+	Name         string
+	Id           int
+	Cores        []int
 	PowerProfile int
 }
 
 type AppQoSPowerProfile struct {
 	Node string
 	Name string
-	Id int
+	Id   int
 }
 
 func createPowerWorkloadReconcilerObject(objs []runtime.Object) (*PowerWorkloadReconciler, error) {
 	s := scheme.Scheme
 
-	if err  := powerv1alpha1.AddToScheme(s); err != nil {
+	if err := powerv1alpha1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 
@@ -68,7 +68,7 @@ func createPowerWorkloadListeners(appqosPools []appqos.Pool, appqosPowerProfiles
 
 	newListener, err := net.Listen("tcp", "127.0.0.1:5000")
 	if err != nil {
-		fmt.Errorf("Failed to create Listener")
+		return nil, fmt.Errorf("Failed to create Listener: %v", err)
 	}
 
 	mux := http.NewServeMux()
@@ -84,7 +84,7 @@ func createPowerWorkloadListeners(appqosPools []appqos.Pool, appqosPowerProfiles
 		} else if r.Method == "DELETE" {
 			path := strings.Split(r.URL.Path, "/")
 			id, _ := strconv.Atoi(path[len(path)-1])
-                        for i, pool := range appqosPools {
+			for i, pool := range appqosPools {
 				if *pool.ID == id {
 					appqosPools = append(appqosPools[:i], appqosPools[i+1:]...)
 				}
@@ -105,9 +105,9 @@ func createPowerWorkloadListeners(appqosPools []appqos.Pool, appqosPowerProfiles
 			}
 		} else if r.Method == "PUT" {
 			b, err := json.Marshal(appqosPowerProfiles)
-                        if err == nil {
-                                fmt.Fprintln(w, string(b[:]))
-                        }
+			if err == nil {
+				fmt.Fprintln(w, string(b[:]))
+			}
 		}
 	}))
 	mux.HandleFunc("/pools", (func(w http.ResponseWriter, r *http.Request) {
@@ -119,15 +119,15 @@ func createPowerWorkloadListeners(appqosPools []appqos.Pool, appqosPowerProfiles
 		} else if r.Method == "POST" {
 			p := appqos.Pool{}
 			_ = json.NewDecoder(r.Body).Decode(&p)
-			newId := len(appqosPools)+1
+			newId := len(appqosPools) + 1
 			p.ID = &newId
 			appqosPools = append(appqosPools, p)
 
 			b, err := json.Marshal("okay")
-                        if err == nil {
-                                w.WriteHeader(http.StatusCreated)
-                                fmt.Fprintln(w, string(b[:]))
-                        }
+			if err == nil {
+				w.WriteHeader(http.StatusCreated)
+				fmt.Fprintln(w, string(b[:]))
+			}
 		}
 	}))
 
@@ -143,28 +143,28 @@ func createPowerWorkloadListeners(appqosPools []appqos.Pool, appqosPowerProfiles
 }
 
 func TestNonSharedWorkloadCreation(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		powerWorkloadNames []string
-		nodeName string
-		powerWorkloads *powerv1alpha1.PowerWorkloadList
-		sharedWorkloadName string
-		appqosPools []AppQoSPool
-		appqosPowerProfiles []AppQoSPowerProfile
-		nodeList *corev1.NodeList
+	tcases := []struct {
+		testCase                      string
+		powerWorkloadNames            []string
+		nodeName                      string
+		powerWorkloads                *powerv1alpha1.PowerWorkloadList
+		sharedWorkloadName            string
+		appqosPools                   []AppQoSPool
+		appqosPowerProfiles           []AppQoSPowerProfile
+		nodeList                      *corev1.NodeList
 		expectedSharedWorkloadCPUList []int
-		expectedDefaultPoolCPUList []int
-		expectedSharedPoolCPUList []int
+		expectedDefaultPoolCPUList    []int
+		expectedSharedPoolCPUList     []int
 	}{
 		{
-			testCase: "Test Case 1",
+			testCase:           "Test Case 1",
 			powerWorkloadNames: []string{"performance-example-node1-workload"},
-			nodeName: "example-node1",
+			nodeName:           "example-node1",
 			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance-example-node1-workload",
+							Name:      "performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -177,14 +177,14 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container1",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											2,
 											3,
 										},
 										PowerProfile: "performance",
-										Workload: "performance-example-node1-workload",
+										Workload:     "performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -197,11 +197,11 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "shared-example-node1-workload",
+							Name:     "shared-example-node1-workload",
 							AllCores: true,
 							PowerNodeSelector: map[string]string{
 								"example-node": "true",
@@ -210,7 +210,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 							PowerProfile: "shared-example-node1",
 						},
 						Status: powerv1alpha1.PowerWorkloadStatus{
-							SharedCores: []int{1,2,3,4,5,6,7,8,9},
+							SharedCores: []int{1, 2, 3, 4, 5, 6, 7, 8, 9},
 						},
 					},
 				},
@@ -218,28 +218,28 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 			sharedWorkloadName: "shared-example-node1-workload",
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
 					Cores: []int{0},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 				{
 					Node: "example-node1",
 					Name: "performance",
-					Id: 2,
+					Id:   2,
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -254,19 +254,19 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedSharedWorkloadCPUList: []int{1,4,5,6,7,8,9},
-			expectedDefaultPoolCPUList: []int{0},
-			expectedSharedPoolCPUList: []int{1,4,5,6,7,8,9},
+			expectedSharedWorkloadCPUList: []int{1, 4, 5, 6, 7, 8, 9},
+			expectedDefaultPoolCPUList:    []int{0},
+			expectedSharedPoolCPUList:     []int{1, 4, 5, 6, 7, 8, 9},
 		},
 		{
-			testCase: "Test Case 2",
+			testCase:           "Test Case 2",
 			powerWorkloadNames: []string{"performance-example-node1-workload"},
-			nodeName: "example-node1",
+			nodeName:           "example-node1",
 			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance-example-node1-workload",
+							Name:      "performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -279,25 +279,25 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container1",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											2,
 											3,
 										},
 										PowerProfile: "performance",
-										Workload: "performance-example-node1-workload",
+										Workload:     "performance-example-node1-workload",
 									},
 									{
 										Name: "example-container2",
-                                                                                Id: "xyz",
-                                                                                Pod: "example-pod",
-                                                                                ExclusiveCPUs: []int{
-                                                                                        4,
-                                                                                        5,
-                                                                                },
-                                                                                PowerProfile: "performance",
-                                                                                Workload: "performance-example-node1-workload",
+										Id:   "xyz",
+										Pod:  "example-pod",
+										ExclusiveCPUs: []int{
+											4,
+											5,
+										},
+										PowerProfile: "performance",
+										Workload:     "performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -312,11 +312,11 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "shared-example-node1-workload",
+							Name:     "shared-example-node1-workload",
 							AllCores: true,
 							PowerNodeSelector: map[string]string{
 								"example-node": "true",
@@ -325,7 +325,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 							PowerProfile: "shared-example-node1",
 						},
 						Status: powerv1alpha1.PowerWorkloadStatus{
-							SharedCores: []int{1,2,3,4,5,6,7,8,9},
+							SharedCores: []int{1, 2, 3, 4, 5, 6, 7, 8, 9},
 						},
 					},
 				},
@@ -333,28 +333,28 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 			sharedWorkloadName: "shared-example-node1-workload",
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
 					Cores: []int{0},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 				{
 					Node: "example-node1",
 					Name: "performance",
-					Id: 2,
+					Id:   2,
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -369,9 +369,9 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedSharedWorkloadCPUList: []int{1,6,7,8,9},
-			expectedDefaultPoolCPUList: []int{0},
-			expectedSharedPoolCPUList: []int{1,6,7,8,9},
+			expectedSharedWorkloadCPUList: []int{1, 6, 7, 8, 9},
+			expectedDefaultPoolCPUList:    []int{0},
+			expectedSharedPoolCPUList:     []int{1, 6, 7, 8, 9},
 		},
 		{
 			testCase: "Test Case 3",
@@ -384,7 +384,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance-example-node1-workload",
+							Name:      "performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -397,25 +397,25 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container1",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											2,
 											3,
 										},
 										PowerProfile: "performance",
-										Workload: "performance-example-node1-workload",
+										Workload:     "performance-example-node1-workload",
 									},
 									{
 										Name: "example-container2",
-                                                                                Id: "xyz",
-                                                                                Pod: "example-pod",
-                                                                                ExclusiveCPUs: []int{
-                                                                                        4,
-                                                                                        5,
-                                                                                },
-                                                                                PowerProfile: "performance",
-                                                                                Workload: "performance-example-node1-workload",
+										Id:   "xyz",
+										Pod:  "example-pod",
+										ExclusiveCPUs: []int{
+											4,
+											5,
+										},
+										PowerProfile: "performance",
+										Workload:     "performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -430,7 +430,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-performance-example-node1-workload",
+							Name:      "balance-performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -443,14 +443,14 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container3",
-										Id: "abcdefg",
-										Pod: "example-pod2",
+										Id:   "abcdefg",
+										Pod:  "example-pod2",
 										ExclusiveCPUs: []int{
 											6,
 											7,
 										},
 										PowerProfile: "balance-performance",
-										Workload: "balance-performance-example-node1-workload",
+										Workload:     "balance-performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -463,11 +463,11 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "shared-example-node1-workload",
+							Name:     "shared-example-node1-workload",
 							AllCores: true,
 							PowerNodeSelector: map[string]string{
 								"example-node": "true",
@@ -476,7 +476,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 							PowerProfile: "shared-example-node1",
 						},
 						Status: powerv1alpha1.PowerWorkloadStatus{
-							SharedCores: []int{1,2,3,4,5,6,7,8,9},
+							SharedCores: []int{1, 2, 3, 4, 5, 6, 7, 8, 9},
 						},
 					},
 				},
@@ -484,33 +484,33 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 			sharedWorkloadName: "shared-example-node1-workload",
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
 					Cores: []int{0},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 				{
 					Node: "example-node1",
 					Name: "performance",
-					Id: 2,
+					Id:   2,
 				},
 				{
 					Node: "example-node1",
 					Name: "balance-performance",
-					Id: 3,
+					Id:   3,
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -525,9 +525,9 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedSharedWorkloadCPUList: []int{1,8,9},
-			expectedDefaultPoolCPUList: []int{0},
-			expectedSharedPoolCPUList: []int{1,8,9},
+			expectedSharedWorkloadCPUList: []int{1, 8, 9},
+			expectedDefaultPoolCPUList:    []int{0},
+			expectedSharedPoolCPUList:     []int{1, 8, 9},
 		},
 		{
 			testCase: "Test Case 4",
@@ -540,7 +540,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance-example-node1-workload",
+							Name:      "performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -553,25 +553,25 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container1",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											2,
 											3,
 										},
 										PowerProfile: "performance",
-										Workload: "performance-example-node1-workload",
+										Workload:     "performance-example-node1-workload",
 									},
 									{
 										Name: "example-container2",
-                                                                                Id: "xyz",
-                                                                                Pod: "example-pod",
-                                                                                ExclusiveCPUs: []int{
-                                                                                        4,
-                                                                                        5,
-                                                                                },
-                                                                                PowerProfile: "performance",
-                                                                                Workload: "performance-example-node1-workload",
+										Id:   "xyz",
+										Pod:  "example-pod",
+										ExclusiveCPUs: []int{
+											4,
+											5,
+										},
+										PowerProfile: "performance",
+										Workload:     "performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -586,7 +586,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-performance-example-node1-workload",
+							Name:      "balance-performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -599,25 +599,25 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container3",
-										Id: "abcdefg",
-										Pod: "example-pod2",
+										Id:   "abcdefg",
+										Pod:  "example-pod2",
 										ExclusiveCPUs: []int{
 											6,
 											7,
 										},
 										PowerProfile: "balance-performance",
-										Workload: "balance-performance-example-node1-workload",
+										Workload:     "balance-performance-example-node1-workload",
 									},
 									{
 										Name: "example-container4",
-										Id: "xyza",
-										Pod: "example-pod2",
+										Id:   "xyza",
+										Pod:  "example-pod2",
 										ExclusiveCPUs: []int{
 											8,
 											9,
 										},
 										PowerProfile: "balance-performance",
-										Workload: "balance-performance-example-node1-workload",
+										Workload:     "balance-performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -632,11 +632,11 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "shared-example-node1-workload",
+							Name:     "shared-example-node1-workload",
 							AllCores: true,
 							PowerNodeSelector: map[string]string{
 								"example-node": "true",
@@ -645,7 +645,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 							PowerProfile: "shared-example-node1",
 						},
 						Status: powerv1alpha1.PowerWorkloadStatus{
-							SharedCores: []int{1,2,3,4,5,6,7,8,9},
+							SharedCores: []int{1, 2, 3, 4, 5, 6, 7, 8, 9},
 						},
 					},
 				},
@@ -653,33 +653,33 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 			sharedWorkloadName: "shared-example-node1-workload",
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
 					Cores: []int{0},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 				{
 					Node: "example-node1",
 					Name: "performance",
-					Id: 2,
+					Id:   2,
 				},
 				{
 					Node: "example-node1",
 					Name: "balance-performance",
-					Id: 3,
+					Id:   3,
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -695,8 +695,8 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 				},
 			},
 			expectedSharedWorkloadCPUList: []int{1},
-			expectedDefaultPoolCPUList: []int{0},
-			expectedSharedPoolCPUList: []int{1},
+			expectedDefaultPoolCPUList:    []int{0},
+			expectedSharedPoolCPUList:     []int{1},
 		},
 		{
 			testCase: "Test Case 5",
@@ -708,7 +708,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance-example-node1-workload",
+							Name:      "performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -721,25 +721,25 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container1",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											3,
 											4,
 										},
 										PowerProfile: "performance",
-										Workload: "performance-example-node1-workload",
+										Workload:     "performance-example-node1-workload",
 									},
 									{
 										Name: "example-container2",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											5,
 											6,
 										},
 										PowerProfile: "performance",
-										Workload: "performance-example-node1-workload",
+										Workload:     "performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -754,11 +754,11 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "shared-example-node1-workload",
+							Name:     "shared-example-node1-workload",
 							AllCores: true,
 							PowerNodeSelector: map[string]string{
 								"example-node": "true",
@@ -767,7 +767,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 							PowerProfile: "shared-example-node1",
 						},
 						Status: powerv1alpha1.PowerWorkloadStatus{
-							SharedCores: []int{1,2,5,6,7,8,9},
+							SharedCores: []int{1, 2, 5, 6, 7, 8, 9},
 						},
 					},
 				},
@@ -775,34 +775,34 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 			sharedWorkloadName: "shared-example-node1-workload",
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
 					Cores: []int{0},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{1,2,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{1, 2, 5, 6, 7, 8, 9},
 				},
 				{
-					Node: "example-node1",
-					Name: "performance-example-node1-workload",
-					Id: 3,
-					Cores: []int{3,4},
+					Node:  "example-node1",
+					Name:  "performance-example-node1-workload",
+					Id:    3,
+					Cores: []int{3, 4},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 				{
 					Node: "example-node1",
 					Name: "performance",
-					Id: 2,
+					Id:   2,
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -817,9 +817,9 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedSharedWorkloadCPUList: []int{1,2,7,8,9},
-			expectedDefaultPoolCPUList: []int{0},
-			expectedSharedPoolCPUList: []int{1,2,7,8,9},
+			expectedSharedWorkloadCPUList: []int{1, 2, 7, 8, 9},
+			expectedDefaultPoolCPUList:    []int{0},
+			expectedSharedPoolCPUList:     []int{1, 2, 7, 8, 9},
 		},
 		{
 			testCase: "Test Case 6",
@@ -832,7 +832,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance-example-node1-workload",
+							Name:      "performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -845,25 +845,25 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container1",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											3,
 											4,
 										},
 										PowerProfile: "performance",
-										Workload: "performance-example-node1-workload",
+										Workload:     "performance-example-node1-workload",
 									},
 									{
 										Name: "example-container2",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											5,
 											6,
 										},
 										PowerProfile: "performance",
-										Workload: "performance-example-node1-workload",
+										Workload:     "performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -878,7 +878,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-performance-example-node1-workload",
+							Name:      "balance-performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -891,14 +891,14 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container3",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											7,
 											8,
 										},
 										PowerProfile: "balance-performance",
-										Workload: "balance-performance-example-node1-workload",
+										Workload:     "balance-performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -911,11 +911,11 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "shared-example-node1-workload",
+							Name:     "shared-example-node1-workload",
 							AllCores: true,
 							PowerNodeSelector: map[string]string{
 								"example-node": "true",
@@ -924,7 +924,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 							PowerProfile: "shared-example-node1",
 						},
 						Status: powerv1alpha1.PowerWorkloadStatus{
-							SharedCores: []int{1,2,5,6,7,8,9},
+							SharedCores: []int{1, 2, 5, 6, 7, 8, 9},
 						},
 					},
 				},
@@ -932,39 +932,39 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 			sharedWorkloadName: "shared-example-node1-workload",
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
 					Cores: []int{0},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{1,2,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{1, 2, 5, 6, 7, 8, 9},
 				},
 				{
-					Node: "example-node1",
-					Name: "performance-example-node1-workload",
-					Id: 3,
-					Cores: []int{3,4},
+					Node:  "example-node1",
+					Name:  "performance-example-node1-workload",
+					Id:    3,
+					Cores: []int{3, 4},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 				{
 					Node: "example-node1",
 					Name: "performance",
-					Id: 2,
+					Id:   2,
 				},
 				{
 					Node: "example-node1",
 					Name: "balance-performance",
-					Id: 3,
+					Id:   3,
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -979,9 +979,9 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					},
 				},
 			},
-			expectedSharedWorkloadCPUList: []int{1,2,9},
-			expectedDefaultPoolCPUList: []int{0},
-			expectedSharedPoolCPUList: []int{1,2,9},
+			expectedSharedWorkloadCPUList: []int{1, 2, 9},
+			expectedDefaultPoolCPUList:    []int{0},
+			expectedSharedPoolCPUList:     []int{1, 2, 9},
 		},
 	}
 
@@ -992,8 +992,8 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 		appqosPools := make([]appqos.Pool, 0)
 		for i := range tc.appqosPools {
 			pool := appqos.Pool{
-				Name: &tc.appqosPools[i].Name,
-				ID: &tc.appqosPools[i].Id,
+				Name:  &tc.appqosPools[i].Name,
+				ID:    &tc.appqosPools[i].Id,
 				Cores: &tc.appqosPools[i].Cores,
 			}
 			appqosPools = append(appqosPools, pool)
@@ -1003,7 +1003,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 		for i := range tc.appqosPowerProfiles {
 			profile := appqos.PowerProfile{
 				Name: &tc.appqosPowerProfiles[i].Name,
-				ID: &tc.appqosPowerProfiles[i].Id,
+				ID:   &tc.appqosPowerProfiles[i].Id,
 			}
 			appqosPowerProfiles = append(appqosPowerProfiles, profile)
 		}
@@ -1023,15 +1023,15 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 		}
 
 		server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
+		}
 
 		for _, powerWorkloadName := range tc.powerWorkloadNames {
 			req := reconcile.Request{
 				NamespacedName: client.ObjectKey{
-					Name: powerWorkloadName,
+					Name:      powerWorkloadName,
 					Namespace: PowerWorkloadNamespace,
 				},
 			}
@@ -1043,9 +1043,9 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 			}
 		}
 
- 		defaultPool, err := r.AppQoSClient.GetPoolByName("http://127.0.0.1:5000", "Default")
+		defaultPool, err := r.AppQoSClient.GetPoolByName("http://127.0.0.1:5000", "Default")
 		if err != nil {
-	 		t.Error(err)
+			t.Error(err)
 			t.Fatal(fmt.Sprintf("%s - error retrieving Default Pool from AppQoS", tc.testCase))
 		}
 
@@ -1067,7 +1067,7 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 
 		sharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.sharedWorkloadName,
+			Name:      tc.sharedWorkloadName,
 			Namespace: PowerWorkloadNamespace,
 		}, sharedPowerWorkload)
 
@@ -1078,31 +1078,31 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 }
 
 func TestSharedWorkloadCreation(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		nodeName string
-		sharedPowerWorkloadName string
-		powerWorkloadNames []string
-		sharedPowerWorkload *powerv1alpha1.PowerWorkload
-		powerWorkloads *powerv1alpha1.PowerWorkloadList
-		nodeList *corev1.NodeList
-		appqosPools []AppQoSPool
-		appqosPowerProfiles []AppQoSPowerProfile
+	tcases := []struct {
+		testCase                           string
+		nodeName                           string
+		sharedPowerWorkloadName            string
+		powerWorkloadNames                 []string
+		sharedPowerWorkload                *powerv1alpha1.PowerWorkload
+		powerWorkloads                     *powerv1alpha1.PowerWorkloadList
+		nodeList                           *corev1.NodeList
+		appqosPools                        []AppQoSPool
+		appqosPowerProfiles                []AppQoSPowerProfile
 		expectedSharedPowerWorkloadCPUList []int
 	}{
 		{
-			testCase: "Test Case 1",
-			nodeName: "example-node1",
+			testCase:                "Test Case 1",
+			nodeName:                "example-node1",
 			sharedPowerWorkloadName: "shared-example-node1-workload",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-example-node1-workload",
+					Name:      "shared-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "shared-example-node1-workload",
-					AllCores: true,
-					ReservedCPUs: []int{0,1},
+					Name:         "shared-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
 						"example-node": "true",
 					},
@@ -1111,8 +1111,7 @@ func TestSharedWorkloadCreation(t *testing.T) {
 			},
 			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
 				Items: []powerv1alpha1.PowerWorkload{
-					{
-					},
+					{},
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -1129,34 +1128,34 @@ func TestSharedWorkloadCreation(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 			},
-			expectedSharedPowerWorkloadCPUList: []int{2,3,4,5,6,7,8,9},
+			expectedSharedPowerWorkloadCPUList: []int{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
-			testCase: "Test Case 2",
-			nodeName: "example-node1",
+			testCase:                "Test Case 2",
+			nodeName:                "example-node1",
 			sharedPowerWorkloadName: "shared-example-node1-workload",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-example-node1-workload",
+					Name:      "shared-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "shared-example-node1-workload",
-					AllCores: true,
-					ReservedCPUs: []int{0,1,2,3,7,8,9},
+					Name:         "shared-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1, 2, 3, 7, 8, 9},
 					PowerNodeSelector: map[string]string{
 						"example-node": "true",
 					},
@@ -1165,8 +1164,7 @@ func TestSharedWorkloadCreation(t *testing.T) {
 			},
 			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
 				Items: []powerv1alpha1.PowerWorkload{
-					{
-					},
+					{},
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -1183,37 +1181,37 @@ func TestSharedWorkloadCreation(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 			},
-			expectedSharedPowerWorkloadCPUList: []int{4,5,6},
+			expectedSharedPowerWorkloadCPUList: []int{4, 5, 6},
 		},
 		{
-			testCase: "Test Case 3",
-			nodeName: "example-node1",
+			testCase:                "Test Case 3",
+			nodeName:                "example-node1",
 			sharedPowerWorkloadName: "shared-example-node1-workload",
 			powerWorkloadNames: []string{
 				"performance-example-node1-workload",
 			},
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-example-node1-workload",
+					Name:      "shared-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "shared-example-node1-workload",
-					AllCores: true,
-					ReservedCPUs: []int{0,1},
+					Name:         "shared-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
 						"example-node": "true",
 					},
@@ -1224,7 +1222,7 @@ func TestSharedWorkloadCreation(t *testing.T) {
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance-example-node1-workload",
+							Name:      "performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -1233,25 +1231,25 @@ func TestSharedWorkloadCreation(t *testing.T) {
 								"example-node": "true",
 							},
 							Node: powerv1alpha1.NodeInfo{
-                                                                Name: "example-node1",
-                                                                Containers: []powerv1alpha1.Container{
-                                                                        {
-                                                                                Name: "example-container1",
-                                                                                Id: "abcdefg",
-                                                                                Pod: "example-pod",
-                                                                                ExclusiveCPUs: []int{
-                                                                                        2,
-                                                                                        3,
-                                                                                },
-                                                                                PowerProfile: "performance",
-                                                                                Workload: "performance-example-node1-workload",
-                                                                        },
-                                                                },
-                                                                CpuIds: []int{
-                                                                        2,
-                                                                        3,
-                                                                },
-                                                        },
+								Name: "example-node1",
+								Containers: []powerv1alpha1.Container{
+									{
+										Name: "example-container1",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
+										ExclusiveCPUs: []int{
+											2,
+											3,
+										},
+										PowerProfile: "performance",
+										Workload:     "performance-example-node1-workload",
+									},
+								},
+								CpuIds: []int{
+									2,
+									3,
+								},
+							},
 							PowerProfile: "performance-example-node1",
 						},
 					},
@@ -1271,38 +1269,38 @@ func TestSharedWorkloadCreation(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 				{
 					Node: "example-node1",
 					Name: "performance-example-node1",
-					Id: 2,
+					Id:   2,
 				},
 			},
-			expectedSharedPowerWorkloadCPUList: []int{4,5,6,7,8,9},
+			expectedSharedPowerWorkloadCPUList: []int{4, 5, 6, 7, 8, 9},
 		},
 		{
-			testCase: "Test Case 4",
+			testCase:                "Test Case 4",
 			sharedPowerWorkloadName: "shared-example-node1-workload",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-example-node1-workload",
+					Name:      "shared-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "shared-example-node1-workload",
-					AllCores: true,
-					ReservedCPUs: []int{0,1},
+					Name:         "shared-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
 						"example-node": "true",
 					},
@@ -1311,8 +1309,7 @@ func TestSharedWorkloadCreation(t *testing.T) {
 			},
 			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
 				Items: []powerv1alpha1.PowerWorkload{
-					{
-					},
+					{},
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -1329,23 +1326,23 @@ func TestSharedWorkloadCreation(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 			},
 		},
@@ -1356,48 +1353,48 @@ func TestSharedWorkloadCreation(t *testing.T) {
 		AppQoSClientAddress = "http://127.0.0.1:5000"
 
 		appqosPools := make([]appqos.Pool, 0)
-                for i := range tc.appqosPools {
-                        pool := appqos.Pool{
-                                Name: &tc.appqosPools[i].Name,
-                                ID: &tc.appqosPools[i].Id,
-                                Cores: &tc.appqosPools[i].Cores,
-                        }
-                        appqosPools = append(appqosPools, pool)
-                }
+		for i := range tc.appqosPools {
+			pool := appqos.Pool{
+				Name:  &tc.appqosPools[i].Name,
+				ID:    &tc.appqosPools[i].Id,
+				Cores: &tc.appqosPools[i].Cores,
+			}
+			appqosPools = append(appqosPools, pool)
+		}
 
-                appqosPowerProfiles := make([]appqos.PowerProfile, 0)
-                for i := range tc.appqosPowerProfiles {
-                        profile := appqos.PowerProfile{
-                                Name: &tc.appqosPowerProfiles[i].Name,
-                                ID: &tc.appqosPowerProfiles[i].Id,
-                        }
-                        appqosPowerProfiles = append(appqosPowerProfiles, profile)
-                }
+		appqosPowerProfiles := make([]appqos.PowerProfile, 0)
+		for i := range tc.appqosPowerProfiles {
+			profile := appqos.PowerProfile{
+				Name: &tc.appqosPowerProfiles[i].Name,
+				ID:   &tc.appqosPowerProfiles[i].Id,
+			}
+			appqosPowerProfiles = append(appqosPowerProfiles, profile)
+		}
 
-                objs := make([]runtime.Object, 0)
-                for i := range tc.powerWorkloads.Items {
-                        objs = append(objs, &tc.powerWorkloads.Items[i])
-                }
-                for i := range tc.nodeList.Items {
-                        objs = append(objs, &tc.nodeList.Items[i])
-                }
+		objs := make([]runtime.Object, 0)
+		for i := range tc.powerWorkloads.Items {
+			objs = append(objs, &tc.powerWorkloads.Items[i])
+		}
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
 
 		r, err := createPowerWorkloadReconcilerObject(objs)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
 
-                server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
-                }
+		server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
+		}
 
 		for _, powerWorkloadName := range tc.powerWorkloadNames {
 			req := reconcile.Request{
 				NamespacedName: client.ObjectKey{
-					Name: powerWorkloadName,
+					Name:      powerWorkloadName,
 					Namespace: PowerWorkloadNamespace,
 				},
 			}
@@ -1417,7 +1414,7 @@ func TestSharedWorkloadCreation(t *testing.T) {
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name: tc.sharedPowerWorkloadName,
+				Name:      tc.sharedPowerWorkloadName,
 				Namespace: PowerWorkloadNamespace,
 			},
 		}
@@ -1432,7 +1429,7 @@ func TestSharedWorkloadCreation(t *testing.T) {
 
 		sharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.sharedPowerWorkloadName,
+			Name:      tc.sharedPowerWorkloadName,
 			Namespace: PowerWorkloadNamespace,
 		}, sharedPowerWorkload)
 		if err != nil {
@@ -1451,19 +1448,19 @@ func TestSharedWorkloadCreation(t *testing.T) {
 }
 
 func TestNonSharedWorkloadDeletion(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		nodeName string
-		sharedPowerWorkloadName string
-		powerWorkloadNames []string
-		powerWorkloads *powerv1alpha1.PowerWorkloadList
-		nodeList *corev1.NodeList
-		appqosPools []AppQoSPool
-		appqosPowerProfiles []AppQoSPowerProfile
+	tcases := []struct {
+		testCase                           string
+		nodeName                           string
+		sharedPowerWorkloadName            string
+		powerWorkloadNames                 []string
+		powerWorkloads                     *powerv1alpha1.PowerWorkloadList
+		nodeList                           *corev1.NodeList
+		appqosPools                        []AppQoSPool
+		appqosPowerProfiles                []AppQoSPowerProfile
 		expectedSharedPowerWorkloadCPUList []int
 	}{
 		{
-			testCase: "Test Case 1",
+			testCase:                "Test Case 1",
 			sharedPowerWorkloadName: "shared-example-node1-workload",
 			powerWorkloadNames: []string{
 				"performance-example-node1-workload",
@@ -1472,7 +1469,7 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance-example-node1-workload",
+							Name:      "performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -1485,14 +1482,14 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container1",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											2,
 											3,
 										},
 										PowerProfile: "performance",
-										Workload: "performance-example-node1-workload",
+										Workload:     "performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -1505,20 +1502,20 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "shared-example-node1-workload",
-							AllCores: true,
-							ReservedCPUs: []int{0,1},
+							Name:         "shared-example-node1-workload",
+							AllCores:     true,
+							ReservedCPUs: []int{0, 1},
 							PowerNodeSelector: map[string]string{
 								"example-node": "true",
 							},
 							PowerProfile: "shared-example-node1",
 						},
 						Status: powerv1alpha1.PowerWorkloadStatus{
-							SharedCores: []int{4,5,6,7,8,9},
+							SharedCores: []int{4, 5, 6, 7, 8, 9},
 						},
 					},
 				},
@@ -1537,40 +1534,40 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{4, 5, 6, 7, 8, 9},
 				},
 				{
-					Node: "example-node1",
-					Name: "performance-example-node1-workload",
-					Id: 3,
-					Cores: []int{2,3},
+					Node:  "example-node1",
+					Name:  "performance-example-node1-workload",
+					Id:    3,
+					Cores: []int{2, 3},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 				{
 					Node: "example-node1",
 					Name: "performance-example-node1",
-					Id: 2,
+					Id:   2,
 				},
 			},
-			expectedSharedPowerWorkloadCPUList: []int{2,3,4,5,6,7,8,9},
+			expectedSharedPowerWorkloadCPUList: []int{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
-			testCase: "Test Case 2",
+			testCase:                "Test Case 2",
 			sharedPowerWorkloadName: "shared-example-node1-workload",
 			powerWorkloadNames: []string{
 				"performance-example-node1-workload",
@@ -1579,7 +1576,7 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance-example-node1-workload",
+							Name:      "performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -1592,14 +1589,14 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container1",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											2,
 											3,
 										},
 										PowerProfile: "performance",
-										Workload: "performance-example-node1-workload",
+										Workload:     "performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -1612,7 +1609,7 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-performance-example-node1-workload",
+							Name:      "balance-performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -1625,14 +1622,14 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container2",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											4,
 											5,
 										},
 										PowerProfile: "balance-performance",
-										Workload: "balance-performance-example-node1-workload",
+										Workload:     "balance-performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -1645,20 +1642,20 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "shared-example-node1-workload",
-							AllCores: true,
-							ReservedCPUs: []int{0,1},
+							Name:         "shared-example-node1-workload",
+							AllCores:     true,
+							ReservedCPUs: []int{0, 1},
 							PowerNodeSelector: map[string]string{
 								"example-node": "true",
 							},
 							PowerProfile: "shared-example-node1",
 						},
 						Status: powerv1alpha1.PowerWorkloadStatus{
-							SharedCores: []int{6,7,8,9},
+							SharedCores: []int{6, 7, 8, 9},
 						},
 					},
 				},
@@ -1677,51 +1674,51 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{6, 7, 8, 9},
 				},
 				{
-					Node: "example-node1",
-					Name: "performance-example-node1-workload",
-					Id: 3,
-					Cores: []int{2,3},
+					Node:  "example-node1",
+					Name:  "performance-example-node1-workload",
+					Id:    3,
+					Cores: []int{2, 3},
 				},
 				{
-					Node: "example-node1",
-					Name: "balance-performance-example-node1-workload",
-					Id: 4,
-					Cores: []int{4,5},
+					Node:  "example-node1",
+					Name:  "balance-performance-example-node1-workload",
+					Id:    4,
+					Cores: []int{4, 5},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 				{
 					Node: "example-node1",
 					Name: "performance-example-node1",
-					Id: 2,
+					Id:   2,
 				},
 				{
 					Node: "example-node1",
 					Name: "balance-performance-example-node1",
-					Id: 3,
+					Id:   3,
 				},
 			},
-			expectedSharedPowerWorkloadCPUList: []int{2,3,6,7,8,9},
+			expectedSharedPowerWorkloadCPUList: []int{2, 3, 6, 7, 8, 9},
 		},
 		{
-			testCase: "Test Case 3",
+			testCase:                "Test Case 3",
 			sharedPowerWorkloadName: "shared-example-node1-workload",
 			powerWorkloadNames: []string{
 				"performance-example-node1-workload",
@@ -1731,7 +1728,7 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance-example-node1-workload",
+							Name:      "performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -1744,14 +1741,14 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container1",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											2,
 											3,
 										},
 										PowerProfile: "performance",
-										Workload: "performance-example-node1-workload",
+										Workload:     "performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -1764,7 +1761,7 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-performance-example-node1-workload",
+							Name:      "balance-performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -1777,14 +1774,14 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 								Containers: []powerv1alpha1.Container{
 									{
 										Name: "example-container2",
-										Id: "abcdefg",
-										Pod: "example-pod",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
 										ExclusiveCPUs: []int{
 											4,
 											5,
 										},
 										PowerProfile: "balance-performance",
-										Workload: "balance-performance-example-node1-workload",
+										Workload:     "balance-performance-example-node1-workload",
 									},
 								},
 								CpuIds: []int{
@@ -1797,20 +1794,20 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "shared-example-node1-workload",
-							AllCores: true,
-							ReservedCPUs: []int{0,1},
+							Name:         "shared-example-node1-workload",
+							AllCores:     true,
+							ReservedCPUs: []int{0, 1},
 							PowerNodeSelector: map[string]string{
 								"example-node": "true",
 							},
 							PowerProfile: "shared-example-node1",
 						},
 						Status: powerv1alpha1.PowerWorkloadStatus{
-							SharedCores: []int{6,7,8,9},
+							SharedCores: []int{6, 7, 8, 9},
 						},
 					},
 				},
@@ -1829,48 +1826,48 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{6, 7, 8, 9},
 				},
 				{
-					Node: "example-node1",
-					Name: "performance-example-node1-workload",
-					Id: 3,
-					Cores: []int{2,3},
+					Node:  "example-node1",
+					Name:  "performance-example-node1-workload",
+					Id:    3,
+					Cores: []int{2, 3},
 				},
 				{
-					Node: "example-node1",
-					Name: "balance-performance-example-node1-workload",
-					Id: 4,
-					Cores: []int{4,5},
+					Node:  "example-node1",
+					Name:  "balance-performance-example-node1-workload",
+					Id:    4,
+					Cores: []int{4, 5},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 				{
 					Node: "example-node1",
 					Name: "performance-example-node1",
-					Id: 2,
+					Id:   2,
 				},
 				{
 					Node: "example-node1",
 					Name: "balance-performance-example-node1",
-					Id: 3,
+					Id:   3,
 				},
 			},
-			expectedSharedPowerWorkloadCPUList: []int{2,3,4,5,6,7,8,9},
+			expectedSharedPowerWorkloadCPUList: []int{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 	}
 
@@ -1879,48 +1876,48 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 		AppQoSClientAddress = "http://127.0.0.1:5000"
 
 		appqosPools := make([]appqos.Pool, 0)
-                for i := range tc.appqosPools {
-                        pool := appqos.Pool{
-                                Name: &tc.appqosPools[i].Name,
-                                ID: &tc.appqosPools[i].Id,
-                                Cores: &tc.appqosPools[i].Cores,
-                        }
-                        appqosPools = append(appqosPools, pool)
-                }
+		for i := range tc.appqosPools {
+			pool := appqos.Pool{
+				Name:  &tc.appqosPools[i].Name,
+				ID:    &tc.appqosPools[i].Id,
+				Cores: &tc.appqosPools[i].Cores,
+			}
+			appqosPools = append(appqosPools, pool)
+		}
 
-                appqosPowerProfiles := make([]appqos.PowerProfile, 0)
-                for i := range tc.appqosPowerProfiles {
-                        profile := appqos.PowerProfile{
-                                Name: &tc.appqosPowerProfiles[i].Name,
-                                ID: &tc.appqosPowerProfiles[i].Id,
-                        }
-                        appqosPowerProfiles = append(appqosPowerProfiles, profile)
-                }
+		appqosPowerProfiles := make([]appqos.PowerProfile, 0)
+		for i := range tc.appqosPowerProfiles {
+			profile := appqos.PowerProfile{
+				Name: &tc.appqosPowerProfiles[i].Name,
+				ID:   &tc.appqosPowerProfiles[i].Id,
+			}
+			appqosPowerProfiles = append(appqosPowerProfiles, profile)
+		}
 
-                objs := make([]runtime.Object, 0)
+		objs := make([]runtime.Object, 0)
 		for i := range tc.powerWorkloads.Items {
 			objs = append(objs, &tc.powerWorkloads.Items[i])
 		}
-                for i := range tc.nodeList.Items {
-                        objs = append(objs, &tc.nodeList.Items[i])
-                }
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
 
 		r, err := createPowerWorkloadReconcilerObject(objs)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
 
-                server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
-                }
+		server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
+		}
 
 		for _, workloadName := range tc.powerWorkloadNames {
 			workload := &powerv1alpha1.PowerWorkload{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name: workloadName,
+				Name:      workloadName,
 				Namespace: PowerWorkloadNamespace,
 			}, workload)
 			if err != nil {
@@ -1931,12 +1928,12 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 			err = r.Client.Delete(context.TODO(), workload)
 			if err != nil {
 				t.Error(err)
-                                t.Fatal(fmt.Sprintf("%s - error deleting PowerWorkload object", tc.testCase))
+				t.Fatal(fmt.Sprintf("%s - error deleting PowerWorkload object", tc.testCase))
 			}
 
 			req := reconcile.Request{
 				NamespacedName: client.ObjectKey{
-					Name: workloadName,
+					Name:      workloadName,
 					Namespace: PowerWorkloadNamespace,
 				},
 			}
@@ -1952,7 +1949,7 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 
 		sharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.sharedPowerWorkloadName,
+			Name:      tc.sharedPowerWorkloadName,
 			Namespace: PowerWorkloadNamespace,
 		}, sharedPowerWorkload)
 		if err != nil {
@@ -1967,50 +1964,50 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 }
 
 func TestSharedWorkloadDeletion(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		nodeName string
-		originalSharedPowerWorkloadName string
-		secondSharedPowerWorkloadName string
-		originalSharedPowerWorkload *powerv1alpha1.PowerWorkload
-		secondSharedPowerWorkload *powerv1alpha1.PowerWorkload
-		nodeList *corev1.NodeList
-		appqosPools []AppQoSPool
-		appqosPowerProfiles []AppQoSPowerProfile
+	tcases := []struct {
+		testCase                           string
+		nodeName                           string
+		originalSharedPowerWorkloadName    string
+		secondSharedPowerWorkloadName      string
+		originalSharedPowerWorkload        *powerv1alpha1.PowerWorkload
+		secondSharedPowerWorkload          *powerv1alpha1.PowerWorkload
+		nodeList                           *corev1.NodeList
+		appqosPools                        []AppQoSPool
+		appqosPowerProfiles                []AppQoSPowerProfile
 		expectedSharedPowerWorkloadCPUList []int
 	}{
 		{
-			testCase: "Test Case 1",
-			nodeName: "example-node1",
+			testCase:                        "Test Case 1",
+			nodeName:                        "example-node1",
 			originalSharedPowerWorkloadName: "shared-example-node1-workload",
-			secondSharedPowerWorkloadName: "shared-second-example-node1-workload",
+			secondSharedPowerWorkloadName:   "shared-second-example-node1-workload",
 			originalSharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-example-node1-workload",
+					Name:      "shared-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "shared-example-node1-workload",
-					AllCores: true,
-					ReservedCPUs: []int{0,1},
+					Name:         "shared-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
 						"example-node": "true",
 					},
 					PowerProfile: "shared-example-node1",
 				},
 				Status: powerv1alpha1.PowerWorkloadStatus{
-					SharedCores: []int{2,3,4,5,6,7,8,9},
+					SharedCores: []int{2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			secondSharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-second-example-node1-workload",
+					Name:      "shared-second-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "shared-second-example-node1-workload",
-					AllCores: true,
-					ReservedCPUs: []int{0,1,2},
+					Name:         "shared-second-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1, 2},
 					PowerNodeSelector: map[string]string{
 						"example-node": "true",
 					},
@@ -2031,26 +2028,26 @@ func TestSharedWorkloadDeletion(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 			},
-			expectedSharedPowerWorkloadCPUList: []int{3,4,5,6,7,8,9},
+			expectedSharedPowerWorkloadCPUList: []int{3, 4, 5, 6, 7, 8, 9},
 		},
 	}
 
@@ -2059,45 +2056,45 @@ func TestSharedWorkloadDeletion(t *testing.T) {
 		AppQoSClientAddress = "http://127.0.0.1:5000"
 
 		appqosPools := make([]appqos.Pool, 0)
-                for i := range tc.appqosPools {
-                        pool := appqos.Pool{
-                                Name: &tc.appqosPools[i].Name,
-                                ID: &tc.appqosPools[i].Id,
-                                Cores: &tc.appqosPools[i].Cores,
-                        }
-                        appqosPools = append(appqosPools, pool)
-                }
+		for i := range tc.appqosPools {
+			pool := appqos.Pool{
+				Name:  &tc.appqosPools[i].Name,
+				ID:    &tc.appqosPools[i].Id,
+				Cores: &tc.appqosPools[i].Cores,
+			}
+			appqosPools = append(appqosPools, pool)
+		}
 
-                appqosPowerProfiles := make([]appqos.PowerProfile, 0)
-                for i := range tc.appqosPowerProfiles {
-                        profile := appqos.PowerProfile{
-                                Name: &tc.appqosPowerProfiles[i].Name,
-                                ID: &tc.appqosPowerProfiles[i].Id,
-                        }
-                        appqosPowerProfiles = append(appqosPowerProfiles, profile)
-                }
+		appqosPowerProfiles := make([]appqos.PowerProfile, 0)
+		for i := range tc.appqosPowerProfiles {
+			profile := appqos.PowerProfile{
+				Name: &tc.appqosPowerProfiles[i].Name,
+				ID:   &tc.appqosPowerProfiles[i].Id,
+			}
+			appqosPowerProfiles = append(appqosPowerProfiles, profile)
+		}
 
-                objs := make([]runtime.Object, 0)
+		objs := make([]runtime.Object, 0)
 		objs = append(objs, tc.originalSharedPowerWorkload)
-                for i := range tc.nodeList.Items {
-                        objs = append(objs, &tc.nodeList.Items[i])
-                }
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
 
 		r, err := createPowerWorkloadReconcilerObject(objs)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
 
-                server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
-                }
+		server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
+		}
 
 		originalSharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.originalSharedPowerWorkloadName,
+			Name:      tc.originalSharedPowerWorkloadName,
 			Namespace: PowerWorkloadNamespace,
 		}, originalSharedPowerWorkload)
 		if err != nil {
@@ -2107,22 +2104,22 @@ func TestSharedWorkloadDeletion(t *testing.T) {
 
 		err = r.Delete(context.TODO(), originalSharedPowerWorkload)
 		if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error deleting original PowerWorkload object", tc.testCase))
-                }
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error deleting original PowerWorkload object", tc.testCase))
+		}
 
 		req := reconcile.Request{
-                        NamespacedName: client.ObjectKey{
-                                Name: tc.originalSharedPowerWorkloadName,
-                                Namespace: PowerWorkloadNamespace,
-                        },
-                }
+			NamespacedName: client.ObjectKey{
+				Name:      tc.originalSharedPowerWorkloadName,
+				Namespace: PowerWorkloadNamespace,
+			},
+		}
 
-                _, err = r.Reconcile(req)
-                if err != nil {
-                        t.Error(err)
-                        //t.Fatal(fmt.Sprintf("%s - error reconciling second PowerWorkload object", tc.testCase))
-                }
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			//t.Fatal(fmt.Sprintf("%s - error reconciling second PowerWorkload object", tc.testCase))
+		}
 
 		err = r.Client.Create(context.TODO(), tc.secondSharedPowerWorkload)
 		if err != nil {
@@ -2132,7 +2129,7 @@ func TestSharedWorkloadDeletion(t *testing.T) {
 
 		req = reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name: tc.secondSharedPowerWorkloadName,
+				Name:      tc.secondSharedPowerWorkloadName,
 				Namespace: PowerWorkloadNamespace,
 			},
 		}
@@ -2145,12 +2142,12 @@ func TestSharedWorkloadDeletion(t *testing.T) {
 
 		secondSharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.secondSharedPowerWorkloadName,
+			Name:      tc.secondSharedPowerWorkloadName,
 			Namespace: PowerWorkloadNamespace,
 		}, secondSharedPowerWorkload)
 		if err != nil {
 			t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error retrieving second PowerWorkload object", tc.testCase))
+			t.Fatal(fmt.Sprintf("%s - error retrieving second PowerWorkload object", tc.testCase))
 		}
 
 		if !reflect.DeepEqual(secondSharedPowerWorkload.Status.SharedCores, tc.expectedSharedPowerWorkloadCPUList) {
@@ -2162,37 +2159,37 @@ func TestSharedWorkloadDeletion(t *testing.T) {
 }
 
 func TestSharedWorkloadUpdated(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		nodeName string
-		sharedPowerWorkload *powerv1alpha1.PowerWorkload
-		nodeList *corev1.NodeList
-		appqosPools []AppQoSPool
-		appqosPowerProfiles []AppQoSPowerProfile
-		newReservedCPUList []int
+	tcases := []struct {
+		testCase                           string
+		nodeName                           string
+		sharedPowerWorkload                *powerv1alpha1.PowerWorkload
+		nodeList                           *corev1.NodeList
+		appqosPools                        []AppQoSPool
+		appqosPowerProfiles                []AppQoSPowerProfile
+		newReservedCPUList                 []int
 		expectedSharedPowerWorkloadCPUList []int
-		expectedDefaultPoolCPUList []int
+		expectedDefaultPoolCPUList         []int
 	}{
 		{
 			testCase: "Test Case 1",
 			nodeName: "example-node1",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-exemple-node1-worklaod",
+					Name:      "shared-exemple-node1-worklaod",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "shared-exemple-node1-worklaod",
-					AllCores: true,
-					ReservedCPUs: []int{0,1},
+					Name:         "shared-exemple-node1-worklaod",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
 						"example-node": "true",
 					},
 					PowerProfile: "shared-example-node1",
 				},
 				Status: powerv1alpha1.PowerWorkloadStatus{
-					SharedCores: []int{2,3,4,5,6,7,8,9},
-					Node: "example-node1",
+					SharedCores: []int{2, 3, 4, 5, 6, 7, 8, 9},
+					Node:        "example-node1",
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -2209,16 +2206,16 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{2,3,4,5,6,7,8,9},
+					Node:         "example-node1",
+					Name:         "Shared",
+					Id:           2,
+					Cores:        []int{2, 3, 4, 5, 6, 7, 8, 9},
 					PowerProfile: 1,
 				},
 			},
@@ -2226,33 +2223,33 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 			},
-			newReservedCPUList: []int{0,1,2,3},
-			expectedSharedPowerWorkloadCPUList: []int{4,5,6,7,8,9},
-			expectedDefaultPoolCPUList: []int{0,1,2,3},
+			newReservedCPUList:                 []int{0, 1, 2, 3},
+			expectedSharedPowerWorkloadCPUList: []int{4, 5, 6, 7, 8, 9},
+			expectedDefaultPoolCPUList:         []int{0, 1, 2, 3},
 		},
 		{
 			testCase: "Test Case 2",
 			nodeName: "example-node1",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-exemple-node1-worklaod",
+					Name:      "shared-exemple-node1-worklaod",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "shared-exemple-node1-worklaod",
-					AllCores: true,
-					ReservedCPUs: []int{0,1},
+					Name:         "shared-exemple-node1-worklaod",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
 						"example-node": "true",
 					},
 					PowerProfile: "shared-example-node1",
 				},
 				Status: powerv1alpha1.PowerWorkloadStatus{
-					SharedCores: []int{2,3,4,5,6,7,8,9},
-					Node: "example-node1",
+					SharedCores: []int{2, 3, 4, 5, 6, 7, 8, 9},
+					Node:        "example-node1",
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -2269,16 +2266,16 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{2,3,4,5,6,7,8,9},
+					Node:         "example-node1",
+					Name:         "Shared",
+					Id:           2,
+					Cores:        []int{2, 3, 4, 5, 6, 7, 8, 9},
 					PowerProfile: 1,
 				},
 			},
@@ -2286,33 +2283,33 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 			},
-			newReservedCPUList: []int{0,3},
-			expectedSharedPowerWorkloadCPUList: []int{1,2,4,5,6,7,8,9},
-			expectedDefaultPoolCPUList: []int{0,3},
+			newReservedCPUList:                 []int{0, 3},
+			expectedSharedPowerWorkloadCPUList: []int{1, 2, 4, 5, 6, 7, 8, 9},
+			expectedDefaultPoolCPUList:         []int{0, 3},
 		},
 		{
 			testCase: "Test Case 3",
 			nodeName: "example-node1",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-exemple-node1-worklaod",
+					Name:      "shared-exemple-node1-worklaod",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "shared-exemple-node1-worklaod",
-					AllCores: true,
-					ReservedCPUs: []int{0,1},
+					Name:         "shared-exemple-node1-worklaod",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
 						"example-node": "true",
 					},
 					PowerProfile: "shared-example-node1",
 				},
 				Status: powerv1alpha1.PowerWorkloadStatus{
-					SharedCores: []int{2,3,4,5,6,7,8,9},
-					Node: "example-node1",
+					SharedCores: []int{2, 3, 4, 5, 6, 7, 8, 9},
+					Node:        "example-node1",
 				},
 			},
 			nodeList: &corev1.NodeList{
@@ -2329,16 +2326,16 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1},
 				},
 				{
-					Node: "example-node1",
-					Name: "Shared",
-					Id: 2,
-					Cores: []int{2,3,4,5,6,7,8,9},
+					Node:         "example-node1",
+					Name:         "Shared",
+					Id:           2,
+					Cores:        []int{2, 3, 4, 5, 6, 7, 8, 9},
 					PowerProfile: 1,
 				},
 			},
@@ -2346,12 +2343,12 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 				{
 					Node: "example-node1",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 			},
-			newReservedCPUList: []int{4,5},
-			expectedSharedPowerWorkloadCPUList: []int{0,1,2,3,6,7,8,9},
-			expectedDefaultPoolCPUList: []int{4,5},
+			newReservedCPUList:                 []int{4, 5},
+			expectedSharedPowerWorkloadCPUList: []int{0, 1, 2, 3, 6, 7, 8, 9},
+			expectedDefaultPoolCPUList:         []int{4, 5},
 		},
 	}
 
@@ -2360,46 +2357,46 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 		AppQoSClientAddress = "http://127.0.0.1:5000"
 
 		appqosPools := make([]appqos.Pool, 0)
-                for i := range tc.appqosPools {
-                        pool := appqos.Pool{
-                                Name: &tc.appqosPools[i].Name,
-                                ID: &tc.appqosPools[i].Id,
-                                Cores: &tc.appqosPools[i].Cores,
+		for i := range tc.appqosPools {
+			pool := appqos.Pool{
+				Name:         &tc.appqosPools[i].Name,
+				ID:           &tc.appqosPools[i].Id,
+				Cores:        &tc.appqosPools[i].Cores,
 				PowerProfile: &tc.appqosPools[i].PowerProfile,
-                        }
-                        appqosPools = append(appqosPools, pool)
-                }
+			}
+			appqosPools = append(appqosPools, pool)
+		}
 
-                appqosPowerProfiles := make([]appqos.PowerProfile, 0)
-                for i := range tc.appqosPowerProfiles {
-                        profile := appqos.PowerProfile{
-                                Name: &tc.appqosPowerProfiles[i].Name,
-                                ID: &tc.appqosPowerProfiles[i].Id,
-                        }
-                        appqosPowerProfiles = append(appqosPowerProfiles, profile)
-                }
+		appqosPowerProfiles := make([]appqos.PowerProfile, 0)
+		for i := range tc.appqosPowerProfiles {
+			profile := appqos.PowerProfile{
+				Name: &tc.appqosPowerProfiles[i].Name,
+				ID:   &tc.appqosPowerProfiles[i].Id,
+			}
+			appqosPowerProfiles = append(appqosPowerProfiles, profile)
+		}
 
-                objs := make([]runtime.Object, 0)
+		objs := make([]runtime.Object, 0)
 		objs = append(objs, tc.sharedPowerWorkload)
-                for i := range tc.nodeList.Items {
-                        objs = append(objs, &tc.nodeList.Items[i])
-                }
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
 
 		r, err := createPowerWorkloadReconcilerObject(objs)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
 
-                server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
-                }
+		server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
+		}
 
 		sharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.sharedPowerWorkload.Name,
+			Name:      tc.sharedPowerWorkload.Name,
 			Namespace: PowerWorkloadNamespace,
 		}, sharedPowerWorkload)
 		if err != nil {
@@ -2411,30 +2408,30 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 		err = r.Client.Update(context.TODO(), sharedPowerWorkload)
 		if err != nil {
 			t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error updating Shared PowerWorkload", tc.testCase))
+			t.Fatal(fmt.Sprintf("%s - error updating Shared PowerWorkload", tc.testCase))
 		}
 
 		req := reconcile.Request{
-                        NamespacedName: client.ObjectKey{
-                                Name: tc.sharedPowerWorkload.Name,
-                                Namespace: PowerWorkloadNamespace,
-                        },
-                }
+			NamespacedName: client.ObjectKey{
+				Name:      tc.sharedPowerWorkload.Name,
+				Namespace: PowerWorkloadNamespace,
+			},
+		}
 
-                _, err = r.Reconcile(req)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
-                }
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
+		}
 
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-                        Name: tc.sharedPowerWorkload.Name,
-                        Namespace: PowerWorkloadNamespace,
-                }, sharedPowerWorkload)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error retrieving Shared PowerWorkload", tc.testCase))
-                }
+			Name:      tc.sharedPowerWorkload.Name,
+			Namespace: PowerWorkloadNamespace,
+		}, sharedPowerWorkload)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Shared PowerWorkload", tc.testCase))
+		}
 
 		if !reflect.DeepEqual(sharedPowerWorkload.Status.SharedCores, tc.expectedSharedPowerWorkloadCPUList) {
 			t.Errorf("%s - Failed: Expected Shared PowerWorkload CPU list to be %v, got %v", tc.testCase, tc.expectedSharedPowerWorkloadCPUList, sharedPowerWorkload.Status.SharedCores)
@@ -2455,31 +2452,31 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 }
 
 func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		nodeName string
-		powerWorkloadNames []string
-		sharedPowerWorkloadName string
-		sharedPowerWorkload *powerv1alpha1.PowerWorkload
-		powerWorkloads *powerv1alpha1.PowerWorkloadList
-		nodeList *corev1.NodeList
-		appqosPools []AppQoSPool
-		appqosPowerProfiles []AppQoSPowerProfile
+	tcases := []struct {
+		testCase                   string
+		nodeName                   string
+		powerWorkloadNames         []string
+		sharedPowerWorkloadName    string
+		sharedPowerWorkload        *powerv1alpha1.PowerWorkload
+		powerWorkloads             *powerv1alpha1.PowerWorkloadList
+		nodeList                   *corev1.NodeList
+		appqosPools                []AppQoSPool
+		appqosPowerProfiles        []AppQoSPowerProfile
 		expectedDefaultPoolCPUList []int
 	}{
 		{
-			testCase: "Test Case 1",
-			nodeName: "example-node1",
+			testCase:                "Test Case 1",
+			nodeName:                "example-node1",
 			sharedPowerWorkloadName: "incorrect-name-example-node1-workload",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "incorrect-name-example-node1-workload",
+					Name:      "incorrect-name-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "incorrect-name-example-node1-workload",
-					AllCores: true,
-					ReservedCPUs: []int{0,1},
+					Name:         "incorrect-name-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
 						"example-node1": "true",
 					},
@@ -2487,8 +2484,7 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 				},
 			},
 			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
-				Items: []powerv1alpha1.PowerWorkload{
-				},
+				Items: []powerv1alpha1.PowerWorkload{},
 			},
 			nodeList: &corev1.NodeList{
 				Items: []corev1.Node{
@@ -2504,10 +2500,10 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
@@ -2516,7 +2512,7 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 					Name: "shared-example-node1",
 				},
 			},
-			expectedDefaultPoolCPUList: []int{0,1,2,3,4,5,6,7,8,9},
+			expectedDefaultPoolCPUList: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			testCase: "Test Case 2",
@@ -2527,13 +2523,13 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 			sharedPowerWorkloadName: "incorrect-name-example-node1-workload",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "incorrect-name-example-node1-workload",
+					Name:      "incorrect-name-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "incorrect-name-example-node1-workload",
-					AllCores: true,
-					ReservedCPUs: []int{0,1,2,3},
+					Name:         "incorrect-name-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1, 2, 3},
 					PowerNodeSelector: map[string]string{
 						"example-node1": "true",
 					},
@@ -2544,13 +2540,13 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "shared-example-node1-workload",
-							AllCores: true,
-							ReservedCPUs: []int{0,1},
+							Name:         "shared-example-node1-workload",
+							AllCores:     true,
+							ReservedCPUs: []int{0, 1},
 							PowerNodeSelector: map[string]string{
 								"example-node1": "true",
 							},
@@ -2573,10 +2569,10 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
@@ -2585,7 +2581,7 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 					Name: "shared-example-node1",
 				},
 			},
-			expectedDefaultPoolCPUList: []int{0,1},
+			expectedDefaultPoolCPUList: []int{0, 1},
 		},
 		{
 			testCase: "Test Case 3",
@@ -2597,13 +2593,13 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 			sharedPowerWorkloadName: "shared1-example-node1-workload",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared1-example-node1-workload",
+					Name:      "shared1-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "shared1-example-node1-workload",
-					AllCores: true,
-					ReservedCPUs: []int{0,1,2,3},
+					Name:         "shared1-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1, 2, 3},
 					PowerNodeSelector: map[string]string{
 						"example-node1": "true",
 					},
@@ -2614,13 +2610,13 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 				Items: []powerv1alpha1.PowerWorkload{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "shared-example-node1-workload",
+							Name:      "shared-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "shared-example-node1-workload",
-							AllCores: true,
-							ReservedCPUs: []int{0,1},
+							Name:         "shared-example-node1-workload",
+							AllCores:     true,
+							ReservedCPUs: []int{0, 1},
 							PowerNodeSelector: map[string]string{
 								"example-node1": "true",
 							},
@@ -2629,34 +2625,34 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "performance-example-node1-workload",
+							Name:      "performance-example-node1-workload",
 							Namespace: PowerWorkloadNamespace,
 						},
 						Spec: powerv1alpha1.PowerWorkloadSpec{
 							Name: "performance-example-node1-workload",
 							PowerNodeSelector: map[string]string{
-                                                                "example-node": "true",
-                                                        },
-                                                        Node: powerv1alpha1.NodeInfo{
-                                                                Name: "example-node1",
-                                                                Containers: []powerv1alpha1.Container{
-                                                                        {
-                                                                                Name: "example-container2",
-                                                                                Id: "abcdefg",
-                                                                                Pod: "example-pod",
-                                                                                ExclusiveCPUs: []int{
-                                                                                        4,
-                                                                                        5,
-                                                                                },
-                                                                                PowerProfile: "performance",
-                                                                                Workload: "performance-example-node1-workload",
-                                                                        },
-                                                                },
-                                                                CpuIds: []int{
-                                                                        4,
-                                                                        5,
-                                                                },
-                                                        },
+								"example-node": "true",
+							},
+							Node: powerv1alpha1.NodeInfo{
+								Name: "example-node1",
+								Containers: []powerv1alpha1.Container{
+									{
+										Name: "example-container2",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
+										ExclusiveCPUs: []int{
+											4,
+											5,
+										},
+										PowerProfile: "performance",
+										Workload:     "performance-example-node1-workload",
+									},
+								},
+								CpuIds: []int{
+									4,
+									5,
+								},
+							},
 						},
 					},
 				},
@@ -2675,10 +2671,10 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1,2,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 2, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
@@ -2691,7 +2687,7 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 					Name: "performance",
 				},
 			},
-			expectedDefaultPoolCPUList: []int{0,1},
+			expectedDefaultPoolCPUList: []int{0, 1},
 		},
 	}
 
@@ -2700,49 +2696,49 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 		AppQoSClientAddress = "http://127.0.0.1:5000"
 
 		appqosPools := make([]appqos.Pool, 0)
-                for i := range tc.appqosPools {
-                        pool := appqos.Pool{
-                                Name: &tc.appqosPools[i].Name,
-                                ID: &tc.appqosPools[i].Id,
-                                Cores: &tc.appqosPools[i].Cores,
+		for i := range tc.appqosPools {
+			pool := appqos.Pool{
+				Name:         &tc.appqosPools[i].Name,
+				ID:           &tc.appqosPools[i].Id,
+				Cores:        &tc.appqosPools[i].Cores,
 				PowerProfile: &tc.appqosPools[i].PowerProfile,
-                        }
-                        appqosPools = append(appqosPools, pool)
-                }
+			}
+			appqosPools = append(appqosPools, pool)
+		}
 
-                appqosPowerProfiles := make([]appqos.PowerProfile, 0)
-                for i := range tc.appqosPowerProfiles {
-                        profile := appqos.PowerProfile{
-                                Name: &tc.appqosPowerProfiles[i].Name,
-                                ID: &tc.appqosPowerProfiles[i].Id,
-                        }
-                        appqosPowerProfiles = append(appqosPowerProfiles, profile)
-                }
+		appqosPowerProfiles := make([]appqos.PowerProfile, 0)
+		for i := range tc.appqosPowerProfiles {
+			profile := appqos.PowerProfile{
+				Name: &tc.appqosPowerProfiles[i].Name,
+				ID:   &tc.appqosPowerProfiles[i].Id,
+			}
+			appqosPowerProfiles = append(appqosPowerProfiles, profile)
+		}
 
-                objs := make([]runtime.Object, 0)
+		objs := make([]runtime.Object, 0)
 		for i := range tc.powerWorkloads.Items {
 			objs = append(objs, &tc.powerWorkloads.Items[i])
 		}
-                for i := range tc.nodeList.Items {
-                        objs = append(objs, &tc.nodeList.Items[i])
-                }
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
 
 		r, err := createPowerWorkloadReconcilerObject(objs)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
 
-                server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
-                }
+		server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
+		}
 
 		for _, powerWorkloadName := range tc.powerWorkloadNames {
 			req := reconcile.Request{
 				NamespacedName: client.ObjectKey{
-					Name: powerWorkloadName,
+					Name:      powerWorkloadName,
 					Namespace: PowerWorkloadNamespace,
 				},
 			}
@@ -2761,21 +2757,21 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 		}
 
 		req := reconcile.Request{
-                        NamespacedName: client.ObjectKey{
-                                Name: tc.sharedPowerWorkloadName,
-                                Namespace: PowerWorkloadNamespace,
-                        },
-                }
+			NamespacedName: client.ObjectKey{
+				Name:      tc.sharedPowerWorkloadName,
+				Namespace: PowerWorkloadNamespace,
+			},
+		}
 
-                _, err = r.Reconcile(req)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
-                }
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
+		}
 
 		sharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.sharedPowerWorkloadName,
+			Name:      tc.sharedPowerWorkloadName,
 			Namespace: PowerWorkloadNamespace,
 		}, sharedPowerWorkload)
 		if err != nil {
@@ -2788,27 +2784,27 @@ func TestSharedWorkloadIncorrectNameBeginning(t *testing.T) {
 		}
 
 		defaultPool, err := r.AppQoSClient.GetPoolByName("http://127.0.0.1:5000", "Default")
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error retrieving Default Pool from AppQoS", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Default Pool from AppQoS", tc.testCase))
+		}
 
-                if !reflect.DeepEqual(*defaultPool.Cores, tc.expectedDefaultPoolCPUList) {
-                        t.Errorf("%s - Failed: Expected Default Pool CPU list to be %v, got %v", tc.testCase, tc.expectedDefaultPoolCPUList, *defaultPool.Cores)
-                }
+		if !reflect.DeepEqual(*defaultPool.Cores, tc.expectedDefaultPoolCPUList) {
+			t.Errorf("%s - Failed: Expected Default Pool CPU list to be %v, got %v", tc.testCase, tc.expectedDefaultPoolCPUList, *defaultPool.Cores)
+		}
 
-                server.Close()
+		server.Close()
 	}
 }
 
 func TestNonSharedPowerWorkloadBeginningWithShared(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		nodeName string
-		powerWorkload *powerv1alpha1.PowerWorkload
-		nodeList *corev1.NodeList
-		appqosPools []AppQoSPool
-		appqosPowerProfiles []AppQoSPowerProfile
+	tcases := []struct {
+		testCase                   string
+		nodeName                   string
+		powerWorkload              *powerv1alpha1.PowerWorkload
+		nodeList                   *corev1.NodeList
+		appqosPools                []AppQoSPool
+		appqosPowerProfiles        []AppQoSPowerProfile
 		expectedDefaultPoolCPUList []int
 	}{
 		{
@@ -2816,7 +2812,7 @@ func TestNonSharedPowerWorkloadBeginningWithShared(t *testing.T) {
 			nodeName: "example-node1",
 			powerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-performance-example-node1-workload",
+					Name:      "shared-performance-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -2829,14 +2825,14 @@ func TestNonSharedPowerWorkloadBeginningWithShared(t *testing.T) {
 						Containers: []powerv1alpha1.Container{
 							{
 								Name: "example-container2",
-								Id: "abcdefg",
-								Pod: "example-pod",
+								Id:   "abcdefg",
+								Pod:  "example-pod",
 								ExclusiveCPUs: []int{
 									4,
 									5,
 								},
 								PowerProfile: "performance",
-								Workload: "shared-performance-example-node1-workload",
+								Workload:     "shared-performance-example-node1-workload",
 							},
 						},
 						CpuIds: []int{
@@ -2860,10 +2856,10 @@ func TestNonSharedPowerWorkloadBeginningWithShared(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
@@ -2872,14 +2868,14 @@ func TestNonSharedPowerWorkloadBeginningWithShared(t *testing.T) {
 					Name: "performance",
 				},
 			},
-			expectedDefaultPoolCPUList: []int{0,1,2,3,4,5,6,7,8,9},
+			expectedDefaultPoolCPUList: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			testCase: "Test Case 2",
 			nodeName: "example-node1",
 			powerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-balance-performance-example-node1-workload",
+					Name:      "shared-balance-performance-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
@@ -2892,8 +2888,8 @@ func TestNonSharedPowerWorkloadBeginningWithShared(t *testing.T) {
 						Containers: []powerv1alpha1.Container{
 							{
 								Name: "example-container2",
-								Id: "abcdefg",
-								Pod: "example-pod",
+								Id:   "abcdefg",
+								Pod:  "example-pod",
 								ExclusiveCPUs: []int{
 									4,
 									5,
@@ -2901,7 +2897,7 @@ func TestNonSharedPowerWorkloadBeginningWithShared(t *testing.T) {
 									7,
 								},
 								PowerProfile: "balance-performance",
-								Workload: "shared-balance-performance-example-node1-workload",
+								Workload:     "shared-balance-performance-example-node1-workload",
 							},
 						},
 						CpuIds: []int{
@@ -2927,10 +2923,10 @@ func TestNonSharedPowerWorkloadBeginningWithShared(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
@@ -2939,68 +2935,68 @@ func TestNonSharedPowerWorkloadBeginningWithShared(t *testing.T) {
 					Name: "balance-performance",
 				},
 			},
-			expectedDefaultPoolCPUList: []int{0,1,2,3,4,5,6,7,8,9},
+			expectedDefaultPoolCPUList: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 	}
 
 	for _, tc := range tcases {
 		t.Setenv("NODE_NAME", tc.nodeName)
-                AppQoSClientAddress = "http://127.0.0.1:5000"
+		AppQoSClientAddress = "http://127.0.0.1:5000"
 
-                appqosPools := make([]appqos.Pool, 0)
-                for i := range tc.appqosPools {
-                        pool := appqos.Pool{
-                                Name: &tc.appqosPools[i].Name,
-                                ID: &tc.appqosPools[i].Id,
-                                Cores: &tc.appqosPools[i].Cores,
-                                PowerProfile: &tc.appqosPools[i].PowerProfile,
-                        }
-                        appqosPools = append(appqosPools, pool)
-                }
+		appqosPools := make([]appqos.Pool, 0)
+		for i := range tc.appqosPools {
+			pool := appqos.Pool{
+				Name:         &tc.appqosPools[i].Name,
+				ID:           &tc.appqosPools[i].Id,
+				Cores:        &tc.appqosPools[i].Cores,
+				PowerProfile: &tc.appqosPools[i].PowerProfile,
+			}
+			appqosPools = append(appqosPools, pool)
+		}
 
-                appqosPowerProfiles := make([]appqos.PowerProfile, 0)
-                for i := range tc.appqosPowerProfiles {
-                        profile := appqos.PowerProfile{
-                                Name: &tc.appqosPowerProfiles[i].Name,
-                                ID: &tc.appqosPowerProfiles[i].Id,
-                        }
-                        appqosPowerProfiles = append(appqosPowerProfiles, profile)
-                }
+		appqosPowerProfiles := make([]appqos.PowerProfile, 0)
+		for i := range tc.appqosPowerProfiles {
+			profile := appqos.PowerProfile{
+				Name: &tc.appqosPowerProfiles[i].Name,
+				ID:   &tc.appqosPowerProfiles[i].Id,
+			}
+			appqosPowerProfiles = append(appqosPowerProfiles, profile)
+		}
 
-                objs := make([]runtime.Object, 0)
+		objs := make([]runtime.Object, 0)
 		objs = append(objs, tc.powerWorkload)
-                for i := range tc.nodeList.Items {
-                        objs = append(objs, &tc.nodeList.Items[i])
-                }
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
 
-                r, err := createPowerWorkloadReconcilerObject(objs)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-                }
+		r, err := createPowerWorkloadReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
 
-                server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
-                }
+		server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
+		}
 
 		req := reconcile.Request{
-                        NamespacedName: client.ObjectKey{
-                                Name: tc.powerWorkload.Name,
-                                Namespace: PowerWorkloadNamespace,
-                        },
-                }
+			NamespacedName: client.ObjectKey{
+				Name:      tc.powerWorkload.Name,
+				Namespace: PowerWorkloadNamespace,
+			},
+		}
 
-                _, err = r.Reconcile(req)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
-                }
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
+		}
 
 		powerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.powerWorkload.Name,
+			Name:      tc.powerWorkload.Name,
 			Namespace: PowerWorkloadNamespace,
 		}, powerWorkload)
 		if err != nil {
@@ -3013,44 +3009,44 @@ func TestNonSharedPowerWorkloadBeginningWithShared(t *testing.T) {
 		}
 
 		defaultPool, err := r.AppQoSClient.GetPoolByName("http://127.0.0.1:5000", "Default")
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error retrieving Default Pool from AppQoS", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Default Pool from AppQoS", tc.testCase))
+		}
 
-                if !reflect.DeepEqual(*defaultPool.Cores, tc.expectedDefaultPoolCPUList) {
-                        t.Errorf("%s - Failed: Expected Default Pool CPU list to be %v, got %v", tc.testCase, tc.expectedDefaultPoolCPUList, *defaultPool.Cores)
-                }
+		if !reflect.DeepEqual(*defaultPool.Cores, tc.expectedDefaultPoolCPUList) {
+			t.Errorf("%s - Failed: Expected Default Pool CPU list to be %v, got %v", tc.testCase, tc.expectedDefaultPoolCPUList, *defaultPool.Cores)
+		}
 
-                server.Close()
+		server.Close()
 	}
 }
 
 func TestSecondSharedWorkloadCreatedWhileOriginalExists(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		nodeName string
-		originalSharedPowerWorkload *powerv1alpha1.PowerWorkload
-		secondSharedPowerWorkload *powerv1alpha1.PowerWorkload
-		nodeList *corev1.NodeList
-		appqosPools []AppQoSPool
-		appqosPowerProfiles []AppQoSPowerProfile
+	tcases := []struct {
+		testCase                           string
+		nodeName                           string
+		originalSharedPowerWorkload        *powerv1alpha1.PowerWorkload
+		secondSharedPowerWorkload          *powerv1alpha1.PowerWorkload
+		nodeList                           *corev1.NodeList
+		appqosPools                        []AppQoSPool
+		appqosPowerProfiles                []AppQoSPowerProfile
 		expectedSharedPowerWorkloadCPUList []int
-		expectedDefaultPoolCPUList []int
-		expectedSharedPoolCPUList []int
+		expectedDefaultPoolCPUList         []int
+		expectedSharedPoolCPUList          []int
 	}{
 		{
 			testCase: "Test Case 1",
 			nodeName: "example-node1",
 			originalSharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "shared-example-node1-workload",
+					Name:      "shared-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "shared-example-node1-workload",
-					AllCores: true,
-					ReservedCPUs: []int{0,1},
+					Name:         "shared-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
 						"example-node": "true",
 					},
@@ -3059,18 +3055,18 @@ func TestSecondSharedWorkloadCreatedWhileOriginalExists(t *testing.T) {
 			},
 			secondSharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-                                        Name: "shared-second-example-node1-workload",
-                                        Namespace: PowerWorkloadNamespace,
-                                },
-                                Spec: powerv1alpha1.PowerWorkloadSpec{
-                                        Name: "shared-second-example-node1-workload",
-                                        AllCores: true,
-                                        ReservedCPUs: []int{0,1,2,3},
-                                        PowerNodeSelector: map[string]string{
-                                                "example-node": "true",
-                                        },
-                                        PowerProfile: "shared-example-node1",
-                                },
+					Name:      "shared-second-example-node1-workload",
+					Namespace: PowerWorkloadNamespace,
+				},
+				Spec: powerv1alpha1.PowerWorkloadSpec{
+					Name:         "shared-second-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1, 2, 3},
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfile: "shared-example-node1",
+				},
 			},
 			nodeList: &corev1.NodeList{
 				Items: []corev1.Node{
@@ -3086,79 +3082,79 @@ func TestSecondSharedWorkloadCreatedWhileOriginalExists(t *testing.T) {
 			},
 			appqosPools: []AppQoSPool{
 				{
-					Node: "example-node1",
-					Name: "Default",
-					Id: 1,
-					Cores: []int{0,1,2,3,4,5,6,7,8,9},
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 				},
 			},
 			appqosPowerProfiles: []AppQoSPowerProfile{
 				{
 					Node: "example-node",
 					Name: "shared-example-node1",
-					Id: 1,
+					Id:   1,
 				},
 			},
-			expectedSharedPowerWorkloadCPUList: []int{2,3,4,5,6,7,8,9},
-			expectedDefaultPoolCPUList: []int{0,1},
-			expectedSharedPoolCPUList: []int{2,3,4,5,6,7,8,9},
+			expectedSharedPowerWorkloadCPUList: []int{2, 3, 4, 5, 6, 7, 8, 9},
+			expectedDefaultPoolCPUList:         []int{0, 1},
+			expectedSharedPoolCPUList:          []int{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 	}
 
 	for _, tc := range tcases {
-                t.Setenv("NODE_NAME", tc.nodeName)
-                AppQoSClientAddress = "http://127.0.0.1:5000"
+		t.Setenv("NODE_NAME", tc.nodeName)
+		AppQoSClientAddress = "http://127.0.0.1:5000"
 
-                appqosPools := make([]appqos.Pool, 0)
-                for i := range tc.appqosPools {
-                        pool := appqos.Pool{
-                                Name: &tc.appqosPools[i].Name,
-                                ID: &tc.appqosPools[i].Id,
-                                Cores: &tc.appqosPools[i].Cores,
-                                PowerProfile: &tc.appqosPools[i].PowerProfile,
-                        }
-                        appqosPools = append(appqosPools, pool)
-                }
+		appqosPools := make([]appqos.Pool, 0)
+		for i := range tc.appqosPools {
+			pool := appqos.Pool{
+				Name:         &tc.appqosPools[i].Name,
+				ID:           &tc.appqosPools[i].Id,
+				Cores:        &tc.appqosPools[i].Cores,
+				PowerProfile: &tc.appqosPools[i].PowerProfile,
+			}
+			appqosPools = append(appqosPools, pool)
+		}
 
-                appqosPowerProfiles := make([]appqos.PowerProfile, 0)
-                for i := range tc.appqosPowerProfiles {
-                        profile := appqos.PowerProfile{
-                                Name: &tc.appqosPowerProfiles[i].Name,
-                                ID: &tc.appqosPowerProfiles[i].Id,
-                        }
-                        appqosPowerProfiles = append(appqosPowerProfiles, profile)
-                }
+		appqosPowerProfiles := make([]appqos.PowerProfile, 0)
+		for i := range tc.appqosPowerProfiles {
+			profile := appqos.PowerProfile{
+				Name: &tc.appqosPowerProfiles[i].Name,
+				ID:   &tc.appqosPowerProfiles[i].Id,
+			}
+			appqosPowerProfiles = append(appqosPowerProfiles, profile)
+		}
 
-                objs := make([]runtime.Object, 0)
-                objs = append(objs, tc.originalSharedPowerWorkload)
-                for i := range tc.nodeList.Items {
-                        objs = append(objs, &tc.nodeList.Items[i])
-                }
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.originalSharedPowerWorkload)
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
 
-                r, err := createPowerWorkloadReconcilerObject(objs)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-                }
+		r, err := createPowerWorkloadReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
 
-                server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
-                }
+		server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
+		}
 
-                req := reconcile.Request{
-                        NamespacedName: client.ObjectKey{
-                                Name: tc.originalSharedPowerWorkload.Name,
-                                Namespace: PowerWorkloadNamespace,
-                        },
-                }
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.originalSharedPowerWorkload.Name,
+				Namespace: PowerWorkloadNamespace,
+			},
+		}
 
-                _, err = r.Reconcile(req)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
-                }
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
+		}
 
 		err = r.Client.Create(context.TODO(), tc.secondSharedPowerWorkload)
 		if err != nil {
@@ -3167,21 +3163,21 @@ func TestSecondSharedWorkloadCreatedWhileOriginalExists(t *testing.T) {
 		}
 
 		req = reconcile.Request{
-                        NamespacedName: client.ObjectKey{
-                                Name: tc.secondSharedPowerWorkload.Name,
-                                Namespace: PowerWorkloadNamespace,
-                        },
-                }
+			NamespacedName: client.ObjectKey{
+				Name:      tc.secondSharedPowerWorkload.Name,
+				Namespace: PowerWorkloadNamespace,
+			},
+		}
 
-                _, err = r.Reconcile(req)
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
-                }
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
+		}
 
 		originalSharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.originalSharedPowerWorkload.Name,
+			Name:      tc.originalSharedPowerWorkload.Name,
 			Namespace: PowerWorkloadNamespace,
 		}, originalSharedPowerWorkload)
 		if err != nil {
@@ -3194,30 +3190,30 @@ func TestSecondSharedWorkloadCreatedWhileOriginalExists(t *testing.T) {
 		}
 
 		defaultPool, err := r.AppQoSClient.GetPoolByName("http://127.0.0.1:5000", "Default")
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error retrieving Default Pool from AppQoS", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Default Pool from AppQoS", tc.testCase))
+		}
 
-                if !reflect.DeepEqual(*defaultPool.Cores, tc.expectedDefaultPoolCPUList) {
-                        t.Errorf("%s - Failed: Expected Default Pool CPU list to be %v, got %v", tc.testCase, tc.expectedDefaultPoolCPUList, *defaultPool.Cores)
-                }
+		if !reflect.DeepEqual(*defaultPool.Cores, tc.expectedDefaultPoolCPUList) {
+			t.Errorf("%s - Failed: Expected Default Pool CPU list to be %v, got %v", tc.testCase, tc.expectedDefaultPoolCPUList, *defaultPool.Cores)
+		}
 
 		sharedPool, err := r.AppQoSClient.GetPoolByName("http://127.0.0.1:5000", "Shared")
-                if err != nil {
-                        t.Error(err)
-                        t.Fatal(fmt.Sprintf("%s - error retrieving Shared Pool from AppQoS", tc.testCase))
-                }
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Shared Pool from AppQoS", tc.testCase))
+		}
 
-                if !reflect.DeepEqual(*sharedPool.Cores, tc.expectedSharedPoolCPUList) {
-                        t.Errorf("%s - Failed: Expected Shared Pool CPU list to be %v, got %v", tc.testCase, tc.expectedSharedPoolCPUList, *sharedPool.Cores)
-                }
+		if !reflect.DeepEqual(*sharedPool.Cores, tc.expectedSharedPoolCPUList) {
+			t.Errorf("%s - Failed: Expected Shared Pool CPU list to be %v, got %v", tc.testCase, tc.expectedSharedPoolCPUList, *sharedPool.Cores)
+		}
 
-                server.Close()
+		server.Close()
 
 		secondSharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.secondSharedPowerWorkload.Name,
+			Name:      tc.secondSharedPowerWorkload.Name,
 			Namespace: PowerWorkloadNamespace,
 		}, secondSharedPowerWorkload)
 		if err != nil {

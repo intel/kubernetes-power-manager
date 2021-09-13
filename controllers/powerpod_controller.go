@@ -19,11 +19,11 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
-	"os"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -44,7 +44,7 @@ import (
 const (
 	PowerProfileAnnotation = "PowerProfile"
 	ResourcePrefix         = "power.intel.com/"
-	CPUResource	       = "cpu"
+	CPUResource            = "cpu"
 )
 
 // PowerPodReconciler reconciles a PowerPod object
@@ -216,14 +216,14 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 				//nodeInfo := []powerv1alpha1.NodeInfo{
 				nodeInfo := &powerv1alpha1.NodeInfo{
-					Name:   pod.Spec.NodeName,
+					Name:       pod.Spec.NodeName,
 					Containers: containerList,
-					CpuIds: cores,
+					CpuIds:     cores,
 				}
 
 				workloadSpec := &powerv1alpha1.PowerWorkloadSpec{
 					Name:         workloadName,
-					Node: 	      *nodeInfo,
+					Node:         *nodeInfo,
 					PowerProfile: profileName,
 				}
 				workload = &powerv1alpha1.PowerWorkload{
@@ -291,7 +291,7 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 	//	3. The requested Power Profile exists in the AppQoS instance on the node
 
 	_ = context.Background()
-        //logger := r.Log.WithName("getPowerProfileRequestsFromContainers")
+	//logger := r.Log.WithName("getPowerProfileRequestsFromContainers")
 
 	profiles := make(map[string][]int, 0)
 	powerContainers := make([]powerv1alpha1.Container, 0)
@@ -445,7 +445,7 @@ func exclusiveCPUs(pod *corev1.Pod, container *corev1.Container) bool {
 	cpuQuantity := container.Resources.Requests[corev1.ResourceCPU]
 	if cpuQuantity.Value()*1000 != cpuQuantity.MilliValue() {
 		return false
-		}
+	}
 
 	return true
 }

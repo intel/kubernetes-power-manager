@@ -51,9 +51,9 @@ var NodeAgentDaemonSetPath = "/power-manifests/power-node-agent-ds.yaml"
 // PowerConfigReconciler reconciles a PowerConfig object
 type PowerConfigReconciler struct {
 	client.Client
-	Log          logr.Logger
-	Scheme       *runtime.Scheme
-	State        *state.PowerNodeData
+	Log    logr.Logger
+	Scheme *runtime.Scheme
+	State  *state.PowerNodeData
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -84,18 +84,6 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				}
 
 				for _, profile := range powerProfiles.Items {
-					/*
-					actualProfile := &powerv1alpha1.PowerProfile{}
-					err = r.Client.Get(context.TODO(), client.ObjectKey{
-						Name: profile.Name,
-						Namespace: profile.Namespace,
-					}, actualProfile)
-					if err != nil {
-						return ctrl.Result{}, err
-					}
-					*/
-
-					//err = r.Client.Delete(context.TODO(), actualProfile)
 					err = r.Client.Delete(context.TODO(), &profile)
 					if err != nil {
 						return ctrl.Result{}, err
@@ -135,7 +123,7 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 
 				daemonSet := &appsv1.DaemonSet{}
 				err = r.Client.Get(context.TODO(), client.ObjectKey{
-					Name: NodeAgentDSName,
+					Name:      NodeAgentDSName,
 					Namespace: req.NamespacedName.Namespace,
 				}, daemonSet)
 				if err != nil {
@@ -173,11 +161,11 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	}
 
 	// Create PowerNodeAgent DaemonSet
-        err = r.createDaemonSetIfNotPresent(config, NodeAgentDaemonSetPath)
-        if err != nil {
-                logger.Error(err, "Error creating Power Node Agent")
-                return ctrl.Result{}, err
-        }
+	err = r.createDaemonSetIfNotPresent(config, NodeAgentDaemonSetPath)
+	if err != nil {
+		logger.Error(err, "Error creating Power Node Agent")
+		return ctrl.Result{}, err
+	}
 
 	labelledNodeList := &corev1.NodeList{}
 	listOption := config.Spec.PowerNodeSelector
@@ -192,34 +180,34 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		r.State.UpdatePowerNodeData(node.Name)
 
 		powerNode := &powerv1alpha1.PowerNode{}
-                err = r.Client.Get(context.TODO(), client.ObjectKey{
-                        Namespace: req.NamespacedName.Namespace,
-                        Name:      node.Name,
-                }, powerNode)
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Namespace: req.NamespacedName.Namespace,
+			Name:      node.Name,
+		}, powerNode)
 
-                if err != nil {
-                        if errors.IsNotFound(err) {
-                                powerNode = &powerv1alpha1.PowerNode{
-                                        ObjectMeta: metav1.ObjectMeta{
-                                                Namespace: req.NamespacedName.Namespace,
-                                                Name:      node.Name,
-                                        },
-                                }
+		if err != nil {
+			if errors.IsNotFound(err) {
+				powerNode = &powerv1alpha1.PowerNode{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: req.NamespacedName.Namespace,
+						Name:      node.Name,
+					},
+				}
 
-                                powerNodeSpec := &powerv1alpha1.PowerNodeSpec{
-                                        NodeName: node.Name,
-                                }
+				powerNodeSpec := &powerv1alpha1.PowerNodeSpec{
+					NodeName: node.Name,
+				}
 
-                                powerNode.Spec = *powerNodeSpec
-                                err = r.Client.Create(context.TODO(), powerNode)
-                                if err != nil {
-                                        logger.Error(err, "Error creating PowerNode CRD")
-                                        return ctrl.Result{}, err
-                                }
-                        } else {
-                                return ctrl.Result{}, err
-                        }
-                }
+				powerNode.Spec = *powerNodeSpec
+				err = r.Client.Create(context.TODO(), powerNode)
+				if err != nil {
+					logger.Error(err, "Error creating PowerNode CRD")
+					return ctrl.Result{}, err
+				}
+			} else {
+				return ctrl.Result{}, err
+			}
+		}
 	}
 
 	config.Status.Nodes = r.State.PowerNodeList
@@ -239,21 +227,21 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 
 		profileFromCluster := &powerv1alpha1.PowerProfile{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: profile,
+			Name:      profile,
 			Namespace: req.NamespacedName.Namespace,
 		}, profileFromCluster)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				// PowerProfile does not exist, so we need to create it
-				
+
 				powerProfileSpec := &powerv1alpha1.PowerProfileSpec{
 					Name: profile,
-					Epp: basePowerProfileToEppValue[profile],
+					Epp:  basePowerProfileToEppValue[profile],
 				}
 				powerProfile := &powerv1alpha1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: req.NamespacedName.Namespace,
-						Name: profile,
+						Name:      profile,
 					},
 				}
 				powerProfile.Spec = *powerProfileSpec
@@ -302,7 +290,7 @@ func (r *PowerConfigReconciler) createDaemonSetIfNotPresent(powerConfig *powerv1
 	err = r.Client.Get(context.TODO(), client.ObjectKey{
 		//Namespace: daemonSet.GetObjectMeta().GetNamespace(),
 		//Name:      daemonSet.GetObjectMeta().GetName(),
-		Name: NodeAgentDSName,
+		Name:      NodeAgentDSName,
 		Namespace: powerConfig.Namespace,
 	}, daemonSet)
 	if err != nil {
@@ -317,7 +305,6 @@ func (r *PowerConfigReconciler) createDaemonSetIfNotPresent(powerConfig *powerv1
 			}
 			err = r.Client.Create(context.TODO(), daemonSet)
 			if err != nil {
-				return errors.NewServiceUnavailable("here for some reason")
 				logger.Error(err, "Error creating DaemonSet")
 				return err
 			}

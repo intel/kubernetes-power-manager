@@ -18,9 +18,9 @@ package controllers
 
 import (
 	"context"
-	"time"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -35,8 +35,8 @@ import (
 // PowerNodeReconciler reconciles a PowerNode object
 type PowerNodeReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log          logr.Logger
+	Scheme       *runtime.Scheme
 	AppQoSClient *appqos.AppQoSClient
 }
 
@@ -65,7 +65,7 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err = r.Client.List(context.TODO(), profiles)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return ctrl.Result{RequeueAfter: time.Second *5}, nil
+			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 		}
 
 		return ctrl.Result{}, err
@@ -94,7 +94,7 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		for _, workload := range workloads.Items {
 			if workload.Name == workloadName && workload.Spec.Node.Name == req.NamespacedName.Name {
 				powerProfilesInUse[profile.Name] = true
-				
+
 				workloadInfo := &powerv1alpha1.WorkloadInfo{}
 				workloadInfo.Name = workload.Name
 				workloadInfo.CpuIds = workload.Spec.Node.CpuIds
@@ -126,7 +126,7 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if !reflect.DeepEqual(defaultPool, &appqos.Pool{}) {
 		defaultPoolInfo := &powerv1alpha1.SharedPoolInfo{
-			Name: "Default",
+			Name:             "Default",
 			SharedPoolCpuIds: *defaultPool.Cores,
 		}
 		sharedPools = append(sharedPools, *defaultPoolInfo)
@@ -134,7 +134,7 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if !reflect.DeepEqual(sharedPool, &appqos.Pool{}) {
 		sharedPoolInfo := &powerv1alpha1.SharedPoolInfo{
-			Name: "Shared",
+			Name:             "Shared",
 			SharedPoolCpuIds: *sharedPool.Cores,
 		}
 		sharedPools = append(sharedPools, *sharedPoolInfo)
