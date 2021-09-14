@@ -118,7 +118,6 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				Namespace: req.NamespacedName.Namespace,
 				Name:      workloadName,
 			}, workload)
-
 			if err != nil {
 				if errors.IsNotFound(err) {
 					return ctrl.Result{}, nil
@@ -142,12 +141,12 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				// We don't need to check if there's no containers because if there weren't, that would have been caught while checking the number of CPUs above
 				updatedWorkloadContainerList := getNewWorkloadContainerList(workload.Spec.Node.Containers, powerPodState.Containers)
 				workload.Spec.Node.Containers = updatedWorkloadContainerList
-			}
 
-			err = r.Client.Update(context.TODO(), workload)
-			if err != nil {
-				logger.Error(err, "Failed updating PowerWorkload")
-				return ctrl.Result{}, err
+				err = r.Client.Update(context.TODO(), workload)
+				if err != nil {
+					logger.Error(err, "Failed updating PowerWorkload")
+					return ctrl.Result{}, err
+				}
 			}
 		}
 

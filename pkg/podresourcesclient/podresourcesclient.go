@@ -8,15 +8,12 @@ import (
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/api/errors"
 	podresourcesapi "k8s.io/kubelet/pkg/apis/podresources/v1"
-	//	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"time"
 )
 
 var maxMessage = 1024 * 1024 * 4 // size in bytes => 4MB
 var socket = "unix:///var/lib/kubelet/pod-resources/kubelet.sock"
 var timeout = 2 * time.Minute
-
-//var log = logf.Log.WithName("podresourcesclient")
 
 // PodResourcesClient stores a client to the Kubelet PodResources API server
 type PodResourcesClient struct {
@@ -63,6 +60,7 @@ func (p *PodResourcesClient) listPodResources() (*podresourcesapi.ListPodResourc
 // GetContainerCPUs returns a string in cpuset format of CPUs allocated to the container
 func (p *PodResourcesClient) GetContainerCPUs(podName, containerName string) (string, error) {
 	podresourcesResponse, err := p.listPodResources()
+	fmt.Println(podresourcesResponse.PodResources)
 	if err != nil {
 		return "", err
 	}

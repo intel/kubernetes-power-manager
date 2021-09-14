@@ -49,24 +49,6 @@ func createPowerProfileReconcileObject(powerProfile *powerv1alpha1.PowerProfile)
 	return r, nil
 }
 
-func createPP(objs []runtime.Object) (*PowerProfileReconciler, error) {
-	s := scheme.Scheme
-
-	if err := powerv1alpha1.AddToScheme(s); err != nil {
-		return nil, err
-	}
-
-	s.AddKnownTypes(powerv1alpha1.GroupVersion)
-
-	cl := fake.NewFakeClient(objs...)
-
-	appqosCl := appqos.NewDefaultAppQoSClient()
-
-	r := &PowerProfileReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
-
-	return r, nil
-}
-
 func createPowerProfileListeners(appqosPowerProfiles []appqos.PowerProfile) (*httptest.Server, error) {
 	var err error
 
