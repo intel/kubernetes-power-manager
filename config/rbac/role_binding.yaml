@@ -8,5 +8,7 @@ roleRef:
   name: manager-role
 subjects:
 - kind: ServiceAccount
-  name: default
-  namespace: default
+  name: intel-power-operator
+  namespace: intel-power
+  #name: default
+  #namespace: default

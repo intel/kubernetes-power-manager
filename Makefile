@@ -41,8 +41,8 @@ build: generate manifests install
 	go build -ldflags "-s -w" -buildmode=pie -o build/_output/bin/intel-rmd-operator cmd/manager/main.go
 
 images: generate manifests install
-	docker build -f build/Dockerfile -t intel-power-operator .
-	docker build -f build/Dockerfile.nodeagent -t intel-power-node-agent .
+	docker build -f build/Dockerfile -t intel-power-operator:latest .
+	docker build -f build/Dockerfile.nodeagent -t intel-power-node-agent:latest .
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests

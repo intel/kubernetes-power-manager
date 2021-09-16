@@ -1,15 +1,8 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  labels:
-    control-plane: controller-manager
-  name: system
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: default
+  namespace: intel-power
   labels:
     control-plane: controller-manager
 spec:
@@ -22,14 +15,18 @@ spec:
       labels:
         control-plane: controller-manager
     spec:
-      serviceAccountName: default
+      serviceAccountName: intel-power-operator
       containers:
       - command:
         - /manager
         args:
         - --enable-leader-election
         imagePullPolicy: Never
-        image: operator:latest
+        image: intel-power-operator:latest
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         name: manager
         resources:
           limits:

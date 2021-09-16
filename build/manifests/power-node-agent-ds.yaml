@@ -2,21 +2,24 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: power-node-agent
-  namespace: default
+  namespace: intel-power
 spec:
   selector:
     matchLabels:
       name: power-node-agent-pod
   template:
     metadata:
+      namespace: intel-power
       labels:
         name: power-node-agent-pod
     spec:
+      serviceAccountName: intel-power-operator
       containers:
         - image: 'intel-power-node-agent:latest'
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
           name: power-node-agent
@@ -56,6 +59,7 @@ spec:
             readOnly: true
           securityContext:
             privileged: true
+            #readOnlyRootFilesystem: true
       volumes:
         - name: appqoscerts
           hostPath:
