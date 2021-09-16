@@ -12,15 +12,12 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	//"k8s.io/apimachinery/pkg/api/resource"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	//controllers "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
-	//corev1 "k8s.io/api/core/v1"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -839,30 +836,11 @@ func TestPowerNodeReconciler(t *testing.T) {
 			objs = append(objs, &tc.powerWorkloadList.Items[i])
 		}
 
-		//r, err := createPowerNodeReconcileObject(tc.powerNode)
 		r, err := createPowerNodeReconcilerObject(objs)
 		if err != nil {
 			t.Error(err)
 			t.Fatal("error creating reconcile object")
 		}
-
-		/*
-			for i := range tc.powerProfileList.Items {
-				err = r.Client.Create(context.TODO(), &tc.powerProfileList.Items[i])
-				if err != nil {
-					t.Error(err)
-					t.Fatal("error creating PowerProfile object")
-				}
-			}
-
-			for i := range tc.powerWorkloadList.Items {
-				err = r.Client.Create(context.TODO(), &tc.powerWorkloadList.Items[i])
-				if err != nil {
-					t.Error(err)
-					t.Fatal("error creating PowerWorkload object")
-				}
-			}
-		*/
 
 		server, err := createListeners(appqosPools)
 		if err != nil {

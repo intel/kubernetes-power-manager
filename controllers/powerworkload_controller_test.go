@@ -2118,7 +2118,7 @@ func TestSharedWorkloadDeletion(t *testing.T) {
 		_, err = r.Reconcile(req)
 		if err != nil {
 			t.Error(err)
-			//t.Fatal(fmt.Sprintf("%s - error reconciling second PowerWorkload object", tc.testCase))
+			t.Fatal(fmt.Sprintf("%s - error reconciling second PowerWorkload object", tc.testCase))
 		}
 
 		err = r.Client.Create(context.TODO(), tc.secondSharedPowerWorkload)
@@ -2137,7 +2137,7 @@ func TestSharedWorkloadDeletion(t *testing.T) {
 		_, err = r.Reconcile(req)
 		if err != nil {
 			t.Error(err)
-			//t.Fatal(fmt.Sprintf("%s - error reconciling second PowerWorkload object", tc.testCase))
+			t.Fatal(fmt.Sprintf("%s - error reconciling second PowerWorkload object", tc.testCase))
 		}
 
 		secondSharedPowerWorkload := &powerv1alpha1.PowerWorkload{}

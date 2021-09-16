@@ -3,19 +3,11 @@ package appqos
 // AppQoS API Calles + Marshalling
 
 import (
-	"time"
-	//	"crypto/ecdsa"
-	//	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
-	//	"encoding/json"
-	//	"fmt"
 	"io/ioutil"
-	//	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
-	//	"reflect"
-	//	"strconv"
-	//	"strings"
+	"time"
 )
 
 const (
@@ -36,12 +28,6 @@ func NewOperatorAppQoSClient() (*AppQoSClient, error) {
 	if err != nil {
 		return &AppQoSClient{}, err
 	}
-	/*
-		err = verifyKeyLength(cert)
-		if err != nil {
-			return &AppQoSClient{}, err
-		}
-	*/
 	caCert, err := ioutil.ReadFile(caPath)
 	if err != nil {
 		return &AppQoSClient{}, err

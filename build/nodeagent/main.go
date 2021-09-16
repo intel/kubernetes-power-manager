@@ -33,7 +33,6 @@ import (
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podstate"
-	//"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -52,7 +51,6 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
-	//flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":10001", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
@@ -95,7 +93,6 @@ func main() {
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerProfile"),
 		Scheme:       mgr.GetScheme(),
 		AppQoSClient: appQoSClient,
-		//State:        state,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
 		os.Exit(1)
@@ -105,7 +102,6 @@ func main() {
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerWorkload"),
 		Scheme:       mgr.GetScheme(),
 		AppQoSClient: appQoSClient,
-		//State:        state,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerWorkload")
 		os.Exit(1)

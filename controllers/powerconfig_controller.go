@@ -25,7 +25,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
-	//"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -44,6 +43,7 @@ const (
 	AppQoSLabel            = "feature.node.kubernetes.io/appqos-node"
 	ExtendedResourcePrefix = "power.intel.com/"
 	NodeAgentDSName        = "power-node-agent"
+	NodeAgentDSNamespace   = "intel-power"
 )
 
 var NodeAgentDaemonSetPath = "/power-manifests/power-node-agent-ds.yaml"
@@ -124,7 +124,7 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 				daemonSet := &appsv1.DaemonSet{}
 				err = r.Client.Get(context.TODO(), client.ObjectKey{
 					Name:      NodeAgentDSName,
-					Namespace: req.NamespacedName.Namespace,
+					Namespace: NodeAgentDSNamespace,
 				}, daemonSet)
 				if err != nil {
 					if !errors.IsNotFound(err) {
@@ -288,10 +288,8 @@ func (r *PowerConfigReconciler) createDaemonSetIfNotPresent(powerConfig *powerv1
 	var err error
 
 	err = r.Client.Get(context.TODO(), client.ObjectKey{
-		//Namespace: daemonSet.GetObjectMeta().GetNamespace(),
-		//Name:      daemonSet.GetObjectMeta().GetName(),
 		Name:      NodeAgentDSName,
-		Namespace: powerConfig.Namespace,
+		Namespace: NodeAgentDSNamespace,
 	}, daemonSet)
 	if err != nil {
 		if errors.IsNotFound(err) {

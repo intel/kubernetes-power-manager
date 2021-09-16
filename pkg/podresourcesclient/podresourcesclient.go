@@ -60,7 +60,6 @@ func (p *PodResourcesClient) listPodResources() (*podresourcesapi.ListPodResourc
 // GetContainerCPUs returns a string in cpuset format of CPUs allocated to the container
 func (p *PodResourcesClient) GetContainerCPUs(podName, containerName string) (string, error) {
 	podresourcesResponse, err := p.listPodResources()
-	fmt.Println(podresourcesResponse.PodResources)
 	if err != nil {
 		return "", err
 	}

@@ -742,7 +742,7 @@ func TestPowerConfigCreation(t *testing.T) {
 		daemonSet := &appsv1.DaemonSet{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      NodeAgentDSName,
-			Namespace: PowerConfigNamespace,
+			Namespace: NodeAgentDSNamespace,
 		}, daemonSet)
 		if err != nil {
 			if errors.IsNotFound(err) {
@@ -1500,7 +1500,7 @@ func TestPowerConfigDeletion(t *testing.T) {
 			daemonSet: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      NodeAgentDSName,
-					Namespace: PowerConfigNamespace,
+					Namespace: NodeAgentDSNamespace,
 				},
 			},
 			expectedNumberOfPowerProfiles:  0,
@@ -1607,7 +1607,7 @@ func TestPowerConfigDeletion(t *testing.T) {
 			daemonSet: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      NodeAgentDSName,
-					Namespace: PowerConfigNamespace,
+					Namespace: NodeAgentDSNamespace,
 				},
 			},
 			expectedNumberOfPowerProfiles:  0,
@@ -1743,7 +1743,7 @@ func TestPowerConfigDeletion(t *testing.T) {
 			daemonSet: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      NodeAgentDSName,
-					Namespace: PowerConfigNamespace,
+					Namespace: NodeAgentDSNamespace,
 				},
 			},
 			expectedNumberOfPowerProfiles:  0,
@@ -1832,7 +1832,7 @@ func TestPowerConfigDeletion(t *testing.T) {
 		daemonSet := &appsv1.DaemonSet{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      NodeAgentDSName,
-			Namespace: PowerConfigNamespace,
+			Namespace: NodeAgentDSNamespace,
 		}, daemonSet)
 		if err != nil {
 			if !errors.IsNotFound(err) {
@@ -1980,7 +1980,7 @@ func TestPowerConfigNodeSelectorChange(t *testing.T) {
 		daemonSet := &appsv1.DaemonSet{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      NodeAgentDSName,
-			Namespace: PowerConfigNamespace,
+			Namespace: NodeAgentDSNamespace,
 		}, daemonSet)
 		if err != nil {
 			t.Error(err)
@@ -2215,7 +2215,7 @@ func TestPowerConfigCreationDaemonSetAlreadyExists(t *testing.T) {
 		daemonSet := &appsv1.DaemonSet{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      NodeAgentDSName,
-			Namespace: PowerConfigNamespace,
+			Namespace: NodeAgentDSNamespace,
 		}, daemonSet)
 		if err != nil {
 			t.Error(err)

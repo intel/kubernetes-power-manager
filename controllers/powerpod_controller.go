@@ -213,7 +213,6 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 					containerList = append(containerList, workloadContainer)
 				}
 
-				//nodeInfo := []powerv1alpha1.NodeInfo{
 				nodeInfo := &powerv1alpha1.NodeInfo{
 					Name:       pod.Spec.NodeName,
 					Containers: containerList,
@@ -290,7 +289,6 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 	//	3. The requested Power Profile exists in the AppQoS instance on the node
 
 	_ = context.Background()
-	//logger := r.Log.WithName("getPowerProfileRequestsFromContainers")
 
 	profiles := make(map[string][]int, 0)
 	powerContainers := make([]powerv1alpha1.Container, 0)

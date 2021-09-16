@@ -10,5 +10,3 @@ subjects:
 - kind: ServiceAccount
   name: intel-power-operator
   namespace: intel-power
-  #name: default
-  #namespace: default
