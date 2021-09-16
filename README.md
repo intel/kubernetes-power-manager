@@ -358,12 +358,11 @@ git clone https://gitlab.devtools.intel.com/OrchSW/CNO/power-operator
 cd power-operator
 ````
 
-- Set up the necessary RBAC rules for the operator:
+- Set up the necessary Namespace, Service Account, and RBAC rules for the operator:
 ````
-kubectl apply -f config/rbac/leader_election_role.yaml
-kubectl apply -f config/rbac/leader_election_role_binding.yaml
-kubectl apply -f config/rbac/role.yaml
-kubectl apply -f config/rbac/role_binding.yaml
+kubectl apply -f config/rbac/namespace.yaml
+kubectl apply -f config/rbac/service_account.yaml
+kubectl apply -f config/rbac/rbac.yaml
 ````
 
 - Generate the CRD templates, create the Custom Resource Definitions, and build the Power Operator and Power Node Agent Docker images:
@@ -377,13 +376,6 @@ NOTE: The images will be labelled ‘intel-power-operator:latest’ and ‘intel
 
 The manager Deployment in config/manager/manager.yaml contains the following:
 ````yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  labels:
-    control-plane: controller-manager
-  name: system
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
