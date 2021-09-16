@@ -35,7 +35,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podresourcesclient"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podstate"
 	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
@@ -54,7 +53,6 @@ type PowerPodReconciler struct {
 	Scheme             *runtime.Scheme
 	State              podstate.State
 	PodResourcesClient podresourcesclient.PodResourcesClient
-	AppQoSClient       *appqos.AppQoSClient
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerpods,verbs=get;list;watch;create;update;patch;delete

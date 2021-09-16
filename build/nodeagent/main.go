@@ -121,7 +121,6 @@ func main() {
 		Scheme:             mgr.GetScheme(),
 		State:              *powerNodeState,
 		PodResourcesClient: *podResourcesClient,
-		AppQoSClient:       appQoSClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerPod")
 		os.Exit(1)
