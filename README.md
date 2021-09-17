@@ -339,8 +339,10 @@ cd intel-cmt-cat/appqos/docker
 ./build_docker.sh
 ````
 
-### Set up App QoS certificates
-The Power Node Agent requires certificates to communicate securely with the App QoS Agent. Both agents are run in the same Pod so the IP address required is ‘localhost’. The certificates must be placed into the /etc/certs/public directory as this is the directory that gets mounted into the Pod. An example of setting up the certificates is as follows:
+### Set up App QoS certificates and App QoS conf file
+The Power Node Agent requires certificates to communicate securely with the App QoS Agent. Both agents are run in the same Pod so the IP address required is ‘localhost’. The certificates must be placed into the /etc/certs/public directory as this is the directory that gets mounted into the Pod.
+The App QoS Agent also requires a conf file to run, which needs to be placed in teh /etc/certs/public directory as well.
+An example of setting up the certificates is as follows:
 ````
 mkdir -p /etc/certs/public
 openssl req -nodes -x509 -newkey rsa:4096 -keyout /etc/certs/public/ca.key -out /etc/certs/public/ca.crt -days 365 -subj "/O=AppQoS/OU=root/CN=localhost"
@@ -349,6 +351,8 @@ chmod 644 /etc/certs/public/ca.key
 openssl req -nodes -newkey rsa:3072 -keyout /etc/certs/public/appqos.key -out /etc/certs/public/appqos.csr -subj "/O=AppQoS/OU=AppQoS Server/CN=localhost"
 openssl x509 -req -in /etc/certs/public/appqos.csr -CA /etc/certs/public/ca.crt -CAkey /etc/certs/public/ca.key -CAcreateserial -out /etc/certs/public/appqos.crt
 chmod 644 /etc/certs/public/appqos.crt /etc/certs/public/appqos.csr /etc/certs/public/ca.key /etc/certs/public/appqos.key
+
+cp ~/intel-cmt-cat/appqos/appqos.conf /etc/certs/public/
 ````
 
 ### Setting up the Power Operator 
