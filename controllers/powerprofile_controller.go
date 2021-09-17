@@ -45,16 +45,22 @@ const (
 
 var AppQoSClientAddress = "https://localhost:5000"
 
-var extendedResourcePercentage map[string]float64 = map[string]float64{
-	// performance          ===>  priority level 0
-	// balance_performance  ===>  priority level 1
-	// balance_power        ===>  priority level 2
-	// power                ===>  priority level 3
+// performance          ===>  priority level 0
+// balance_performance  ===>  priority level 1
+// balance_power        ===>  priority level 2
+// power                ===>  priority level 3
 
+var extendedResourcePercentage map[string]float64 = map[string]float64{
 	"performance":         .40,
 	"balance-performance": .80,
 	"balance-power":       .90,
 	"power":               1.0,
+}
+
+var extendedPowerProfileMaxMinDifference map[string]int = map[string]int{
+	"performance":         0,
+	"balance-performance": 1000,
+	"balance-power":       2000,
 }
 
 var basePowerProfileToEppValue map[string]string = map[string]string{
@@ -219,6 +225,9 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	maximumFrequency = maximumFrequency / 1000
 	minimumFrequency := maximumFrequency - 400
 
+	maximumValueForProfile := maximumFrequency - extendedPowerProfileMaxMinDifference[profile.Spec.Name]
+	minimumValueForProfile := minimumFrequency - extendedPowerProfileMaxMinDifference[profile.Spec.Name]
+
 	// Check to see if the extended PowerProfile has already been created for this Node
 	if profile.Spec.Epp != "power" {
 		profileForNode := &powerv1alpha1.PowerProfile{}
@@ -238,8 +247,8 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 				powerProfileSpec := &powerv1alpha1.PowerProfileSpec{
 					Name: profileName,
-					Max:  maximumFrequency,
-					Min:  minimumFrequency,
+					Max:  maximumValueForProfile,
+					Min:  minimumValueForProfile,
 					Epp:  profile.Spec.Epp,
 				}
 
@@ -281,8 +290,8 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			powerProfile.MinFreq = &profile.Spec.Min
 			powerProfile.MaxFreq = &profile.Spec.Max
 		} else {
-			powerProfile.MinFreq = &minimumFrequency
-			powerProfile.MaxFreq = &maximumFrequency
+			powerProfile.MinFreq = &minimumValueForProfile
+			powerProfile.MaxFreq = &maximumValueForProfile
 		}
 
 		// Create PowerProfile

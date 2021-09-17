@@ -1897,3 +1897,159 @@ func TestBasePowerProfileDeletion(t *testing.T) {
 		}
 	}
 }
+
+func TestPowerProfileMinMaxValues(t *testing.T) {
+	tcases := []struct{
+		testCase string
+		performanceBasePowerProfile *powerv1alpha1.PowerProfile
+		basePowerProfiles *powerv1alpha1.PowerProfileList
+		node *corev1.Node
+		performancePowerProfileName string
+		expectedNumberOfPowerProfiles int
+		expectedPowerProfileMaxMinValue map[string]int
+	}{
+		{
+			testCase: "Test Case 1",
+			performanceBasePowerProfile: &powerv1alpha1.PowerProfile{
+				ObjectMeta: metav1.ObjectMeta{
+                                                        Name: "performance",
+                                                        Namespace: PowerProfileNamespace,
+                                                },
+                                                Spec: powerv1alpha1.PowerProfileSpec{
+                                                        Name: "performance",
+                                                        Epp: "performance",
+                                                },
+			},
+			basePowerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "balance-performance",
+							Namespace: PowerProfileNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance",
+							Epp: "balance_performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "balance-power",
+							Namespace: PowerProfileNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-power",
+							Epp: "balance_power",
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+				Status: corev1.NodeStatus{
+					Capacity: map[corev1.ResourceName]resource.Quantity{
+						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+					},
+				},
+			},
+			performancePowerProfileName: "performance-example-node1",
+			expectedNumberOfPowerProfiles: 6,
+			expectedPowerProfileMaxMinValue: map[string]int{
+				"balance-performance-example-node1": 1000,
+				"balance-power-example-node1": 2000,
+			},
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.node.Name)
+		AppQoSClientAddress = "http://localhost:5000"
+
+		r, err := createPowerProfileReconcileObject(tc.performanceBasePowerProfile)
+		if err != nil {
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		server, err := createPowerProfileListeners([]appqos.PowerProfile{})
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Listener", tc.testCase))
+		}
+
+		err = r.Client.Create(context.TODO(), tc.node)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Node object", tc.testCase))
+		}
+
+		for _, profile := range tc.basePowerProfiles.Items {
+			err = r.Client.Create(context.TODO(), &profile)
+			if err != nil {
+				t.Error(err)
+				t.Fatal(fmt.Sprintf("%s - error creating PowerProfile object '%s'", tc.testCase, profile.Name))
+			}
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.performanceBasePowerProfile.Name,
+				Namespace: PowerProfileNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
+		}
+
+		for _, profile := range tc.basePowerProfiles.Items {
+			req := reconcile.Request{
+				NamespacedName: client.ObjectKey{
+					Name:      profile.Name,
+					Namespace: PowerProfileNamespace,
+				},
+			}
+
+			_, err = r.Reconcile(req)
+			if err != nil {
+				t.Error(err)
+				t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
+			}
+		}
+
+		server.Close()
+
+		performancePowerProfile := &powerv1alpha1.PowerProfile{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name: tc.performancePowerProfileName,
+			Namespace: PowerProfileNamespace,
+		}, performancePowerProfile)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving performance PowerProfile", tc.testCase))
+		}
+
+		for profileName, value := range tc.expectedPowerProfileMaxMinValue {
+			powerProfile := &powerv1alpha1.PowerProfile{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name: profileName,
+				Namespace: PowerProfileNamespace,
+			}, powerProfile)
+			if err != nil {
+				t.Error(err)
+				t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile '%s'", tc.testCase, profileName))
+			}
+
+			if (performancePowerProfile.Spec.Max - value) != powerProfile.Spec.Max {
+				t.Errorf("%s - Failed: Expected PowerProfile '%s' Max value to be %v, got %v", tc.testCase, profileName, (performancePowerProfile.Spec.Max - value), powerProfile.Spec.Max)
+			}
+
+			if (performancePowerProfile.Spec.Min - value) != powerProfile.Spec.Min {
+				t.Errorf("%s - Failed: Expected PowerProfile '%s' Min value to be %v, got %v", tc.testCase, profileName, (performancePowerProfile.Spec.Min - value), powerProfile.Spec.Min)
+			}
+		}
+	}
+}
