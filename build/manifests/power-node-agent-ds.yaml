@@ -44,7 +44,7 @@ spec:
               readOnly: true
             - mountPath: /var/lib/kubelet/pod-resources/
               name: kubesock
-              readOnly: false
+              readOnly: true
         - image: 'appqos:latest'
           imagePullPolicy: IfNotPresent
           name: appqos
