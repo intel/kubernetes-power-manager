@@ -47,7 +47,7 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powernode", req.NamespacedName)
 
-	powerProfilesInUse := make(map[string]bool, 0)
+	powerProfilesInUse := make(map[string]bool)
 	powerWorkloads := make([]powerv1alpha1.WorkloadInfo, 0)
 	powerContainers := make([]powerv1alpha1.Container, 0)
 

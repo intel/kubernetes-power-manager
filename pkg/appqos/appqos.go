@@ -147,7 +147,10 @@ func (ac *AppQoSClient) PostPool(pool *Pool, address string) (string, error) {
 	}
 
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
+	_, err = buf.ReadFrom(resp.Body)
+	if err != nil {
+		return "Failed to read from response body", err
+	}
 	respStr := buf.String()
 
 	if resp.StatusCode != 201 {
@@ -184,7 +187,10 @@ func (ac *AppQoSClient) PutPool(pool *Pool, address string, id int) (string, err
 	}
 
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
+	_, err = buf.ReadFrom(resp.Body)
+	if err != nil {
+		return "Failed to read from response body", err
+	}
 	respStr := buf.String()
 
 	if resp.StatusCode != 200 {
@@ -214,7 +220,10 @@ func (ac *AppQoSClient) DeletePool(address string, id int) error {
 	}
 
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
+	_, err = buf.ReadFrom(resp.Body)
+	if err != nil {
+		return err
+	}
 
 	if resp.StatusCode != 200 {
 		deleteFailedErr := errors.NewServiceUnavailable(buf.String())
@@ -309,7 +318,10 @@ func (ac *AppQoSClient) PostPowerProfile(powerProfile *PowerProfile, address str
 	}
 
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
+	_, err = buf.ReadFrom(resp.Body)
+	if err != nil {
+		return "Failed to read from response body", err
+	}
 	respStr := buf.String()
 
 	if resp.StatusCode != 201 {
@@ -346,7 +358,10 @@ func (ac *AppQoSClient) PutPowerProfile(powerProfile *PowerProfile, address stri
 	}
 
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
+	_, err = buf.ReadFrom(resp.Body)
+	if err != nil {
+		return "Failed to read from response body", err
+	}
 	respStr := buf.String()
 
 	if resp.StatusCode != 200 {
@@ -376,7 +391,10 @@ func (ac *AppQoSClient) DeletePowerProfile(address string, id int) error {
 	}
 
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
+	_, err = buf.ReadFrom(resp.Body)
+	if err != nil {
+		return err
+	}
 
 	if resp.StatusCode != 200 {
 		deleteFailedErr := errors.NewServiceUnavailable(buf.String())

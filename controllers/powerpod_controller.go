@@ -99,7 +99,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 
-		workloadToCPUsRemoved := make(map[string][]int, 0)
+		workloadToCPUsRemoved := make(map[string][]int)
 		for _, container := range powerPodState.Containers {
 			workload := fmt.Sprintf("%s%s", container.PowerProfile, WorkloadNameSuffix)
 			cpus := container.ExclusiveCPUs
@@ -288,7 +288,7 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 
 	_ = context.Background()
 
-	profiles := make(map[string][]int, 0)
+	profiles := make(map[string][]int)
 	powerContainers := make([]powerv1alpha1.Container, 0)
 
 	for _, container := range containers {
@@ -397,7 +397,7 @@ func getContainerProfileFromRequests(container corev1.Container) (string, error)
 	moreThanOneProfileError := errors.NewServiceUnavailable("Cannot have more than one Power Profile per Container")
 	resourceRequestsMismatchError := errors.NewServiceUnavailable("Mismatch between CPU requests and PowerProfile Requests")
 
-	for resource, _ := range container.Resources.Requests {
+	for resource := range container.Resources.Requests {
 		if strings.HasPrefix(string(resource), ResourcePrefix) {
 			if profileName == "" {
 				profileName = string(resource[len(ResourcePrefix):])
@@ -438,11 +438,7 @@ func exclusiveCPUs(pod *corev1.Pod, container *corev1.Container) bool {
 	}
 
 	cpuQuantity := container.Resources.Requests[corev1.ResourceCPU]
-	if cpuQuantity.Value()*1000 != cpuQuantity.MilliValue() {
-		return false
-	}
-
-	return true
+	return cpuQuantity.Value()*1000 == cpuQuantity.MilliValue()
 }
 
 func getContainerID(pod *corev1.Pod, containerName string) string {

@@ -1633,6 +1633,10 @@ func TestExtendedPowerProfileDeletion(t *testing.T) {
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name: tc.node.Name,
 		}, updatedNode)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving updated Node object", tc.testCase))
+		}
 
 		for powerProfileName, shouldExist := range tc.expectedExtendedResourcesToExist {
 			resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, powerProfileName))
@@ -1837,6 +1841,10 @@ func TestBasePowerProfileDeletion(t *testing.T) {
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name: tc.node.Name,
 		}, updatedNode)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Updated Node", tc.testCase))
+		}
 
 		for powerProfileName, shouldExist := range tc.expectedExtendedResourcesToExist {
 			resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, powerProfileName))

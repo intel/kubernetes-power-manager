@@ -10,10 +10,6 @@ import (
 	"time"
 )
 
-const (
-	tlsServerName = "appqos-nameserver"
-)
-
 var certPath = "/etc/certs/public/appqos.crt"
 var keyPath = "/etc/certs/public/appqos.key"
 var caPath = "/etc/certs/public/ca.crt"

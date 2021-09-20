@@ -1070,6 +1070,10 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 			Name:      tc.sharedWorkloadName,
 			Namespace: PowerWorkloadNamespace,
 		}, sharedPowerWorkload)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Shared PowerWorkload object", tc.testCase))
+		}
 
 		if !reflect.DeepEqual(sharedPowerWorkload.Status.SharedCores, tc.expectedSharedWorkloadCPUList) {
 			t.Errorf("%s - Failed: Expected Shared PowerWorkload core list to be %v, got %v", tc.testCase, tc.expectedSharedWorkloadCPUList, sharedPowerWorkload.Status.SharedCores)

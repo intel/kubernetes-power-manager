@@ -64,7 +64,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		if errors.IsNotFound(err) {
 			// Assume PowerWorkload has been deleted. Check each Power Node to delete from each AppQoS instance
 
-			pool := &appqos.Pool{}
+			var pool *appqos.Pool
 
 			if strings.HasPrefix(req.NamespacedName.Name, "shared") {
 				pool, err = r.AppQoSClient.GetSharedPool(AppQoSClientAddress)
@@ -161,8 +161,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 
 		labelledNodeList := &corev1.NodeList{}
-		listOption := client.MatchingLabels{}
-		listOption = workload.Spec.PowerNodeSelector
+		listOption := workload.Spec.PowerNodeSelector
 
 		err = r.Client.List(context.TODO(), labelledNodeList, client.MatchingLabels(listOption))
 		if err != nil {
@@ -280,7 +279,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				}
 			}
 
-			coresRemovedFromDefaultPool := make([]int, 0)
+			var coresRemovedFromDefaultPool []int
 			if *sharedPool.Name == "Shared" {
 				defaultPool, err := r.AppQoSClient.GetPoolByName(AppQoSClientAddress, DefaultPool)
 				if err != nil {
@@ -455,6 +454,10 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 		if len(returnedCPUs) > 0 {
 			updatedSharedPool, id, err := r.returnCoresToSharedPool(returnedCPUs, AppQoSClientAddress)
+			if err != nil {
+				logger.Error(err, "error updating Shared Pool")
+				return ctrl.Result{}, err
+			}
 
 			appqosPutResponse, err := r.AppQoSClient.PutPool(updatedSharedPool, AppQoSClientAddress, id)
 			if err != nil {
@@ -471,7 +474,7 @@ func (r *PowerWorkloadReconciler) removeCoresFromSharedPool(workloadCPUList []in
 	// Removes the CPUs in workloadCPUList from the Shared Pool if they exist. Returns an empty Pool if
 	// no cores have been removed
 
-	sharedPool := &appqos.Pool{}
+	var sharedPool *appqos.Pool
 	var err error
 
 	if useDefaultPool {
@@ -493,7 +496,7 @@ func (r *PowerWorkloadReconciler) removeCoresFromSharedPool(workloadCPUList []in
 		return &appqos.Pool{}, 0, nil
 	}
 
-	updatedSharedPool := &appqos.Pool{}
+	var updatedSharedPool *appqos.Pool
 	var sharedPoolID int
 
 	// The Default pool won't have an associated Power Profile
@@ -514,7 +517,7 @@ func (r *PowerWorkloadReconciler) returnCoresToSharedPool(returnedCPUs []int, no
 		return &appqos.Pool{}, 0, err
 	}
 
-	updatedSharedPool := &appqos.Pool{}
+	var updatedSharedPool *appqos.Pool
 	var sharedPoolID int
 	newSharedCPUList := append(*sharedPool.Cores, returnedCPUs...)
 	sort.Ints(newSharedCPUList)
@@ -544,22 +547,6 @@ func updatePoolWithoutPowerProfile(newCPUList []int, pool *appqos.Pool) (*appqos
 	updatedPool.Cores = &newCPUList
 
 	return updatedPool, *pool.ID
-}
-
-func (r *PowerWorkloadReconciler) removeNonReservedCPUsFromDefaultPool(reservedCPUs []int, nodeAddress string) ([]int, error) {
-	sharedCores := make([]int, 0)
-
-	defaultPool, err := r.AppQoSClient.GetPoolByName(nodeAddress, DefaultPool)
-	if err != nil {
-		return sharedCores, err
-	}
-
-	if reflect.DeepEqual(defaultPool, &appqos.Pool{}) {
-		notFoundError := errors.NewServiceUnavailable("Default Pool not found")
-		return sharedCores, notFoundError
-	}
-
-	return util.CPUListDifference(reservedCPUs, *defaultPool.Cores), nil
 }
 
 func (r *PowerWorkloadReconciler) SetupWithManager(mgr ctrl.Manager) error {

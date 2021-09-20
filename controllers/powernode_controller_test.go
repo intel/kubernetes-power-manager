@@ -45,26 +45,6 @@ func createPowerNodeReconcilerObject(objs []runtime.Object) (*PowerNodeReconcile
 	return r, nil
 }
 
-func createPowerNodeReconcileObject(powerNode *powerv1alpha1.PowerNode) (*PowerNodeReconciler, error) {
-	s := scheme.Scheme
-
-	if err := powerv1alpha1.AddToScheme(s); err != nil {
-		return nil, err
-	}
-
-	objs := []runtime.Object{powerNode}
-
-	s.AddKnownTypes(powerv1alpha1.GroupVersion)
-
-	cl := fake.NewFakeClient(objs...)
-
-	appqosCl := appqos.NewDefaultAppQoSClient()
-
-	r := &PowerNodeReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
-
-	return r, nil
-}
-
 func createListeners(appqosPools []appqos.Pool) (*httptest.Server, error) {
 	var err error
 

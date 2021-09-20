@@ -145,13 +145,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 					if profileFromList.Spec.Epp == basePowerProfileToEppValue[req.NamespacedName.Name] {
 						// Only need to delete the PowerProfile CRD, profile will be deleted from AppQoS then
 
-						actualProfile := &powerv1alpha1.PowerProfile{}
-						err = r.Client.Get(context.TODO(), client.ObjectKey{
-							Name:      profileFromList.Name,
-							Namespace: profileFromList.Namespace,
-						}, actualProfile)
-
-						err = r.Client.Delete(context.TODO(), actualProfile)
+						err = r.Client.Delete(context.TODO(), &profileFromList)
 						if err != nil {
 							logger.Error(err, "error deleting PowerProfile")
 							return ctrl.Result{}, err
@@ -338,7 +332,7 @@ func (r *PowerProfileReconciler) removeExtendedResources(nodeName string, profil
 		return err
 	}
 
-	newNodeCapacityList := make(map[corev1.ResourceName]resource.Quantity, 0)
+	newNodeCapacityList := make(map[corev1.ResourceName]resource.Quantity)
 	extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
 	for resourceFromNode, numberOfResources := range node.Status.Capacity {
 		if resourceFromNode == extendedResourceName {
