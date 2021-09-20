@@ -271,7 +271,6 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
-	// TODO: Do check for update
 	if _, exists := extendedResourcePercentage[profileName]; !exists {
 		powerProfile := &appqos.PowerProfile{}
 		if profile.Spec.Epp == "power" {

@@ -360,7 +360,6 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 				sharedWorkload := &powerv1alpha1.PowerWorkload{}
 				err = r.Client.Get(context.TODO(), client.ObjectKey{
-					// TODO: change to const value
 					Name:      fmt.Sprintf("shared-%s-workload", workload.Spec.Node.Name),
 					Namespace: req.NamespacedName.Namespace,
 				}, sharedWorkload)
