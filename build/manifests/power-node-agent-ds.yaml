@@ -59,7 +59,6 @@ spec:
             readOnly: true
           securityContext:
             privileged: true
-            #readOnlyRootFilesystem: true
       volumes:
         - name: appqoscerts
           hostPath:
