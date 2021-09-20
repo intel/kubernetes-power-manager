@@ -144,6 +144,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 
 	// The only time the PowerWorkload can be on the wrong Node is if it is a Shared Workload, as that is created by the user
+	// If there are multiple nodes that the Shared PowerWorkload' Node Selector satisfies we need to fail here before anything is done
 	if workload.Spec.AllCores {
 		if !strings.HasPrefix(workload.Name, "shared-") {
 			// Shared PowerWorkload does not start with 'shared-' so it cannot be eligible as the Shared PowerWorkload
@@ -176,6 +177,12 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 				return ctrl.Result{}, nil
 			}
+		}
+
+		if len(labelledNodeList.Items) > 1 {
+			tooManyNodesError := errors.NewServiceUnavailable("Shared PowerWorkload cannot be assigned to multiple Nodes")
+			logger.Error(tooManyNodesError, "error creating Shared PowerWorkload")
+			return ctrl.Result{}, nil
 		}
 
 		if !util.NodeNameInNodeList(nodeName, labelledNodeList.Items) {

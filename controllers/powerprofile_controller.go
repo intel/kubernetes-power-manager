@@ -109,27 +109,6 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 			// frequency resets of the effected CPUs to the PowerWorkload controller. We also need to check to see
 			// if there are any AppQoS instances on other nodes
 
-			workloadName := fmt.Sprintf("%s%s", req.NamespacedName.Name, WorkloadNameSuffix)
-			powerWorkload := &powerv1alpha1.PowerWorkload{}
-			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name:      workloadName,
-				Namespace: req.NamespacedName.Namespace,
-			}, powerWorkload)
-			if err != nil {
-				if errors.IsNotFound(err) {
-					logger.Info("No PowerWorkload associated with this PowerProfile")
-				} else {
-					logger.Error(err, "error retrieving PowerWorkload")
-					return ctrl.Result{}, err
-				}
-			} else {
-				err = r.Client.Delete(context.TODO(), powerWorkload)
-				if err != nil {
-					logger.Error(err, "error deleting PowerWorkload")
-					return ctrl.Result{}, err
-				}
-			}
-
 			profileFromAppQoS, err := r.AppQoSClient.GetProfileByName(req.NamespacedName.Name, AppQoSClientAddress)
 			if err != nil {
 				logger.Error(err, "error retrieving PowerProfile from AppQoS instance")
@@ -178,6 +157,27 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 							return ctrl.Result{}, err
 						}
 					}
+				}
+			}
+
+			workloadName := fmt.Sprintf("%s%s", req.NamespacedName.Name, WorkloadNameSuffix)
+			powerWorkload := &powerv1alpha1.PowerWorkload{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name:      workloadName,
+				Namespace: req.NamespacedName.Namespace,
+			}, powerWorkload)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					logger.Info("No PowerWorkload associated with this PowerProfile")
+				} else {
+					logger.Error(err, "error retrieving PowerWorkload")
+					return ctrl.Result{}, err
+				}
+			} else {
+				err = r.Client.Delete(context.TODO(), powerWorkload)
+				if err != nil {
+					logger.Error(err, "error deleting PowerWorkload")
+					return ctrl.Result{}, err
 				}
 			}
 

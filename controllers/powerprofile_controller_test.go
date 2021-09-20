@@ -1899,47 +1899,47 @@ func TestBasePowerProfileDeletion(t *testing.T) {
 }
 
 func TestPowerProfileMinMaxValues(t *testing.T) {
-	tcases := []struct{
-		testCase string
-		performanceBasePowerProfile *powerv1alpha1.PowerProfile
-		basePowerProfiles *powerv1alpha1.PowerProfileList
-		node *corev1.Node
-		performancePowerProfileName string
-		expectedNumberOfPowerProfiles int
+	tcases := []struct {
+		testCase                        string
+		performanceBasePowerProfile     *powerv1alpha1.PowerProfile
+		basePowerProfiles               *powerv1alpha1.PowerProfileList
+		node                            *corev1.Node
+		performancePowerProfileName     string
+		expectedNumberOfPowerProfiles   int
 		expectedPowerProfileMaxMinValue map[string]int
 	}{
 		{
 			testCase: "Test Case 1",
 			performanceBasePowerProfile: &powerv1alpha1.PowerProfile{
 				ObjectMeta: metav1.ObjectMeta{
-                                                        Name: "performance",
-                                                        Namespace: PowerProfileNamespace,
-                                                },
-                                                Spec: powerv1alpha1.PowerProfileSpec{
-                                                        Name: "performance",
-                                                        Epp: "performance",
-                                                },
+					Name:      "performance",
+					Namespace: PowerProfileNamespace,
+				},
+				Spec: powerv1alpha1.PowerProfileSpec{
+					Name: "performance",
+					Epp:  "performance",
+				},
 			},
 			basePowerProfiles: &powerv1alpha1.PowerProfileList{
 				Items: []powerv1alpha1.PowerProfile{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-performance",
+							Name:      "balance-performance",
 							Namespace: PowerProfileNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "balance-performance",
-							Epp: "balance_performance",
+							Epp:  "balance_performance",
 						},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "balance-power",
+							Name:      "balance-power",
 							Namespace: PowerProfileNamespace,
 						},
 						Spec: powerv1alpha1.PowerProfileSpec{
 							Name: "balance-power",
-							Epp: "balance_power",
+							Epp:  "balance_power",
 						},
 					},
 				},
@@ -1954,11 +1954,11 @@ func TestPowerProfileMinMaxValues(t *testing.T) {
 					},
 				},
 			},
-			performancePowerProfileName: "performance-example-node1",
+			performancePowerProfileName:   "performance-example-node1",
 			expectedNumberOfPowerProfiles: 6,
 			expectedPowerProfileMaxMinValue: map[string]int{
 				"balance-performance-example-node1": 1000,
-				"balance-power-example-node1": 2000,
+				"balance-power-example-node1":       2000,
 			},
 		},
 	}
@@ -2024,7 +2024,7 @@ func TestPowerProfileMinMaxValues(t *testing.T) {
 
 		performancePowerProfile := &powerv1alpha1.PowerProfile{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.performancePowerProfileName,
+			Name:      tc.performancePowerProfileName,
 			Namespace: PowerProfileNamespace,
 		}, performancePowerProfile)
 		if err != nil {
@@ -2035,7 +2035,7 @@ func TestPowerProfileMinMaxValues(t *testing.T) {
 		for profileName, value := range tc.expectedPowerProfileMaxMinValue {
 			powerProfile := &powerv1alpha1.PowerProfile{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name: profileName,
+				Name:      profileName,
 				Namespace: PowerProfileNamespace,
 			}, powerProfile)
 			if err != nil {
