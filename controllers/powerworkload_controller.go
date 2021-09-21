@@ -170,23 +170,13 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 
 		// If there were no Nodes that matched the provided labels, check the NodeInfo of the Workload for a name
-		if len(labelledNodeList.Items) == 0 {
-			if workload.Spec.Node.Name != nodeName {
-				// Shared Workload is not meant for this Node
-
-				return ctrl.Result{}, nil
-			}
+		if (len(labelledNodeList.Items) == 0 && workload.Spec.Node.Name != nodeName) || !util.NodeNameInNodeList(nodeName, labelledNodeList.Items) {
+			return ctrl.Result{}, nil
 		}
 
 		if len(labelledNodeList.Items) > 1 {
 			tooManyNodesError := errors.NewServiceUnavailable("Shared PowerWorkload cannot be assigned to multiple Nodes")
 			logger.Error(tooManyNodesError, "error creating Shared PowerWorkload")
-			return ctrl.Result{}, nil
-		}
-
-		if !util.NodeNameInNodeList(nodeName, labelledNodeList.Items) {
-			// Shared Workload is not meant for this Node
-
 			return ctrl.Result{}, nil
 		}
 

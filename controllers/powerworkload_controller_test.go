@@ -3230,3 +3230,150 @@ func TestSecondSharedWorkloadCreatedWhileOriginalExists(t *testing.T) {
 		}
 	}
 }
+
+func TestIncorrectNumberOfNodesSelected(t *testing.T) {
+	tcases := []struct {
+		testCase                    string
+		sharedPowerWorkload         *powerv1alpha1.PowerWorkload
+		nodeName                    string
+		nodes                       *corev1.NodeList
+		expectedNumberOfSharedCores int
+	}{
+		{
+			testCase: "Test Case 1",
+			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "shared-example-node2-workload",
+					Namespace: PowerWorkloadNamespace,
+				},
+				Spec: powerv1alpha1.PowerWorkloadSpec{
+					Name:         "shared-example-node2-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
+					PowerNodeSelector: map[string]string{
+						"example-node": "false",
+					},
+					PowerProfile: "shared-example-node2",
+				},
+			},
+			nodeName: "example-node2",
+			nodes: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+						},
+					},
+				},
+			},
+			expectedNumberOfSharedCores: 0,
+		},
+		{
+			testCase: "Test Case 2",
+			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "shared-example-node1-workload",
+					Namespace: PowerWorkloadNamespace,
+				},
+				Spec: powerv1alpha1.PowerWorkloadSpec{
+					Name:         "shared-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
+					PowerNodeSelector: map[string]string{
+						"example-node": "false",
+					},
+					PowerProfile: "shared-example-node1",
+				},
+			},
+			nodeName: "example-node1",
+			nodes: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node2",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node3",
+						},
+					},
+				},
+			},
+			expectedNumberOfSharedCores: 0,
+		},
+		{
+			testCase: "Test Case 3",
+			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "shared-example-node1-workload",
+					Namespace: PowerWorkloadNamespace,
+				},
+				Spec: powerv1alpha1.PowerWorkloadSpec{
+					Name:         "shared-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
+					PowerNodeSelector: map[string]string{
+						"example-node": "false",
+					},
+					PowerProfile: "shared-example-node1",
+				},
+			},
+			nodeName: "example-node1",
+			nodes: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+						},
+					},
+				},
+			},
+			expectedNumberOfSharedCores: 0,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+		AppQoSClientAddress = "http://127.0.0.1:5000"
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.sharedPowerWorkload)
+		for i := range tc.nodes.Items {
+			objs = append(objs, &tc.nodes.Items[i])
+		}
+
+		r, err := createPowerWorkloadReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.sharedPowerWorkload.Name,
+				Namespace: PowerWorkloadNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
+		}
+
+		sharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name:      tc.sharedPowerWorkload.Name,
+			Namespace: PowerWorkloadNamespace,
+		}, sharedPowerWorkload)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Shared PowerWorkload", tc.testCase))
+		}
+
+		if len(sharedPowerWorkload.Status.SharedCores) != tc.expectedNumberOfSharedCores {
+			t.Errorf("%s - Failed: Expected number of Shared Cores to be %v, got %v", tc.testCase, tc.expectedNumberOfSharedCores, len(sharedPowerWorkload.Status.SharedCores))
+		}
+	}
+}
