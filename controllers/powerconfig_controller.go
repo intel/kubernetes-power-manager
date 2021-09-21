@@ -214,7 +214,7 @@ func (r *PowerConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	err = r.Client.Status().Update(context.TODO(), config)
 	if err != nil {
 		logger.Error(err, "Failed to update PowerConfig")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, err
 	}
 
 	// Create the PowerProfiles that were requested in the PowerConfig if it doesn't exist

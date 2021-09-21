@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -60,10 +62,12 @@ func createPowerProfileListeners(appqosPowerProfiles []appqos.PowerProfile) (*ht
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", (func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "DELETE" {
-			b, err := json.Marshal("okay")
-			if err == nil {
-				w.WriteHeader(http.StatusOK)
-				fmt.Fprintln(w, string(b[:]))
+			path := strings.Split(r.URL.Path, "/")
+			id, _ := strconv.Atoi(path[len(path)-1])
+			for i, pool := range appqosPowerProfiles {
+				if *pool.ID == id {
+					appqosPowerProfiles = append(appqosPowerProfiles[:i], appqosPowerProfiles[i+1:]...)
+				}
 			}
 		}
 	}))
@@ -1686,6 +1690,7 @@ func TestBasePowerProfileDeletion(t *testing.T) {
 		extendedPowerProfiles            *powerv1alpha1.PowerProfileList
 		node                             *corev1.Node
 		powerWorkloads                   *powerv1alpha1.PowerWorkloadList
+		appqosPowerProfiles              []AppQoSPowerProfile
 		expectedProfilesToExist          []string
 		expectedProfilesToNotExist       []string
 		expectedWorkloadsToExist         []string
@@ -1754,6 +1759,18 @@ func TestBasePowerProfileDeletion(t *testing.T) {
 					},
 				},
 			},
+			appqosPowerProfiles: []AppQoSPowerProfile{
+				{
+					Node: "example-node1",
+					Name: "performance",
+					Id:   1,
+				},
+				{
+					Node: "example-node1",
+					Name: "performance-example-node1",
+					Id:   2,
+				},
+			},
 			expectedProfilesToNotExist: []string{
 				"performance",
 				"performance-example-node1",
@@ -1774,12 +1791,21 @@ func TestBasePowerProfileDeletion(t *testing.T) {
 		t.Setenv("NODE_NAME", tc.node.Name)
 		AppQoSClientAddress = "http://localhost:5000"
 
+		appqosPowerProfiles := make([]appqos.PowerProfile, 0)
+		for i := range tc.appqosPowerProfiles {
+			profile := appqos.PowerProfile{
+				Name: &tc.appqosPowerProfiles[i].Name,
+				ID:   &tc.appqosPowerProfiles[i].Id,
+			}
+			appqosPowerProfiles = append(appqosPowerProfiles, profile)
+		}
+
 		r, err := createPowerProfileReconcileObject(tc.basePowerProfile)
 		if err != nil {
 			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
 		}
 
-		server, err := createPowerProfileListeners([]appqos.PowerProfile{})
+		server, err := createPowerProfileListeners(appqosPowerProfiles)
 		if err != nil {
 			t.Error(err)
 			t.Fatal(fmt.Sprintf("%s - error creating Listener", tc.testCase))

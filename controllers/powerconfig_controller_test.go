@@ -641,6 +641,66 @@ func TestPowerConfigCreation(t *testing.T) {
 				"example-node": "true",
 			},
 		},
+		{
+			testCase: "Test Case 9",
+			powerConfig: &powerv1alpha1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      PowerConfigName,
+					Namespace: PowerConfigNamespace,
+				},
+				Spec: powerv1alpha1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfiles: []string{
+						"performance",
+						"incorrect",
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node2",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node3",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			expectedNumberOfNodes:      3,
+			expectedNumberOfPowerNodes: 3,
+			expectedPowerNodes: []string{
+				"example-node1",
+				"example-node2",
+				"example-node3",
+			},
+			expectedNumberOfPowerProfiles: 1,
+			expectedPowerProfiles: []string{
+				"performance",
+			},
+			expectedDaemonSetNodeSelector: map[string]string{
+				"example-node": "true",
+			},
+		},
 	}
 
 	for _, tc := range tcases {

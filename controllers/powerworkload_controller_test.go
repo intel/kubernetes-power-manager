@@ -938,10 +938,11 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 					Cores: []int{0},
 				},
 				{
-					Node:  "example-node1",
-					Name:  "Shared",
-					Id:    2,
-					Cores: []int{1, 2, 5, 6, 7, 8, 9},
+					Node:         "example-node1",
+					Name:         "Shared",
+					Id:           2,
+					Cores:        []int{1, 2, 5, 6, 7, 8, 9},
+					PowerProfile: 1,
 				},
 				{
 					Node:  "example-node1",
@@ -983,6 +984,77 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 			expectedDefaultPoolCPUList:    []int{0},
 			expectedSharedPoolCPUList:     []int{1, 2, 9},
 		},
+		{
+			testCase:           "Test Case 7",
+			powerWorkloadNames: []string{"performance-example-node1-workload"},
+			nodeName:           "example-node1",
+			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
+				Items: []powerv1alpha1.PowerWorkload{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1-workload",
+							Namespace: PowerWorkloadNamespace,
+						},
+						Spec: powerv1alpha1.PowerWorkloadSpec{
+							Name: "performance-example-node1-workload",
+							PowerNodeSelector: map[string]string{
+								"example-node": "true",
+							},
+							Node: powerv1alpha1.NodeInfo{
+								Name: "example-node1",
+								Containers: []powerv1alpha1.Container{
+									{
+										Name: "example-container1",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
+										ExclusiveCPUs: []int{
+											2,
+											3,
+										},
+										PowerProfile: "performance",
+										Workload:     "performance-example-node1-workload",
+									},
+								},
+								CpuIds: []int{
+									2,
+									3,
+								},
+							},
+							PowerProfile: "performance",
+						},
+					},
+				},
+			},
+			sharedWorkloadName: "shared-example-node1-workload",
+			appqosPools: []AppQoSPool{
+				{
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+				},
+			},
+			appqosPowerProfiles: []AppQoSPowerProfile{
+				{
+					Node: "example-node1",
+					Name: "performance",
+					Id:   2,
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			expectedDefaultPoolCPUList: []int{0, 1, 4, 5, 6, 7, 8, 9},
+		},
 	}
 
 	for _, tc := range tcases {
@@ -991,10 +1063,20 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 
 		appqosPools := make([]appqos.Pool, 0)
 		for i := range tc.appqosPools {
-			pool := appqos.Pool{
-				Name:  &tc.appqosPools[i].Name,
-				ID:    &tc.appqosPools[i].Id,
-				Cores: &tc.appqosPools[i].Cores,
+			var pool appqos.Pool
+			if tc.appqosPools[i].PowerProfile != 0 {
+				pool = appqos.Pool{
+					Name:         &tc.appqosPools[i].Name,
+					ID:           &tc.appqosPools[i].Id,
+					Cores:        &tc.appqosPools[i].Cores,
+					PowerProfile: &tc.appqosPools[i].PowerProfile,
+				}
+			} else {
+				pool = appqos.Pool{
+					Name:  &tc.appqosPools[i].Name,
+					ID:    &tc.appqosPools[i].Id,
+					Cores: &tc.appqosPools[i].Cores,
+				}
 			}
 			appqosPools = append(appqosPools, pool)
 		}
@@ -1053,30 +1135,34 @@ func TestNonSharedWorkloadCreation(t *testing.T) {
 			t.Errorf("%s - Failed: Expected Default Pool CPU list to be %v, got %v", tc.testCase, tc.expectedDefaultPoolCPUList, *defaultPool.Cores)
 		}
 
-		sharedPool, err := r.AppQoSClient.GetPoolByName("http://127.0.0.1:5000", "Shared")
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Shared Pool from AppQoS", tc.testCase))
-		}
+		if len(tc.expectedSharedPoolCPUList) > 0 {
+			sharedPool, err := r.AppQoSClient.GetPoolByName("http://127.0.0.1:5000", "Shared")
+			if err != nil {
+				t.Error(err)
+				t.Fatal(fmt.Sprintf("%s - error retrieving Shared Pool from AppQoS", tc.testCase))
+			}
 
-		if !reflect.DeepEqual(*sharedPool.Cores, tc.expectedSharedPoolCPUList) {
-			t.Errorf("%s - Failed: Expected Shared Pool CPU list to be %v, got %v", tc.testCase, tc.expectedSharedPoolCPUList, *sharedPool.Cores)
+			if !reflect.DeepEqual(*sharedPool.Cores, tc.expectedSharedPoolCPUList) {
+				t.Errorf("%s - Failed: Expected Shared Pool CPU list to be %v, got %v", tc.testCase, tc.expectedSharedPoolCPUList, *sharedPool.Cores)
+			}
 		}
 
 		server.Close()
 
-		sharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name:      tc.sharedWorkloadName,
-			Namespace: PowerWorkloadNamespace,
-		}, sharedPowerWorkload)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Shared PowerWorkload object", tc.testCase))
-		}
+		if len(tc.expectedSharedWorkloadCPUList) > 0 {
+			sharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name:      tc.sharedWorkloadName,
+				Namespace: PowerWorkloadNamespace,
+			}, sharedPowerWorkload)
+			if err != nil {
+				t.Error(err)
+				t.Fatal(fmt.Sprintf("%s - error retrieving Shared PowerWorkload object", tc.testCase))
+			}
 
-		if !reflect.DeepEqual(sharedPowerWorkload.Status.SharedCores, tc.expectedSharedWorkloadCPUList) {
-			t.Errorf("%s - Failed: Expected Shared PowerWorkload core list to be %v, got %v", tc.testCase, tc.expectedSharedWorkloadCPUList, sharedPowerWorkload.Status.SharedCores)
+			if !reflect.DeepEqual(sharedPowerWorkload.Status.SharedCores, tc.expectedSharedWorkloadCPUList) {
+				t.Errorf("%s - Failed: Expected Shared PowerWorkload core list to be %v, got %v", tc.testCase, tc.expectedSharedWorkloadCPUList, sharedPowerWorkload.Status.SharedCores)
+			}
 		}
 	}
 }
@@ -1544,10 +1630,11 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 					Cores: []int{0, 1},
 				},
 				{
-					Node:  "example-node1",
-					Name:  "Shared",
-					Id:    2,
-					Cores: []int{4, 5, 6, 7, 8, 9},
+					Node:         "example-node1",
+					Name:         "Shared",
+					Id:           2,
+					Cores:        []int{4, 5, 6, 7, 8, 9},
+					PowerProfile: 1,
 				},
 				{
 					Node:  "example-node1",
@@ -1684,10 +1771,11 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 					Cores: []int{0, 1},
 				},
 				{
-					Node:  "example-node1",
-					Name:  "Shared",
-					Id:    2,
-					Cores: []int{6, 7, 8, 9},
+					Node:         "example-node1",
+					Name:         "Shared",
+					Id:           2,
+					Cores:        []int{6, 7, 8, 9},
+					PowerProfile: 1,
 				},
 				{
 					Node:  "example-node1",
@@ -1836,10 +1924,11 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 					Cores: []int{0, 1},
 				},
 				{
-					Node:  "example-node1",
-					Name:  "Shared",
-					Id:    2,
-					Cores: []int{6, 7, 8, 9},
+					Node:         "example-node1",
+					Name:         "Shared",
+					Id:           2,
+					Cores:        []int{6, 7, 8, 9},
+					PowerProfile: 1,
 				},
 				{
 					Node:  "example-node1",
@@ -1881,10 +1970,20 @@ func TestNonSharedWorkloadDeletion(t *testing.T) {
 
 		appqosPools := make([]appqos.Pool, 0)
 		for i := range tc.appqosPools {
-			pool := appqos.Pool{
-				Name:  &tc.appqosPools[i].Name,
-				ID:    &tc.appqosPools[i].Id,
-				Cores: &tc.appqosPools[i].Cores,
+			var pool appqos.Pool
+			if tc.appqosPools[i].PowerProfile != 0 {
+				pool = appqos.Pool{
+					Name:         &tc.appqosPools[i].Name,
+					ID:           &tc.appqosPools[i].Id,
+					Cores:        &tc.appqosPools[i].Cores,
+					PowerProfile: &tc.appqosPools[i].PowerProfile,
+				}
+			} else {
+				pool = appqos.Pool{
+					Name:  &tc.appqosPools[i].Name,
+					ID:    &tc.appqosPools[i].Id,
+					Cores: &tc.appqosPools[i].Cores,
+				}
 			}
 			appqosPools = append(appqosPools, pool)
 		}
@@ -3179,6 +3278,20 @@ func TestSecondSharedWorkloadCreatedWhileOriginalExists(t *testing.T) {
 			t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
 		}
 
+		// Need to reconcile a second time after the second Shared PowerWorkload is deleted
+		req = reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.secondSharedPowerWorkload.Name,
+				Namespace: PowerWorkloadNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
+		}
+
 		originalSharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      tc.originalSharedPowerWorkload.Name,
@@ -3280,7 +3393,7 @@ func TestIncorrectNumberOfNodesSelected(t *testing.T) {
 					AllCores:     true,
 					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
-						"example-node": "false",
+						"example-node": "true",
 					},
 					PowerProfile: "shared-example-node1",
 				},
@@ -3296,6 +3409,9 @@ func TestIncorrectNumberOfNodesSelected(t *testing.T) {
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "example-node3",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
 						},
 					},
 				},
@@ -3325,6 +3441,46 @@ func TestIncorrectNumberOfNodesSelected(t *testing.T) {
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "example-node1",
+						},
+					},
+				},
+			},
+			expectedNumberOfSharedCores: 0,
+		},
+		{
+			testCase: "Test Case 4",
+			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "shared-example-node1-workload",
+					Namespace: PowerWorkloadNamespace,
+				},
+				Spec: powerv1alpha1.PowerWorkloadSpec{
+					Name:         "shared-example-node1-workload",
+					AllCores:     true,
+					ReservedCPUs: []int{0, 1},
+					PowerNodeSelector: map[string]string{
+						"example-node": "true",
+					},
+					PowerProfile: "shared-example-node1",
+				},
+			},
+			nodeName: "example-node1",
+			nodes: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node2",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
 						},
 					},
 				},
@@ -3375,5 +3531,622 @@ func TestIncorrectNumberOfNodesSelected(t *testing.T) {
 		if len(sharedPowerWorkload.Status.SharedCores) != tc.expectedNumberOfSharedCores {
 			t.Errorf("%s - Failed: Expected number of Shared Cores to be %v, got %v", tc.testCase, tc.expectedNumberOfSharedCores, len(sharedPowerWorkload.Status.SharedCores))
 		}
+	}
+}
+
+func TestIncorrectNodeForWorkload(t *testing.T) {
+	tcases := []struct {
+		testCase                   string
+		powerWorkload              *powerv1alpha1.PowerWorkload
+		nodeName                   string
+		appqosPools                []AppQoSPool
+		appqosPowerProfiles        []AppQoSPowerProfile
+		nodeList                   *corev1.NodeList
+		expectedPoolNameToNotExist string
+	}{
+		{
+			testCase: "Test Case 1",
+			powerWorkload: &powerv1alpha1.PowerWorkload{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "performance-example-node1-workload",
+					Namespace: PowerWorkloadNamespace,
+				},
+				Spec: powerv1alpha1.PowerWorkloadSpec{
+					Name: "performance-example-node1-workload",
+					Node: powerv1alpha1.NodeInfo{
+						Name: "example-node1",
+						Containers: []powerv1alpha1.Container{
+							{
+								Name:          "example-container1",
+								Id:            "abcdefg",
+								Pod:           "example-pod",
+								ExclusiveCPUs: []int{2, 3},
+								PowerProfile:  "performance-example-node1",
+								Workload:      "performance-example-node1-workload",
+							},
+						},
+						CpuIds: []int{2, 3},
+					},
+					PowerProfile: "performance-example-node1",
+				},
+			},
+			nodeName: "example-node2",
+			appqosPools: []AppQoSPool{
+				{
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+				},
+			},
+			appqosPowerProfiles: []AppQoSPowerProfile{
+				{
+					Node: "example-node1",
+					Name: "performance-example-node1",
+					Id:   1,
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node2",
+						},
+					},
+				},
+			},
+			expectedPoolNameToNotExist: "performance-example-node1-workload",
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+		AppQoSClientAddress = "http://127.0.0.1:5000"
+
+		appqosPools := make([]appqos.Pool, 0)
+		for i := range tc.appqosPools {
+			pool := appqos.Pool{
+				Name:  &tc.appqosPools[i].Name,
+				ID:    &tc.appqosPools[i].Id,
+				Cores: &tc.appqosPools[i].Cores,
+			}
+			appqosPools = append(appqosPools, pool)
+		}
+
+		appqosPowerProfiles := make([]appqos.PowerProfile, 0)
+		for i := range tc.appqosPowerProfiles {
+			profile := appqos.PowerProfile{
+				Name: &tc.appqosPowerProfiles[i].Name,
+				ID:   &tc.appqosPowerProfiles[i].Id,
+			}
+			appqosPowerProfiles = append(appqosPowerProfiles, profile)
+		}
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.powerWorkload)
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
+
+		r, err := createPowerWorkloadReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.powerWorkload.Name,
+				Namespace: PowerWorkloadNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object '%s'", tc.testCase, tc.powerWorkload.Name))
+		}
+
+		workloadPool, err := r.AppQoSClient.GetPoolByName("http://127.0.0.1:5000", tc.expectedPoolNameToNotExist)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Pool from AppQoS", tc.testCase))
+		}
+
+		if !reflect.DeepEqual(*workloadPool, appqos.Pool{}) {
+			t.Errorf("%s - Failed: Expected Pool from AppQoS '%s' to not exist", tc.testCase, tc.expectedPoolNameToNotExist)
+		}
+
+		server.Close()
+	}
+}
+
+func TestNonSharedWorkloadUpdate(t *testing.T) {
+	tcases := []struct {
+		testCase                   string
+		nodeName                   string
+		powerWorkloadName          string
+		powerWorkloads             *powerv1alpha1.PowerWorkloadList
+		nodeList                   *corev1.NodeList
+		updatedNodeInfo            powerv1alpha1.NodeInfo
+		appqosPools                []AppQoSPool
+		appqosPowerProfiles        []AppQoSPowerProfile
+		expectedAppQoSPoolCPULists map[string][]int
+	}{
+		{
+			testCase:          "Test Case 1",
+			nodeName:          "example-node1",
+			powerWorkloadName: "performance-example-node1-workload",
+			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
+				Items: []powerv1alpha1.PowerWorkload{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "shared-example-node1-workload",
+							Namespace: PowerWorkloadNamespace,
+						},
+						Spec: powerv1alpha1.PowerWorkloadSpec{
+							Name:         "shared-example-node1-workload",
+							AllCores:     true,
+							ReservedCPUs: []int{0, 1},
+							PowerNodeSelector: map[string]string{
+								"example-node": "true",
+							},
+							PowerProfile: "shared-example-node1",
+						},
+						Status: powerv1alpha1.PowerWorkloadStatus{
+							SharedCores: []int{4, 5, 6, 7, 8, 9},
+							Node:        "example-node1",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1-workload",
+							Namespace: PowerWorkloadNamespace,
+						},
+						Spec: powerv1alpha1.PowerWorkloadSpec{
+							Name: "performance-example-node1-workload",
+							Node: powerv1alpha1.NodeInfo{
+								Name: "example-node1",
+								Containers: []powerv1alpha1.Container{
+									{
+										Name: "example-container1",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
+										ExclusiveCPUs: []int{
+											2,
+											3,
+										},
+										PowerProfile: "performance-example-node1",
+										Workload:     "performance-example-node1-workload",
+									},
+								},
+								CpuIds: []int{
+									2,
+									3,
+								},
+							},
+							PowerProfile: "performance-example-node1",
+						},
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			updatedNodeInfo: powerv1alpha1.NodeInfo{
+				Name: "example-node1",
+				Containers: []powerv1alpha1.Container{
+					{
+						Name: "example-container1",
+						Id:   "abcdefg",
+						Pod:  "example-pod",
+						ExclusiveCPUs: []int{
+							2,
+							3,
+						},
+						PowerProfile: "performance-example-node1",
+						Workload:     "performance-example-node1-workload",
+					},
+					{
+						Name: "example-container2",
+						Id:   "abcdefgasdf",
+						Pod:  "example-pod2",
+						ExclusiveCPUs: []int{
+							4,
+							5,
+						},
+						PowerProfile: "performance-example-node1",
+						Workload:     "performance-example-node1-workload",
+					},
+				},
+				CpuIds: []int{
+					2,
+					3,
+					4,
+					5,
+				},
+			},
+			appqosPools: []AppQoSPool{
+				{
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1},
+				},
+				{
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{4, 5, 6, 7, 8, 9},
+				},
+				{
+					Node:  "example-node1",
+					Name:  "performance-example-node1-workload",
+					Id:    3,
+					Cores: []int{2, 3},
+				},
+			},
+			appqosPowerProfiles: []AppQoSPowerProfile{
+				{
+					Node: "example-node1",
+					Name: "shared-example-node1",
+					Id:   1,
+				},
+				{
+					Node: "example-node1",
+					Name: "performance-example-node1",
+					Id:   2,
+				},
+			},
+			expectedAppQoSPoolCPULists: map[string][]int{
+				"Default":                            []int{0, 1},
+				"Shared":                             []int{6, 7, 8, 9},
+				"performance-example-node1-workload": []int{2, 3, 4, 5},
+			},
+		},
+		{
+			testCase:          "Test Case 2",
+			nodeName:          "example-node1",
+			powerWorkloadName: "performance-example-node1-workload",
+			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
+				Items: []powerv1alpha1.PowerWorkload{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1-workload",
+							Namespace: PowerWorkloadNamespace,
+						},
+						Spec: powerv1alpha1.PowerWorkloadSpec{
+							Name: "performance-example-node1-workload",
+							Node: powerv1alpha1.NodeInfo{
+								Name: "example-node1",
+								Containers: []powerv1alpha1.Container{
+									{
+										Name: "example-container1",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
+										ExclusiveCPUs: []int{
+											2,
+											3,
+										},
+										PowerProfile: "performance-example-node1",
+										Workload:     "performance-example-node1-workload",
+									},
+								},
+								CpuIds: []int{
+									2,
+									3,
+								},
+							},
+							PowerProfile: "performance-example-node1",
+						},
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			updatedNodeInfo: powerv1alpha1.NodeInfo{
+				Name: "example-node1",
+				Containers: []powerv1alpha1.Container{
+					{
+						Name: "example-container1",
+						Id:   "abcdefg",
+						Pod:  "example-pod",
+						ExclusiveCPUs: []int{
+							2,
+							3,
+						},
+						PowerProfile: "performance-example-node1",
+						Workload:     "performance-example-node1-workload",
+					},
+					{
+						Name: "example-container2",
+						Id:   "abcdefgasdf",
+						Pod:  "example-pod2",
+						ExclusiveCPUs: []int{
+							4,
+							5,
+						},
+						PowerProfile: "performance-example-node1",
+						Workload:     "performance-example-node1-workload",
+					},
+				},
+				CpuIds: []int{
+					2,
+					3,
+					4,
+					5,
+				},
+			},
+			appqosPools: []AppQoSPool{
+				{
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1, 4, 5, 6, 7, 8, 9},
+				},
+				{
+					Node:  "example-node1",
+					Name:  "performance-example-node1-workload",
+					Id:    2,
+					Cores: []int{2, 3},
+				},
+			},
+			appqosPowerProfiles: []AppQoSPowerProfile{
+				{
+					Node: "example-node1",
+					Name: "performance-example-node1",
+					Id:   1,
+				},
+			},
+			expectedAppQoSPoolCPULists: map[string][]int{
+				"Default":                            []int{0, 1, 6, 7, 8, 9},
+				"performance-example-node1-workload": []int{2, 3, 4, 5},
+			},
+		},
+		{
+			testCase:          "Test Case 3",
+			nodeName:          "example-node1",
+			powerWorkloadName: "performance-example-node1-workload",
+			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
+				Items: []powerv1alpha1.PowerWorkload{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "shared-example-node1-workload",
+							Namespace: PowerWorkloadNamespace,
+						},
+						Spec: powerv1alpha1.PowerWorkloadSpec{
+							Name:         "shared-example-node1-workload",
+							AllCores:     true,
+							ReservedCPUs: []int{0, 1},
+							PowerNodeSelector: map[string]string{
+								"example-node": "true",
+							},
+							PowerProfile: "shared-example-node1",
+						},
+						Status: powerv1alpha1.PowerWorkloadStatus{
+							SharedCores: []int{4, 5, 6, 7, 8, 9},
+							Node:        "example-node1",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1-workload",
+							Namespace: PowerWorkloadNamespace,
+						},
+						Spec: powerv1alpha1.PowerWorkloadSpec{
+							Name: "performance-example-node1-workload",
+							Node: powerv1alpha1.NodeInfo{
+								Name: "example-node1",
+								Containers: []powerv1alpha1.Container{
+									{
+										Name: "example-container1",
+										Id:   "abcdefg",
+										Pod:  "example-pod",
+										ExclusiveCPUs: []int{
+											2,
+											3,
+										},
+										PowerProfile: "performance-example-node1",
+										Workload:     "performance-example-node1-workload",
+									},
+								},
+								CpuIds: []int{
+									2,
+									3,
+								},
+							},
+							PowerProfile: "performance-example-node1",
+						},
+					},
+				},
+			},
+			nodeList: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "example-node1",
+							Labels: map[string]string{
+								"example-node": "true",
+							},
+						},
+					},
+				},
+			},
+			updatedNodeInfo: powerv1alpha1.NodeInfo{
+				Name: "example-node1",
+				Containers: []powerv1alpha1.Container{
+					{
+						Name: "example-container2",
+						Id:   "abcdefgasdf",
+						Pod:  "example-pod2",
+						ExclusiveCPUs: []int{
+							4,
+							5,
+						},
+						PowerProfile: "performance-example-node1",
+						Workload:     "performance-example-node1-workload",
+					},
+				},
+				CpuIds: []int{
+					4,
+					5,
+				},
+			},
+			appqosPools: []AppQoSPool{
+				{
+					Node:  "example-node1",
+					Name:  "Default",
+					Id:    1,
+					Cores: []int{0, 1},
+				},
+				{
+					Node:  "example-node1",
+					Name:  "Shared",
+					Id:    2,
+					Cores: []int{4, 5, 6, 7, 8, 9},
+				},
+				{
+					Node:  "example-node1",
+					Name:  "performance-example-node1-workload",
+					Id:    3,
+					Cores: []int{2, 3},
+				},
+			},
+			appqosPowerProfiles: []AppQoSPowerProfile{
+				{
+					Node: "example-node1",
+					Name: "shared-example-node1",
+					Id:   1,
+				},
+				{
+					Node: "example-node1",
+					Name: "performance-example-node1",
+					Id:   2,
+				},
+			},
+			expectedAppQoSPoolCPULists: map[string][]int{
+				"Default":                            []int{0, 1},
+				"Shared":                             []int{2, 3, 6, 7, 8, 9},
+				"performance-example-node1-workload": []int{4, 5},
+			},
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+		AppQoSClientAddress = "http://127.0.0.1:5000"
+
+		appqosPools := make([]appqos.Pool, 0)
+		for i := range tc.appqosPools {
+			pool := appqos.Pool{
+				Name:  &tc.appqosPools[i].Name,
+				ID:    &tc.appqosPools[i].Id,
+				Cores: &tc.appqosPools[i].Cores,
+			}
+			appqosPools = append(appqosPools, pool)
+		}
+
+		appqosPowerProfiles := make([]appqos.PowerProfile, 0)
+		for i := range tc.appqosPowerProfiles {
+			profile := appqos.PowerProfile{
+				Name: &tc.appqosPowerProfiles[i].Name,
+				ID:   &tc.appqosPowerProfiles[i].Id,
+			}
+			appqosPowerProfiles = append(appqosPowerProfiles, profile)
+		}
+
+		objs := make([]runtime.Object, 0)
+		for i := range tc.powerWorkloads.Items {
+			objs = append(objs, &tc.powerWorkloads.Items[i])
+		}
+		for i := range tc.nodeList.Items {
+			objs = append(objs, &tc.nodeList.Items[i])
+		}
+
+		r, err := createPowerWorkloadReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		server, err := createPowerWorkloadListeners(appqosPools, appqosPowerProfiles)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
+		}
+
+		powerWorkload := &powerv1alpha1.PowerWorkload{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name:      tc.powerWorkloadName,
+			Namespace: PowerWorkloadNamespace,
+		}, powerWorkload)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkload object", tc.testCase))
+		}
+
+		powerWorkload.Spec.Node = tc.updatedNodeInfo
+		err = r.Client.Update(context.TODO(), powerWorkload)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error updated PowerWorkload", tc.testCase))
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.powerWorkloadName,
+				Namespace: PowerWorkloadNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object", tc.testCase))
+		}
+
+		for poolName, cpuIds := range tc.expectedAppQoSPoolCPULists {
+			pool, err := r.AppQoSClient.GetPoolByName("http://127.0.0.1:5000", poolName)
+			if err != nil {
+				t.Error(err)
+				t.Fatal(fmt.Sprintf("%s - error retrieving Pool '%s' from AppQos", tc.testCase, poolName))
+			}
+
+			if !reflect.DeepEqual(*pool.Cores, cpuIds) {
+				t.Errorf("%s - Failed: Expected Pool %v to have CPU List of %v, got %v", tc.testCase, poolName, cpuIds, *pool.Cores)
+			}
+		}
+
+		server.Close()
 	}
 }

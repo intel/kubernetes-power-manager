@@ -441,6 +441,216 @@ func TestPodReconcileNewWorkloadCreated(t *testing.T) {
 			expectedPowerWorkloadCpuIds:       []int{1, 2, 3, 4, 5, 6},
 			expectedPowerWorkloadPowerProfile: "performance-example-node1",
 		},
+		{
+			testCase: "Test Case 4",
+			pods: &corev1.PodList{
+				Items: []corev1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-pod",
+							Namespace: PowerPodNamespace,
+							UID:       "abcdefg",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "example-node1",
+							Containers: []corev1.Container{
+								{
+									Name: "example-container-1",
+									Resources: corev1.ResourceRequirements{
+										Limits: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+											corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+										},
+										Requests: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+											corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+										},
+									},
+								},
+								{
+									Name: "example-container-2",
+									Resources: corev1.ResourceRequirements{
+										Limits: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+										},
+										Requests: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+										},
+									},
+								},
+							},
+						},
+						Status: corev1.PodStatus{
+							Phase:    corev1.PodRunning,
+							QOSClass: corev1.PodQOSGuaranteed,
+							ContainerStatuses: []corev1.ContainerStatus{
+								{
+									Name:        "example-container-1",
+									ContainerID: "docker://abcdefg",
+								},
+								{
+									Name:        "example-container-2",
+									ContainerID: "docker://hijklmnop",
+								},
+							},
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "performance",
+						},
+					},
+				},
+			},
+			podResources: []podresourcesapi.PodResources{
+				{
+					Name:       "example-pod",
+					Containers: []*podresourcesapi.ContainerResources{},
+				},
+			},
+			containerResources: map[string][]podresourcesapi.ContainerResources{
+				"example-pod": []podresourcesapi.ContainerResources{
+					{
+						Name:   "example-container-1",
+						CpuIds: []int64{1, 2},
+					},
+					{
+						Name:   "example-container-2",
+						CpuIds: []int64{3, 4},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads:          1,
+			expectedPowerWorkloadName:               "performance-example-node1-workload",
+			expectedNumberOfPowerWorkloadContainers: 1,
+			expectedPowerWorkloadContainerCpuIds: map[string][]int{
+				"example-container-1": []int{1, 2},
+			},
+			expectedPowerWorkloadCpuIds:       []int{1, 2},
+			expectedPowerWorkloadPowerProfile: "performance-example-node1",
+		},
+		{
+			testCase: "Test Case 5",
+			pods: &corev1.PodList{
+				Items: []corev1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-pod",
+							Namespace: PowerPodNamespace,
+							UID:       "abcdefg",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "example-node1",
+							Containers: []corev1.Container{
+								{
+									Name: "example-container-1",
+									Resources: corev1.ResourceRequirements{
+										Limits: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):                         *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
+											corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(2, resource.DecimalSI),
+										},
+										Requests: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):                         *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
+											corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(2, resource.DecimalSI),
+										},
+									},
+								},
+							},
+						},
+						Status: corev1.PodStatus{
+							Phase:    corev1.PodRunning,
+							QOSClass: corev1.PodQOSGuaranteed,
+							ContainerStatuses: []corev1.ContainerStatus{
+								{
+									Name:        "example-container-1",
+									ContainerID: "docker://abcdefg",
+								},
+							},
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance",
+							Epp:  "performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "performance",
+						},
+					},
+				},
+			},
+			resources: map[string]string{
+				"cpu":    "2",
+				"memory": "200Mi",
+				"power.intel.com/performance-example-node1": "2",
+			},
+			podResources: []podresourcesapi.PodResources{
+				{
+					Name:       "example-pod",
+					Containers: []*podresourcesapi.ContainerResources{},
+				},
+			},
+			containerResources: map[string][]podresourcesapi.ContainerResources{
+				"example-pod": []podresourcesapi.ContainerResources{
+					{
+						Name:   "example-container-1",
+						CpuIds: []int64{1, 2},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads:          1,
+			expectedPowerWorkloadName:               "performance-example-node1-workload",
+			expectedNumberOfPowerWorkloadContainers: 1,
+			expectedPowerWorkloadContainerCpuIds: map[string][]int{
+				"example-container-1": []int{1, 2},
+			},
+			expectedPowerWorkloadCpuIds:       []int{1, 2},
+			expectedPowerWorkloadPowerProfile: "performance-example-node1",
+		},
 	}
 
 	for _, tc := range tcases {
@@ -686,6 +896,301 @@ func TestPodDeletion(t *testing.T) {
 				"performance-example-node1-workload": true,
 			},
 		},
+		{
+			testCase: "Test Case 2",
+			pods: &corev1.PodList{
+				Items: []corev1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-pod",
+							Namespace: PowerPodNamespace,
+							UID:       "abcdefg",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "example-node1",
+							Containers: []corev1.Container{
+								{
+									Name: "example-container-1",
+									Resources: corev1.ResourceRequirements{
+										Limits: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+											corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+										},
+										Requests: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+											corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+										},
+									},
+								},
+								{
+									Name: "example-container-2",
+									Resources: corev1.ResourceRequirements{
+										Limits: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+											corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+										},
+										Requests: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+											corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+										},
+									},
+								},
+							},
+						},
+						Status: corev1.PodStatus{
+							Phase:    corev1.PodRunning,
+							QOSClass: corev1.PodQOSGuaranteed,
+							ContainerStatuses: []corev1.ContainerStatus{
+								{
+									Name:        "example-container-1",
+									ContainerID: "docker://abcdefg",
+								},
+								{
+									Name:        "example-container-2",
+									ContainerID: "docker://abcdefglasdjkfh",
+								},
+							},
+						},
+					},
+				},
+			},
+			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
+				Items: []powerv1alpha1.PowerWorkload{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1-workload",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerWorkloadSpec{
+							Name: "performance-example-node1-workload",
+							Node: powerv1alpha1.NodeInfo{
+								Name: "example-node1",
+								Containers: []powerv1alpha1.Container{
+									{
+										Name:          "example-container-1",
+										Id:            "abcdefg",
+										Pod:           "example-pod",
+										ExclusiveCPUs: []int{1, 2},
+										PowerProfile:  "performance-example-node1",
+										Workload:      "performance-example-node1-workload",
+									},
+									{
+										Name:          "example-container-2",
+										Id:            "abcdefg",
+										Pod:           "example-pod",
+										ExclusiveCPUs: []int{3, 4},
+										PowerProfile:  "performance-example-node1",
+										Workload:      "performance-example-node1-workload",
+									},
+								},
+								CpuIds: []int{1, 2, 3, 4},
+							},
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance",
+							Epp:  "performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3700,
+							Min:  3400,
+							Epp:  "performance",
+						},
+					},
+				},
+			},
+			podResources: []podresourcesapi.PodResources{
+				{
+					Name:       "example-pod",
+					Containers: []*podresourcesapi.ContainerResources{},
+				},
+			},
+			containerResources: map[string][]podresourcesapi.ContainerResources{
+				"example-pod": []podresourcesapi.ContainerResources{
+					{
+						Name:   "example-container-1",
+						CpuIds: []int64{1, 2},
+					},
+					{
+						Name:   "example-container-2",
+						CpuIds: []int64{3, 4},
+					},
+				},
+			},
+			powerWorkloadNames: []string{
+				"performance-example-node1-workload",
+			},
+			expectedNumberOfPowerWorkloads: 0,
+			expectedPowerWorkloadToNotBeFound: map[string]bool{
+				"performance-example-node1-workload": true,
+			},
+		},
+		{
+			testCase: "Test Case 3",
+			pods: &corev1.PodList{
+				Items: []corev1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-pod",
+							Namespace: PowerPodNamespace,
+							UID:       "abcdefg",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "example-node1",
+							Containers: []corev1.Container{
+								{
+									Name: "example-container-1",
+									Resources: corev1.ResourceRequirements{
+										Limits: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+											corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+										},
+										Requests: map[corev1.ResourceName]resource.Quantity{
+											corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+											corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+											corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+										},
+									},
+								},
+							},
+						},
+						Status: corev1.PodStatus{
+							Phase:    corev1.PodRunning,
+							QOSClass: corev1.PodQOSGuaranteed,
+							ContainerStatuses: []corev1.ContainerStatus{
+								{
+									Name:        "example-container-1",
+									ContainerID: "docker://abcdefg",
+								},
+							},
+						},
+					},
+				},
+			},
+			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
+				Items: []powerv1alpha1.PowerWorkload{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1-workload",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerWorkloadSpec{
+							Name: "performance-example-node1-workload",
+							Node: powerv1alpha1.NodeInfo{
+								Name: "example-node1",
+								Containers: []powerv1alpha1.Container{
+									{
+										Name:          "example-container-1",
+										Id:            "abcdefg",
+										Pod:           "example-pod",
+										ExclusiveCPUs: []int{1, 2},
+										PowerProfile:  "performance-example-node1",
+										Workload:      "performance-example-node1-workload",
+									},
+									{
+										Name:          "example-container-2",
+										Id:            "abcdefgskdfjlha",
+										Pod:           "example-pod2",
+										ExclusiveCPUs: []int{3, 4},
+										PowerProfile:  "performance-example-node1",
+										Workload:      "performance-example-node1-workload",
+									},
+								},
+								CpuIds: []int{1, 2, 3, 4},
+							},
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance",
+							Epp:  "performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3700,
+							Min:  3400,
+							Epp:  "performance",
+						},
+					},
+				},
+			},
+			podResources: []podresourcesapi.PodResources{
+				{
+					Name:       "example-pod",
+					Containers: []*podresourcesapi.ContainerResources{},
+				},
+				{
+					Name:       "example-pod2",
+					Containers: []*podresourcesapi.ContainerResources{},
+				},
+			},
+			containerResources: map[string][]podresourcesapi.ContainerResources{
+				"example-pod": []podresourcesapi.ContainerResources{
+					{
+						Name:   "example-container-1",
+						CpuIds: []int64{1, 2},
+					},
+				},
+				"example-pod2": []podresourcesapi.ContainerResources{
+					{
+						Name:   "example-container-2",
+						CpuIds: []int64{3, 4},
+					},
+				},
+			},
+			powerWorkloadNames: []string{
+				"performance-example-node1-workload",
+			},
+			expectedNumberOfPowerWorkloads: 1,
+			expectedPowerWorkloadCpuIds: map[string][]int{
+				"performance-example-node1-workload": []int{3, 4},
+			},
+		},
 	}
 
 	for _, tc := range tcases {
@@ -791,6 +1296,1391 @@ func TestPodDeletion(t *testing.T) {
 					t.Errorf("%s - Failed: Expected PowerWorkload '%s' CpuIds to be %v, got %v", tc.testCase, powerWorkloadName, tc.expectedPowerWorkloadCpuIds[powerWorkloadName], powerWorkload.Spec.Node.CpuIds)
 				}
 			}
+		}
+	}
+}
+
+func TestIncorrectNode(t *testing.T) {
+	tcases := []struct {
+		testCase                       string
+		pod                            *corev1.Pod
+		expectedNumberOfPowerWorkloads int
+	}{
+		{
+			testCase: "Test Case 1",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example-pod",
+					Namespace: PowerPodNamespace,
+					UID:       "abcdefg",
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "example-node1",
+					Containers: []corev1.Container{
+						{
+							Name: "example-container-1",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase:    corev1.PodRunning,
+					QOSClass: corev1.PodQOSGuaranteed,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:        "example-container-1",
+							ContainerID: "docker://abcdefg",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads: 0,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", "incorrect")
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.pod)
+
+		r, err := createPowerPodReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.pod.Name,
+				Namespace: PowerPodNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object", tc.testCase))
+		}
+
+		powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), powerWorkloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkload list", tc.testCase))
+		}
+
+		if len(powerWorkloads.Items) != tc.expectedNumberOfPowerWorkloads {
+			t.Errorf("%s - Failed: Expected number of PowerWorkloads to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerWorkloads, len(powerWorkloads.Items))
+		}
+	}
+}
+
+func TestKubeSystemNamespace(t *testing.T) {
+	tcases := []struct {
+		testCase                       string
+		pod                            *corev1.Pod
+		expectedNumberOfPowerWorkloads int
+	}{
+		{
+			testCase: "Test Case 1",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example-pod",
+					Namespace: "kube-system",
+					UID:       "abcdefg",
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "example-node1",
+					Containers: []corev1.Container{
+						{
+							Name: "example-container-1",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase:    corev1.PodRunning,
+					QOSClass: corev1.PodQOSGuaranteed,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:        "example-container-1",
+							ContainerID: "docker://abcdefg",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads: 0,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", "example-node1")
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.pod)
+
+		r, err := createPowerPodReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.pod.Name,
+				Namespace: "kube-system",
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object", tc.testCase))
+		}
+
+		powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), powerWorkloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkload list", tc.testCase))
+		}
+
+		if len(powerWorkloads.Items) != tc.expectedNumberOfPowerWorkloads {
+			t.Errorf("%s - Failed: Expected number of PowerWorkloads to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerWorkloads, len(powerWorkloads.Items))
+		}
+	}
+}
+
+func TestNoContainersRequestingPowerProfile(t *testing.T) {
+	tcases := []struct {
+		testCase                       string
+		pod                            *corev1.Pod
+		expectedNumberOfPowerWorkloads int
+	}{
+		{
+			testCase: "Test Case 1",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example-pod",
+					Namespace: "kube-system",
+					UID:       "abcdefg",
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "example-node1",
+					Containers: []corev1.Container{
+						{
+							Name: "example-container-1",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase:    corev1.PodRunning,
+					QOSClass: corev1.PodQOSGuaranteed,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:        "example-container-1",
+							ContainerID: "docker://abcdefg",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads: 0,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", "example-node1")
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.pod)
+
+		r, err := createPowerPodReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.pod.Name,
+				Namespace: "kube-system",
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object", tc.testCase))
+		}
+
+		powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), powerWorkloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkload list", tc.testCase))
+		}
+
+		if len(powerWorkloads.Items) != tc.expectedNumberOfPowerWorkloads {
+			t.Errorf("%s - Failed: Expected number of PowerWorkloads to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerWorkloads, len(powerWorkloads.Items))
+		}
+	}
+}
+
+func TestMultiplePowerProfilesRequested(t *testing.T) {
+	tcases := []struct {
+		testCase                       string
+		pod                            *corev1.Pod
+		node                           *corev1.Node
+		powerProfiles                  *powerv1alpha1.PowerProfileList
+		podResources                   []podresourcesapi.PodResources
+		containerResources             map[string][]podresourcesapi.ContainerResources
+		expectedNumberOfPowerWorkloads int
+	}{
+		{
+			testCase: "Test Case 1",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example-pod",
+					Namespace: PowerPodNamespace,
+					UID:       "abcdefg",
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "example-node1",
+					Containers: []corev1.Container{
+						{
+							Name: "example-container-1",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+						{
+							Name: "example-container-2",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/balance-performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/balance-performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase:    corev1.PodRunning,
+					QOSClass: corev1.PodQOSGuaranteed,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:        "example-container-1",
+							ContainerID: "docker://abcdefg",
+						},
+						{
+							Name:        "example-container-2",
+							ContainerID: "docker://abcdefg",
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "balance-performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "balance-performance",
+						},
+					},
+				},
+			},
+			podResources: []podresourcesapi.PodResources{
+				{
+					Name:       "example-pod",
+					Containers: []*podresourcesapi.ContainerResources{},
+				},
+			},
+			containerResources: map[string][]podresourcesapi.ContainerResources{
+				"example-pod": []podresourcesapi.ContainerResources{
+					{
+						Name:   "example-container-1",
+						CpuIds: []int64{1, 2},
+					},
+					{
+						Name:   "example-container-2",
+						CpuIds: []int64{3, 4},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads: 0,
+		},
+		{
+			testCase: "Test Case 2",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example-pod",
+					Namespace: PowerPodNamespace,
+					UID:       "abcdefg",
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "example-node1",
+					Containers: []corev1.Container{
+						{
+							Name: "example-container-1",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                               *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                            *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"):         *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/balance-performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                               *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                            *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"):         *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/balance-performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+						{
+							Name: "example-container-2",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/balance-performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/balance-performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase:    corev1.PodRunning,
+					QOSClass: corev1.PodQOSGuaranteed,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:        "example-container-1",
+							ContainerID: "docker://abcdefg",
+						},
+						{
+							Name:        "example-container-2",
+							ContainerID: "docker://abcdefg",
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "balance-performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "balance-performance",
+						},
+					},
+				},
+			},
+			podResources: []podresourcesapi.PodResources{
+				{
+					Name:       "example-pod",
+					Containers: []*podresourcesapi.ContainerResources{},
+				},
+			},
+			containerResources: map[string][]podresourcesapi.ContainerResources{
+				"example-pod": []podresourcesapi.ContainerResources{
+					{
+						Name:   "example-container-1",
+						CpuIds: []int64{1, 2},
+					},
+					{
+						Name:   "example-container-2",
+						CpuIds: []int64{3, 4},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads: 0,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.node.Name)
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.pod)
+		objs = append(objs, tc.node)
+		for i := range tc.powerProfiles.Items {
+			objs = append(objs, &tc.powerProfiles.Items[i])
+		}
+
+		r, err := createPowerPodReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		fakePodResources := []*podresourcesapi.PodResources{}
+		for i := range tc.podResources {
+			fakeContainers := []*podresourcesapi.ContainerResources{}
+			for j := range tc.containerResources[tc.podResources[i].Name] {
+				fakeContainers = append(fakeContainers, &tc.containerResources[tc.podResources[i].Name][j])
+			}
+			tc.podResources[i].Containers = fakeContainers
+			fakePodResources = append(fakePodResources, &tc.podResources[i])
+		}
+		fakeListResponse := &podresourcesapi.ListPodResourcesResponse{
+			PodResources: fakePodResources,
+		}
+
+		podResourcesClient := createFakePodResourcesListerClient(fakeListResponse)
+		r.PodResourcesClient = *podResourcesClient
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.pod.Name,
+				Namespace: PowerPodNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			if !errors.IsServiceUnavailable(err) {
+				if err == nil {
+					t.Errorf("%s - Failed: Expected moreThanOneProfileError to have occured", tc.testCase)
+				} else {
+					t.Error(err)
+					t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object", tc.testCase))
+				}
+			}
+		}
+
+		powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), powerWorkloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkload list", tc.testCase))
+		}
+
+		if len(powerWorkloads.Items) != tc.expectedNumberOfPowerWorkloads {
+			t.Errorf("%s - Failed: Expected number of PowerWorkloads to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerWorkloads, len(powerWorkloads.Items))
+		}
+	}
+}
+
+func TestPodNotInRunningPhase(t *testing.T) {
+	tcases := []struct {
+		testCase                       string
+		pod                            *corev1.Pod
+		node                           *corev1.Node
+		powerProfiles                  *powerv1alpha1.PowerProfileList
+		podResources                   []podresourcesapi.PodResources
+		containerResources             map[string][]podresourcesapi.ContainerResources
+		expectedNumberOfPowerWorkloads int
+	}{
+		{
+			testCase: "Test Case 1",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example-pod",
+					Namespace: PowerPodNamespace,
+					UID:       "abcdefg",
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "example-node1",
+					Containers: []corev1.Container{
+						{
+							Name: "example-container-1",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+						{
+							Name: "example-container-2",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/balance-performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/balance-performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: corev1.PodStatus{
+					QOSClass: corev1.PodQOSGuaranteed,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:        "example-container-1",
+							ContainerID: "docker://abcdefg",
+						},
+						{
+							Name:        "example-container-2",
+							ContainerID: "docker://abcdefg",
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "balance-performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "balance-performance",
+						},
+					},
+				},
+			},
+			podResources: []podresourcesapi.PodResources{
+				{
+					Name:       "example-pod",
+					Containers: []*podresourcesapi.ContainerResources{},
+				},
+			},
+			containerResources: map[string][]podresourcesapi.ContainerResources{
+				"example-pod": []podresourcesapi.ContainerResources{
+					{
+						Name:   "example-container-1",
+						CpuIds: []int64{1, 2},
+					},
+					{
+						Name:   "example-container-2",
+						CpuIds: []int64{3, 4},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads: 0,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.node.Name)
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.pod)
+		objs = append(objs, tc.node)
+		for i := range tc.powerProfiles.Items {
+			objs = append(objs, &tc.powerProfiles.Items[i])
+		}
+
+		r, err := createPowerPodReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		fakePodResources := []*podresourcesapi.PodResources{}
+		for i := range tc.podResources {
+			fakeContainers := []*podresourcesapi.ContainerResources{}
+			for j := range tc.containerResources[tc.podResources[i].Name] {
+				fakeContainers = append(fakeContainers, &tc.containerResources[tc.podResources[i].Name][j])
+			}
+			tc.podResources[i].Containers = fakeContainers
+			fakePodResources = append(fakePodResources, &tc.podResources[i])
+		}
+		fakeListResponse := &podresourcesapi.ListPodResourcesResponse{
+			PodResources: fakePodResources,
+		}
+
+		podResourcesClient := createFakePodResourcesListerClient(fakeListResponse)
+		r.PodResourcesClient = *podResourcesClient
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.pod.Name,
+				Namespace: PowerPodNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			if !errors.IsServiceUnavailable(err) {
+				if err == nil {
+					t.Errorf("%s - Failed: Expected podNotRunningErr to have occured", tc.testCase)
+				} else {
+					t.Error(err)
+					t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object", tc.testCase))
+				}
+			}
+		}
+
+		powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), powerWorkloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkloads", tc.testCase))
+		}
+
+		if len(powerWorkloads.Items) != tc.expectedNumberOfPowerWorkloads {
+			t.Errorf("%s - Failed: Expected number of PowerWorkloads to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerWorkloads, len(powerWorkloads.Items))
+		}
+	}
+}
+
+func TestNoUIDForPodFound(t *testing.T) {
+	tcases := []struct {
+		testCase                       string
+		pod                            *corev1.Pod
+		node                           *corev1.Node
+		powerProfiles                  *powerv1alpha1.PowerProfileList
+		podResources                   []podresourcesapi.PodResources
+		containerResources             map[string][]podresourcesapi.ContainerResources
+		expectedNumberOfPowerWorkloads int
+	}{
+		{
+			testCase: "Test Case 1",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example-pod",
+					Namespace: PowerPodNamespace,
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "example-node1",
+					Containers: []corev1.Container{
+						{
+							Name: "example-container-1",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+						{
+							Name: "example-container-2",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/balance-performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):    *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"): *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/balance-performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase:    corev1.PodRunning,
+					QOSClass: corev1.PodQOSGuaranteed,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:        "example-container-1",
+							ContainerID: "docker://abcdefg",
+						},
+						{
+							Name:        "example-container-2",
+							ContainerID: "docker://abcdefg",
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "balance-performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "balance-performance",
+						},
+					},
+				},
+			},
+			podResources: []podresourcesapi.PodResources{
+				{
+					Name:       "example-pod",
+					Containers: []*podresourcesapi.ContainerResources{},
+				},
+			},
+			containerResources: map[string][]podresourcesapi.ContainerResources{
+				"example-pod": []podresourcesapi.ContainerResources{
+					{
+						Name:   "example-container-1",
+						CpuIds: []int64{1, 2},
+					},
+					{
+						Name:   "example-container-2",
+						CpuIds: []int64{3, 4},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads: 0,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.node.Name)
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.pod)
+		objs = append(objs, tc.node)
+		for i := range tc.powerProfiles.Items {
+			objs = append(objs, &tc.powerProfiles.Items[i])
+		}
+
+		r, err := createPowerPodReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		fakePodResources := []*podresourcesapi.PodResources{}
+		for i := range tc.podResources {
+			fakeContainers := []*podresourcesapi.ContainerResources{}
+			for j := range tc.containerResources[tc.podResources[i].Name] {
+				fakeContainers = append(fakeContainers, &tc.containerResources[tc.podResources[i].Name][j])
+			}
+			tc.podResources[i].Containers = fakeContainers
+			fakePodResources = append(fakePodResources, &tc.podResources[i])
+		}
+		fakeListResponse := &podresourcesapi.ListPodResourcesResponse{
+			PodResources: fakePodResources,
+		}
+
+		podResourcesClient := createFakePodResourcesListerClient(fakeListResponse)
+		r.PodResourcesClient = *podResourcesClient
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.pod.Name,
+				Namespace: PowerPodNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			if !errors.IsServiceUnavailable(err) {
+				if err == nil {
+					t.Errorf("%s - Failed: Expected podUIDNotFoundError to have occured", tc.testCase)
+				} else {
+					t.Error(err)
+					t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object", tc.testCase))
+				}
+			}
+		}
+
+		powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), powerWorkloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkloads", tc.testCase))
+		}
+
+		if len(powerWorkloads.Items) != tc.expectedNumberOfPowerWorkloads {
+			t.Errorf("%s - Failed: Expected number of PowerWorkloads to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerWorkloads, len(powerWorkloads.Items))
+		}
+	}
+}
+
+func TestPowerProfileDoesNotExist(t *testing.T) {
+	tcases := []struct {
+		testCase                       string
+		pod                            *corev1.Pod
+		node                           *corev1.Node
+		powerProfiles                  *powerv1alpha1.PowerProfileList
+		expectedNumberOfPowerWorkloads int
+	}{
+		{
+			testCase: "Test Case 1",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example-pod",
+					Namespace: PowerPodNamespace,
+					UID:       "abcdefg",
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "example-node1",
+					Containers: []corev1.Container{
+						{
+							Name: "example-container-1",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase:    corev1.PodRunning,
+					QOSClass: corev1.PodQOSGuaranteed,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:        "example-container-1",
+							ContainerID: "docker://abcdefg",
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "balance-performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "balance_performance",
+						},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads: 0,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.node.Name)
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.pod)
+		objs = append(objs, tc.node)
+		for i := range tc.powerProfiles.Items {
+			objs = append(objs, &tc.powerProfiles.Items[i])
+		}
+
+		r, err := createPowerPodReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.pod.Name,
+				Namespace: PowerPodNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			if !errors.IsServiceUnavailable(err) {
+				if err == nil {
+					t.Errorf("%s - Failed: Expected powerProfileNotFoundError to have occured", tc.testCase)
+				} else {
+					t.Error(err)
+					t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object", tc.testCase))
+				}
+			}
+		}
+
+		powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), powerWorkloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkloads", tc.testCase))
+		}
+
+		if len(powerWorkloads.Items) != tc.expectedNumberOfPowerWorkloads {
+			t.Errorf("%s - Failed: Expected number of PowerWorkloads to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerWorkloads, len(powerWorkloads.Items))
+		}
+	}
+}
+
+func TestCpuPowerProfileResourcesMismatch(t *testing.T) {
+	tcases := []struct {
+		testCase                       string
+		pod                            *corev1.Pod
+		node                           *corev1.Node
+		powerProfiles                  *powerv1alpha1.PowerProfileList
+		resources                      map[string]string
+		podResources                   []podresourcesapi.PodResources
+		containerResources             map[string][]podresourcesapi.ContainerResources
+		expectedNumberOfPowerWorkloads int
+	}{
+		{
+			testCase: "Test Case 1",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example-pod",
+					Namespace: PowerPodNamespace,
+					UID:       "abcdefg",
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "example-node1",
+					Containers: []corev1.Container{
+						{
+							Name: "example-container-1",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(1, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("memory"):                                    *resource.NewQuantity(200, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(1, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase:    corev1.PodRunning,
+					QOSClass: corev1.PodQOSGuaranteed,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:        "example-container-1",
+							ContainerID: "docker://abcdefg",
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "performance",
+						},
+					},
+				},
+			},
+			resources: map[string]string{
+				"cpu":    "2",
+				"memory": "200Mi",
+				"power.intel.com/performance-example-node1": "2",
+			},
+			podResources: []podresourcesapi.PodResources{
+				{
+					Name:       "example-pod",
+					Containers: []*podresourcesapi.ContainerResources{},
+				},
+			},
+			containerResources: map[string][]podresourcesapi.ContainerResources{
+				"example-pod": []podresourcesapi.ContainerResources{
+					{
+						Name:   "example-container-1",
+						CpuIds: []int64{1, 2},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads: 0,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.node.Name)
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.pod)
+		objs = append(objs, tc.node)
+		for i := range tc.powerProfiles.Items {
+			objs = append(objs, &tc.powerProfiles.Items[i])
+		}
+
+		r, err := createPowerPodReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		fakePodResources := []*podresourcesapi.PodResources{}
+		for i := range tc.podResources {
+			fakeContainers := []*podresourcesapi.ContainerResources{}
+			for j := range tc.containerResources[tc.podResources[i].Name] {
+				fakeContainers = append(fakeContainers, &tc.containerResources[tc.podResources[i].Name][j])
+			}
+			tc.podResources[i].Containers = fakeContainers
+			fakePodResources = append(fakePodResources, &tc.podResources[i])
+		}
+		fakeListResponse := &podresourcesapi.ListPodResourcesResponse{
+			PodResources: fakePodResources,
+		}
+
+		podResourcesClient := createFakePodResourcesListerClient(fakeListResponse)
+		r.PodResourcesClient = *podResourcesClient
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.pod.Name,
+				Namespace: PowerPodNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			if !errors.IsServiceUnavailable(err) {
+				if err == nil {
+					t.Errorf("%s - Failed: Expected resourceRequestsMismatchError to have occured", tc.testCase)
+				} else {
+					t.Error(err)
+					t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object", tc.testCase))
+				}
+			}
+		}
+
+		powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), powerWorkloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkloads", tc.testCase))
+		}
+
+		if len(powerWorkloads.Items) != tc.expectedNumberOfPowerWorkloads {
+			t.Errorf("%s - Failed: Expected number of PowerWorkloads to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerWorkloads, len(powerWorkloads.Items))
+		}
+	}
+}
+
+func TestNoContainersRequestingExclusiveCPUs(t *testing.T) {
+	tcases := []struct {
+		testCase                       string
+		pod                            *corev1.Pod
+		node                           *corev1.Node
+		powerProfiles                  *powerv1alpha1.PowerProfileList
+		podResources                   []podresourcesapi.PodResources
+		containerResources             map[string][]podresourcesapi.ContainerResources
+		expectedNumberOfPowerWorkloads int
+	}{
+		{
+			testCase: "Test Case 1",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example-pod",
+					Namespace: PowerPodNamespace,
+					UID:       "abcdefg",
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "example-node1",
+					Containers: []corev1.Container{
+						{
+							Name: "example-container-1",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+						{
+							Name: "example-container-2",
+							Resources: corev1.ResourceRequirements{
+								Limits: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+								Requests: map[corev1.ResourceName]resource.Quantity{
+									corev1.ResourceName("cpu"):                                       *resource.NewQuantity(2, resource.DecimalSI),
+									corev1.ResourceName("power.intel.com/performance-example-node1"): *resource.NewQuantity(2, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:        "example-container-1",
+							ContainerID: "docker://abcdefg",
+						},
+						{
+							Name:        "example-container-2",
+							ContainerID: "docker://abcdefg",
+						},
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "example-node1",
+				},
+			},
+			powerProfiles: &powerv1alpha1.PowerProfileList{
+				Items: []powerv1alpha1.PowerProfile{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "performance",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "balance-performance-example-node1",
+							Namespace: PowerPodNamespace,
+						},
+						Spec: powerv1alpha1.PowerProfileSpec{
+							Name: "balance-performance-example-node1",
+							Max:  3200,
+							Min:  2800,
+							Epp:  "balance-performance",
+						},
+					},
+				},
+			},
+			podResources: []podresourcesapi.PodResources{
+				{
+					Name:       "example-pod",
+					Containers: []*podresourcesapi.ContainerResources{},
+				},
+			},
+			containerResources: map[string][]podresourcesapi.ContainerResources{
+				"example-pod": []podresourcesapi.ContainerResources{
+					{
+						Name:   "example-container-1",
+						CpuIds: []int64{1, 2},
+					},
+					{
+						Name:   "example-container-2",
+						CpuIds: []int64{3, 4},
+					},
+				},
+			},
+			expectedNumberOfPowerWorkloads: 0,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.node.Name)
+
+		objs := make([]runtime.Object, 0)
+		objs = append(objs, tc.pod)
+		objs = append(objs, tc.node)
+		for i := range tc.powerProfiles.Items {
+			objs = append(objs, &tc.powerProfiles.Items[i])
+		}
+
+		r, err := createPowerPodReconcilerObject(objs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		fakePodResources := []*podresourcesapi.PodResources{}
+		for i := range tc.podResources {
+			fakeContainers := []*podresourcesapi.ContainerResources{}
+			for j := range tc.containerResources[tc.podResources[i].Name] {
+				fakeContainers = append(fakeContainers, &tc.containerResources[tc.podResources[i].Name][j])
+			}
+			tc.podResources[i].Containers = fakeContainers
+			fakePodResources = append(fakePodResources, &tc.podResources[i])
+		}
+		fakeListResponse := &podresourcesapi.ListPodResourcesResponse{
+			PodResources: fakePodResources,
+		}
+
+		podResourcesClient := createFakePodResourcesListerClient(fakeListResponse)
+		r.PodResourcesClient = *podResourcesClient
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.pod.Name,
+				Namespace: PowerPodNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling PowerWorkload object", tc.testCase))
+		}
+
+		powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), powerWorkloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkloads", tc.testCase))
+		}
+
+		if len(powerWorkloads.Items) != tc.expectedNumberOfPowerWorkloads {
+			t.Errorf("%s - Failed: Expected number of PowerWorkloads to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerWorkloads, len(powerWorkloads.Items))
 		}
 	}
 }

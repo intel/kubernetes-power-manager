@@ -66,7 +66,8 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 			var pool *appqos.Pool
 
-			if strings.HasPrefix(req.NamespacedName.Name, "shared") {
+			// TODO: Change 'shared-' to const SharedPowerWorkloadPrefix
+			if strings.HasPrefix(req.NamespacedName.Name, "shared-") {
 				pool, err = r.AppQoSClient.GetSharedPool(AppQoSClientAddress)
 			} else {
 				pool, err = r.AppQoSClient.GetPoolByName(AppQoSClientAddress, req.NamespacedName.Name)
@@ -91,7 +92,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 					}
 				}
 
-				if numberOfSharedPowerWorkloads > 1 {
+				if numberOfSharedPowerWorkloads > 0 {
 					// This is a Shared PowerWorkload that was deleted because it was not the original one
 					return ctrl.Result{}, nil
 				}
@@ -143,8 +144,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, err
 	}
 
-	// The only time the PowerWorkload can be on the wrong Node is if it is a Shared Workload, as that is created by the user
-	// If there are multiple nodes that the Shared PowerWorkload' Node Selector satisfies we need to fail here before anything is done
+	// If there are multiple nodes that the Shared PowerWorkload's Node Selector satisfies we need to fail here before anything is done
 	if workload.Spec.AllCores {
 		if !strings.HasPrefix(workload.Name, "shared-") {
 			// Shared PowerWorkload does not start with 'shared-' so it cannot be eligible as the Shared PowerWorkload
@@ -207,6 +207,13 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			return ctrl.Result{}, nil
 		}
 	} else {
+		// Check to make sure this PowerWorkload is meant for this Node
+		if workload.Spec.Node.Name != nodeName {
+			// Not meant for this Node, continue
+
+			return ctrl.Result{}, nil
+		}
+
 		if strings.HasPrefix(workload.Name, "shared-") {
 			// Non Shared PowerWorkload cannot start with 'shared-'
 
@@ -333,7 +340,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			// Have to update the Shared pool before creating the pool for the newly created
 			// Power Workload
 
-			updatedSharedPool, id, err := r.removeCoresFromSharedPool(workload.Spec.Node.CpuIds, AppQoSClientAddress, false)
+			updatedSharedPool, id, err := r.removeCoresFromSharedPool(workload.Spec.Node.CpuIds, AppQoSClientAddress)
 			if err != nil {
 				logger.Error(err, "error retrieving Shared pool")
 				return ctrl.Result{}, err
@@ -392,7 +399,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		// back into the Default pool. It has to be done in this order as AppQoS will fail
 		// if you try and assign CPUs to a new pool when they exist in another one
 
-		updatedSharedPool, id, err := r.removeCoresFromSharedPool(workload.Spec.Node.CpuIds, AppQoSClientAddress, false)
+		updatedSharedPool, id, err := r.removeCoresFromSharedPool(workload.Spec.Node.CpuIds, AppQoSClientAddress)
 		if err != nil {
 			logger.Error(err, "error updating Shared pool")
 			return ctrl.Result{}, err
@@ -459,23 +466,13 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	return ctrl.Result{}, nil
 }
 
-func (r *PowerWorkloadReconciler) removeCoresFromSharedPool(workloadCPUList []int, nodeAddress string, useDefaultPool bool) (*appqos.Pool, int, error) {
+func (r *PowerWorkloadReconciler) removeCoresFromSharedPool(workloadCPUList []int, nodeAddress string) (*appqos.Pool, int, error) {
 	// Removes the CPUs in workloadCPUList from the Shared Pool if they exist. Returns an empty Pool if
 	// no cores have been removed
 
-	var sharedPool *appqos.Pool
-	var err error
-
-	if useDefaultPool {
-		sharedPool, err = r.AppQoSClient.GetPoolByName(nodeAddress, DefaultPool)
-		if err != nil {
-			return &appqos.Pool{}, 0, err
-		}
-	} else {
-		sharedPool, err = r.AppQoSClient.GetSharedPool(nodeAddress)
-		if err != nil {
-			return &appqos.Pool{}, 0, err
-		}
+	sharedPool, err := r.AppQoSClient.GetSharedPool(nodeAddress)
+	if err != nil {
+		return &appqos.Pool{}, 0, err
 	}
 
 	updatedSharedCoreList := util.CPUListDifference(workloadCPUList, *sharedPool.Cores)

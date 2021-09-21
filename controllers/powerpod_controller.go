@@ -408,14 +408,16 @@ func getContainerProfileFromRequests(container corev1.Container) (string, error)
 		}
 	}
 
-	// Check if there is a mismatch in CPU requests and PowerProfile requests
-	powerProfileResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ResourcePrefix, profileName))
-	numRequestsPowerProfile := container.Resources.Requests[powerProfileResourceName]
-	numLimitsPowerProfile := container.Resources.Limits[powerProfileResourceName]
-	numRequestsCPU := container.Resources.Requests[CPUResource]
-	numLimistCPU := container.Resources.Limits[CPUResource]
-	if numRequestsCPU != numRequestsPowerProfile || numLimistCPU != numLimitsPowerProfile {
-		return "", resourceRequestsMismatchError
+	if profileName != "" {
+		// Check if there is a mismatch in CPU requests and PowerProfile requests
+		powerProfileResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ResourcePrefix, profileName))
+		numRequestsPowerProfile := container.Resources.Requests[powerProfileResourceName]
+		numLimitsPowerProfile := container.Resources.Limits[powerProfileResourceName]
+		numRequestsCPU := container.Resources.Requests[CPUResource]
+		numLimistCPU := container.Resources.Limits[CPUResource]
+		if numRequestsCPU != numRequestsPowerProfile || numLimistCPU != numLimitsPowerProfile {
+			return "", resourceRequestsMismatchError
+		}
 	}
 
 	return profileName, nil

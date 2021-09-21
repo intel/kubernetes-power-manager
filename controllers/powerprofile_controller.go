@@ -214,6 +214,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	maximumFrequency, err := strconv.Atoi(strings.Split(maximumFrequencyString, "\n")[0])
 	if err != nil {
 		logger.Error(err, "error reading maximum frequency value")
+		return ctrl.Result{}, err
 	}
 
 	maximumFrequency = maximumFrequency / 1000
