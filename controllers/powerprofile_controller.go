@@ -52,15 +52,15 @@ var AppQoSClientAddress = "https://localhost:5000"
 
 var extendedResourcePercentage map[string]float64 = map[string]float64{
 	"performance":         .40,
-	"balance-performance": .80,
-	"balance-power":       .90,
+	"balance-performance": .60,
+	"balance-power":       .80,
 	"power":               1.0,
 }
 
 var extendedPowerProfileMaxMinDifference map[string]int = map[string]int{
 	"performance":         0,
-	"balance-performance": 1000,
-	"balance-power":       2000,
+	"balance-performance": 500,
+	"balance-power":       1000,
 }
 
 var basePowerProfileToEppValue map[string]string = map[string]string{
