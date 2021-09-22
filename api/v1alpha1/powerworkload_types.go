@@ -92,17 +92,6 @@ type PowerWorkloadList struct {
 	Items           []PowerWorkload `json:"items"`
 }
 
-/*
-func (pw *PowerWorkload) GetNodeList() []string {
-	nodeList := make([]string, 0)
-	for _, nodeInfo := range pw.Spec.Nodes {
-		nodeList = append(nodeList, nodeInfo.Name)
-	}
-
-	return nodeList
-}
-*/
-
 func init() {
 	SchemeBuilder.Register(&PowerWorkload{}, &PowerWorkloadList{})
 }

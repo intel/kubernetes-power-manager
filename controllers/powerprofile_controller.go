@@ -217,7 +217,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
-	maximumFrequency = maximumFrequency / 1000
+	maximumFrequency = (maximumFrequency / 1000) - 400
 	minimumFrequency := maximumFrequency - 400
 
 	maximumValueForProfile := maximumFrequency - extendedPowerProfileMaxMinDifference[profile.Spec.Name]
@@ -254,7 +254,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 					return ctrl.Result{}, err
 				}
 
-				err = r.createExtendedResources(nodeName, profileName, profile.Spec.Epp)
+				err = r.createExtendedResources(nodeName, profileName, req.NamespacedName.Name)
 				if err != nil {
 					logger.Error(err, "error creating Extended resources")
 					return ctrl.Result{}, err
@@ -266,7 +266,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	}
 
 	// Create the Extended Resources for the base profile as well so the Pod controller can determine the Profile if necessary
-	err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp)
+	err = r.createExtendedResources(nodeName, profile.Spec.Name, req.NamespacedName.Name)
 	if err != nil {
 		logger.Error(err, "error creating extended resources for base profile")
 		return ctrl.Result{}, err
@@ -300,7 +300,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	return ctrl.Result{}, nil
 }
 
-func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profileName string, eppValue string) error {
+func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profileName string, baseProfile string) error {
 	node := &corev1.Node{}
 	err := r.Client.Get(context.TODO(), client.ObjectKey{
 		Name: nodeName,
@@ -310,7 +310,7 @@ func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profil
 	}
 
 	numCPUsOnNode := float64(rt.NumCPU())
-	numExtendedResources := int64(numCPUsOnNode * extendedResourcePercentage[eppValue])
+	numExtendedResources := int64(numCPUsOnNode * extendedResourcePercentage[baseProfile])
 	profilesAvailable := resource.NewQuantity(numExtendedResources, resource.DecimalSI)
 	extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
 	node.Status.Capacity[extendedResourceName] = *profilesAvailable

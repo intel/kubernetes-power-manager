@@ -129,11 +129,13 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 					}
 				}
 
-				sharedWorkload.Status.SharedCores = *updatedSharedPool.Cores
-				err = r.Client.Status().Update(context.TODO(), &sharedWorkload)
-				if err != nil {
-					logger.Error(err, "error updating SharedWorkload")
-					return ctrl.Result{}, err
+				if !reflect.DeepEqual(sharedWorkload, powerv1alpha1.PowerWorkload{}) {
+					sharedWorkload.Status.SharedCores = *updatedSharedPool.Cores
+					err = r.Client.Status().Update(context.TODO(), &sharedWorkload)
+					if err != nil {
+						logger.Error(err, "error updating SharedWorkload")
+						return ctrl.Result{}, err
+					}
 				}
 			}
 
