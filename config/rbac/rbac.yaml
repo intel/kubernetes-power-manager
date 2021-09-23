@@ -68,7 +68,7 @@ rules:
   resources: ["nodes/status"] 
   verbs: ["get", "list", "watch", "patch", "update"]
 - apiGroups: [""]
-  resources: ["pods"]
+  resources: ["pods", "configmaps"]
   verbs: ["get", "list", "watch", "patch", "create", "update"]
 - apiGroups: ["power.intel.com"]
   resources: ["powerconfigs", "powerconfigs/status", "powernodes", "powernodes/status", "powerprofiles", "powerprofiles/status", "powerworkloads", "powerworkloads/status"] 
