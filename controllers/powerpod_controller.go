@@ -66,7 +66,11 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err := r.Get(context.TODO(), req.NamespacedName, pod)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Maybe do a check to see if the Pod is still recorded in State for some reason
+			// Defeat the Pod from the internal state in case it was never deleted
+			err = r.State.DeletePodFromState(req.NamespacedName.Name)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 
 			return ctrl.Result{}, nil
 		}
@@ -259,7 +263,7 @@ func (r *PowerPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		err = r.Client.Update(context.TODO(), workload)
 		if err != nil {
 			logger.Error(err, "error while trying to update PowerWorkload")
-			continue
+			return ctrl.Result{}, err
 		}
 	}
 
@@ -374,7 +378,7 @@ func getNewWorkloadContainerList(nodeContainers []powerv1alpha1.Container, podSt
 	newNodeContainers := make([]powerv1alpha1.Container, 0)
 
 	for _, container := range nodeContainers {
-		if !tempIsContainerInList(container.Name, podStateContainers) {
+		if !isContainerInList(container.Name, podStateContainers) {
 			newNodeContainers = append(newNodeContainers, container)
 		}
 	}
@@ -382,7 +386,7 @@ func getNewWorkloadContainerList(nodeContainers []powerv1alpha1.Container, podSt
 	return newNodeContainers
 }
 
-func tempIsContainerInList(name string, containers []powerv1alpha1.Container) bool {
+func isContainerInList(name string, containers []powerv1alpha1.Container) bool {
 	for _, container := range containers {
 		if container.Name == name {
 			return true

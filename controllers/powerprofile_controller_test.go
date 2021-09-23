@@ -1991,8 +1991,8 @@ func TestPowerProfileMinMaxValues(t *testing.T) {
 			performancePowerProfileName:   "performance-example-node1",
 			expectedNumberOfPowerProfiles: 6,
 			expectedPowerProfileMaxMinValue: map[string]int{
-				"balance-performance-example-node1": 1000,
-				"balance-power-example-node1":       2000,
+				"balance-performance-example-node1": 500,
+				"balance-power-example-node1":       1000,
 			},
 		},
 	}
