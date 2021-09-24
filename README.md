@@ -355,6 +355,18 @@ chmod 644 /etc/certs/public/appqos.crt /etc/certs/public/appqos.csr /etc/certs/p
 cp ~/intel-cmt-cat/appqos/appqos.conf /etc/certs/public/
 ````
 
+### The following configuration is recommended for the appqos.conf file
+````
+{
+  "apps": [], 
+  "sstbf": {
+    "configured": false
+  }, 
+  "pools": [], 
+  "power_profiles_expert_mode": true
+}
+````
+
 ### Setting up the Power Operator 
 - Clone the Power Operator  
 ````
