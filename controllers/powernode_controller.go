@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 	"time"
+	"os"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -46,6 +47,13 @@ type PowerNodeReconciler struct {
 func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powernode", req.NamespacedName)
+
+	nodeName := os.Getenv("NODE_NAME")
+	if nodeName != req.NamespacedName.Name {
+		// PowerNode is not on this Node
+
+		return ctrl.Result{}, nil
+	}
 
 	powerProfilesInUse := make(map[string]bool)
 	powerWorkloads := make([]powerv1alpha1.WorkloadInfo, 0)
