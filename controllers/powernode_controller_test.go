@@ -791,6 +791,7 @@ func TestPowerNodeReconciler(t *testing.T) {
 	}
 
 	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.powerNode.Name)
 		AppQoSClientAddress = "http://127.0.0.1:5000"
 
 		appqosPools := make([]appqos.Pool, 0)
