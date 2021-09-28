@@ -98,6 +98,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 	logger.Info("Reconciling PowerProfile")
 
+	// Node name is passed down via the downwards API and used to make sure the PowerProfile is for this node
 	nodeName := os.Getenv("NODE_NAME")
 
 	profile := &powerv1alpha1.PowerProfile{}
@@ -105,7 +106,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// When a PowerProfile cannot be found, we assume it has been deleted. We need to check if there is a
-			// corresponding PowerWorkload and, if there is, delete that too. We leave the cleanup of requesting the
+			// corresponding PowerWorkload in App QoS and, if there is, delete that too. We leave the cleanup of requesting the
 			// frequency resets of the effected CPUs to the PowerWorkload controller. We also need to check to see
 			// if there are any AppQoS instances on other nodes
 
@@ -154,24 +155,26 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 				}
 			}
 
-			workloadName := fmt.Sprintf("%s%s", req.NamespacedName.Name, WorkloadNameSuffix)
-			powerWorkload := &powerv1alpha1.PowerWorkload{}
-			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name:      workloadName,
-				Namespace: req.NamespacedName.Namespace,
-			}, powerWorkload)
-			if err != nil {
-				if errors.IsNotFound(err) {
-					logger.Info("No PowerWorkload associated with this PowerProfile")
-				} else {
-					logger.Error(err, "error retrieving PowerWorkload")
-					return ctrl.Result{}, err
-				}
-			} else {
-				err = r.Client.Delete(context.TODO(), powerWorkload)
+			if strings.HasSuffix(req.NamespacedName.Name, nodeName) {
+				workloadName := fmt.Sprintf("%s%s", req.NamespacedName.Name, WorkloadNameSuffix)
+				powerWorkload := &powerv1alpha1.PowerWorkload{}
+				err = r.Client.Get(context.TODO(), client.ObjectKey{
+					Name:      workloadName,
+					Namespace: req.NamespacedName.Namespace,
+				}, powerWorkload)
 				if err != nil {
-					logger.Error(err, "error deleting PowerWorkload")
-					return ctrl.Result{}, err
+					if errors.IsNotFound(err) {
+						logger.Info("No PowerWorkload associated with this PowerProfile")
+					} else {
+						logger.Error(err, "error retrieving PowerWorkload")
+						return ctrl.Result{}, err
+					}
+				} else {
+					err = r.Client.Delete(context.TODO(), powerWorkload)
+					if err != nil {
+						logger.Error(err, "error deleting PowerWorkload")
+						return ctrl.Result{}, err
+					}
 				}
 			}
 

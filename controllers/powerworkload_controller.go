@@ -50,6 +50,8 @@ const (
 	DefaultPool        string = "Default"
 )
 
+var sharedPowerWorkloadName = ""
+
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerworkloads,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerworkloads/status,verbs=get;update;patch
 
@@ -66,15 +68,27 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 			var pool *appqos.Pool
 
-			// TODO: Change 'shared-' to const SharedPowerWorkloadPrefix
 			if strings.HasPrefix(req.NamespacedName.Name, "shared-") {
-				pool, err = r.AppQoSClient.GetSharedPool(AppQoSClientAddress)
+				if req.NamespacedName.Name != sharedPowerWorkloadName {
+					logger.Info("The deleted Shared PowerWorkload was not assigned to this Node")
+					return ctrl.Result{}, nil
+				} else {
+					pool, err = r.AppQoSClient.GetSharedPool(AppQoSClientAddress)
+					sharedPowerWorkloadName = ""
+				}
 			} else {
-				pool, err = r.AppQoSClient.GetPoolByName(AppQoSClientAddress, req.NamespacedName.Name)
+				workloadSuffix := fmt.Sprintf("%s-workload", nodeName)
+				if strings.HasSuffix(req.NamespacedName.Name, workloadSuffix) {
+					pool, err = r.AppQoSClient.GetPoolByName(AppQoSClientAddress, req.NamespacedName.Name)
+				}
 			}
 			if err != nil {
 				logger.Error(err, "error retrieving Pool from AppQoS instance")
 				return ctrl.Result{}, err
+			}
+
+			if reflect.DeepEqual(pool, &appqos.Pool{}) {
+				return ctrl.Result{}, nil
 			}
 
 			if *pool.Name == "Shared" {
@@ -182,21 +196,7 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			return ctrl.Result{}, nil
 		}
 
-		powerWorkloads := &powerv1alpha1.PowerWorkloadList{}
-		err = r.Client.List(context.TODO(), powerWorkloads)
-		if err != nil {
-			logger.Error(err, "error retrieving PowerWorkload list")
-			return ctrl.Result{}, err
-		}
-
-		numberOfSharedPowerWorkloads := 0
-		for _, powerWorkload := range powerWorkloads.Items {
-			if strings.HasPrefix(powerWorkload.Name, "shared-") {
-				numberOfSharedPowerWorkloads++
-			}
-		}
-
-		if numberOfSharedPowerWorkloads > 1 {
+		if sharedPowerWorkloadName != "" && sharedPowerWorkloadName != req.NamespacedName.Name {
 			// Delete this Shared PowerWorkload as another already exists
 			err = r.Client.Delete(context.TODO(), workload)
 			if err != nil {
@@ -204,8 +204,8 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				return ctrl.Result{}, err
 			}
 
-			sharedPoolExistsError := errors.NewServiceUnavailable("Shared Pool already exists in AppQoS instance")
-			logger.Error(sharedPoolExistsError, "error retrieving Shared Pool")
+			sharedPowerWorkloadAlreadyExists := errors.NewServiceUnavailable("A Shared PowerWorkload already exists for this node")
+			logger.Error(sharedPowerWorkloadAlreadyExists, "error creating Shared PowerWorkload")
 			return ctrl.Result{}, nil
 		}
 	} else {
@@ -259,6 +259,8 @@ func (r *PowerWorkloadReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		if workload.Spec.AllCores {
 			// This is being designated as the Shared Workload for this Node
 			// Need to make sure there is no other shared pool
+
+			sharedPowerWorkloadName = req.NamespacedName.Name
 
 			sharedPool, err := r.AppQoSClient.GetSharedPool(AppQoSClientAddress)
 			if err != nil {

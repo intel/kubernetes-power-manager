@@ -2157,6 +2157,7 @@ func TestSharedWorkloadDeletion(t *testing.T) {
 	for _, tc := range tcases {
 		t.Setenv("NODE_NAME", tc.nodeName)
 		AppQoSClientAddress = "http://127.0.0.1:5000"
+		sharedPowerWorkloadName = tc.originalSharedPowerWorkloadName
 
 		appqosPools := make([]appqos.Pool, 0)
 		for i := range tc.appqosPools {
@@ -2257,6 +2258,7 @@ func TestSharedWorkloadDeletion(t *testing.T) {
 			t.Errorf("%s - Failed: Expected second Shared PowerWorkload CPU list to be %v, got %v", tc.testCase, tc.expectedSharedPowerWorkloadCPUList, secondSharedPowerWorkload.Status.SharedCores)
 		}
 
+		sharedPowerWorkloadName = ""
 		server.Close()
 	}
 }
@@ -2278,11 +2280,11 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 			nodeName: "example-node1",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "shared-exemple-node1-worklaod",
+					Name:      "shared-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name:         "shared-exemple-node1-worklaod",
+					Name:         "shared-example-node1-workload",
 					AllCores:     true,
 					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
@@ -2338,11 +2340,11 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 			nodeName: "example-node1",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "shared-exemple-node1-worklaod",
+					Name:      "shared-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name:         "shared-exemple-node1-worklaod",
+					Name:         "shared-example-node1-workload",
 					AllCores:     true,
 					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
@@ -2398,11 +2400,11 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 			nodeName: "example-node1",
 			sharedPowerWorkload: &powerv1alpha1.PowerWorkload{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "shared-exemple-node1-worklaod",
+					Name:      "shared-example-node1-workload",
 					Namespace: PowerWorkloadNamespace,
 				},
 				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name:         "shared-exemple-node1-worklaod",
+					Name:         "shared-example-node1-workload",
 					AllCores:     true,
 					ReservedCPUs: []int{0, 1},
 					PowerNodeSelector: map[string]string{
@@ -2497,6 +2499,19 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 			t.Fatal(fmt.Sprintf("%s - error creating Listeners", tc.testCase))
 		}
 
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.sharedPowerWorkload.Name,
+				Namespace: PowerWorkloadNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling shared PowerWorkload object", tc.testCase))
+		}
+
 		sharedPowerWorkload := &powerv1alpha1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      tc.sharedPowerWorkload.Name,
@@ -2514,7 +2529,7 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 			t.Fatal(fmt.Sprintf("%s - error updating Shared PowerWorkload", tc.testCase))
 		}
 
-		req := reconcile.Request{
+		req = reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.sharedPowerWorkload.Name,
 				Namespace: PowerWorkloadNamespace,
@@ -2550,6 +2565,7 @@ func TestSharedWorkloadUpdated(t *testing.T) {
 			t.Errorf("%s - Failed: Expected Default Pool CPU list to be %v, got %v", tc.testCase, tc.expectedDefaultPoolCPUList, *defaultPool.Cores)
 		}
 
+		sharedPowerWorkloadName = ""
 		server.Close()
 	}
 }
