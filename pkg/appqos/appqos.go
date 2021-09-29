@@ -17,8 +17,6 @@ const (
 	PoolsEndpoint         = "/pools"
 	AppsEndpoint          = "/apps"
 	PowerProfilesEndpoint = "/power_profiles"
-	Username              = "admin"
-	Passwd                = "password"
 
 	HttpPrefix  = "http://"
 	HttpsPrefix = "https://"
@@ -36,7 +34,6 @@ func (ac *AppQoSClient) GetPools(address string) ([]Pool, error) {
 		return nil, err
 	}
 
-	req.SetBasicAuth(Username, Passwd)
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -67,7 +64,6 @@ func (ac *AppQoSClient) GetPool(address string, id int) (*Pool, error) {
 		return pool, err
 	}
 
-	req.SetBasicAuth(Username, Passwd)
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return pool, err
@@ -140,7 +136,6 @@ func (ac *AppQoSClient) PostPool(pool *Pool, address string) (string, error) {
 		return "Failed to create new HTTP POST request", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(Username, Passwd)
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return "Failed to set header for  HTTP POST request", err
@@ -180,7 +175,6 @@ func (ac *AppQoSClient) PutPool(pool *Pool, address string, id int) (string, err
 		return "Failed to create new HTTP PATCH request", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(Username, Passwd)
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return "Failed to set header for  HTTP PATCH request", err
@@ -213,7 +207,6 @@ func (ac *AppQoSClient) DeletePool(address string, id int) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(Username, Passwd)
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return err
@@ -244,7 +237,6 @@ func (ac *AppQoSClient) GetPowerProfiles(address string) ([]PowerProfile, error)
 		return nil, err
 	}
 
-	req.SetBasicAuth(Username, Passwd)
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -275,7 +267,6 @@ func (ac *AppQoSClient) GetPowerProfile(address string, id int) (*PowerProfile, 
 		return powerProfile, err
 	}
 
-	req.SetBasicAuth(Username, Passwd)
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return powerProfile, err
@@ -311,7 +302,6 @@ func (ac *AppQoSClient) PostPowerProfile(powerProfile *PowerProfile, address str
 		return "Failed to create new HTTP POST request", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(Username, Passwd)
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return "Failed to set header for  HTTP POST request", err
@@ -351,7 +341,6 @@ func (ac *AppQoSClient) PutPowerProfile(powerProfile *PowerProfile, address stri
 		return "Failed to create new HTTP PATCH request", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(Username, Passwd)
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return "Failed to set header for  HTTP PATCH request", err
@@ -384,7 +373,6 @@ func (ac *AppQoSClient) DeletePowerProfile(address string, id int) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(Username, Passwd)
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return err
