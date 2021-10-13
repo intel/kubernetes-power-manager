@@ -3,7 +3,7 @@
  
 ## What is the Power Manager for Kubernetes?
 
-In a container orchestration engine such as Kubernetes, the allocation of CPU resources from a pool of platforms is based solely on availability with now consideration of individual capabilities such as Intel Speed Select Technology (SST).
+In a container orchestration engine such as Kubernetes, the allocation of CPU resources from a pool of platforms is based solely on availability with no consideration of individual capabilities such as Intel Speed Select Technology (SST).
 
 The Intel Power Manager for Kubernetes is a Kubernetes Operator designed to expose and utilize Intel specific power management technologies in a Kubernetes Environment.
 
@@ -57,7 +57,7 @@ The Power Manager for Kubernetes bridges the gap between the container orchestra
     Frequency tuning allows the individual cores on the system to be sped up or slowed down by changing their frequency.
     This tuning is done via the CommsPowerManagement python library which is utilized via App QoS.
     The min and max values for a core are defined in the Power Profile and the tuning is done after the core has been assigned by the Native CPU Manager.
-    How exactly the frequency of the cores is changed is by simply writing the new frequency value to the /sys/devices/device/system/cpu/cpuN/cpufreq/scaling_max|min_freq file for the given core.
+    How exactly the frequency of the cores is changed is by simply writing the new frequency value to the /sys/devices/system/cpu/cpuN/cpufreq/scaling_max|min_freq file for the given core.
 
 Note: In the future, we want to move away from the CommsPowerManagement library to create a Go Library that utilizes the Intel Pstate driver.
 
@@ -91,6 +91,8 @@ The operator will wait for the PowerConfig to be created by the user, in which t
 
 Once the Config Controller sees that the PowerConfig is created, it reads the values and then deploys the node agent and the App QoS agent on to each of the Nodes that are specified. It then creates the PowerProfiles and extended resources. Extended resources are resources created in the cluster that can be requested in the PodSpec. The Kubelet can then keep track of these requests. It is important to use as it can specify how many cores on the system can be run at a higher frequency before hitting the heat threshold.
 
+Note: Only one PowerConfig can be present in a cluster. The Config Controller will ignore and delete and subsequent PowerConfigs created after the first.
+
 ### Example
 ````yaml
 apiVersion: "power.intel.com/v1alpha1"
@@ -108,7 +110,7 @@ spec:
 ### Workload Controller 
 The Workload Controller is responsible for the actual tuning of the cores. The Workload Controller contacts the App QoS agent and requests that it creates Pools in App QoS. The Pools hold the PowerProfile associated with the cores and the cores that need to be configured.
     
-The PowerWorkload objects are created automatically by the PowerPod controller. This action is undertaken by the operator when a pod is created with a container requesting exclusive cores and a PowerProfile.
+The PowerWorkload objects are created automatically by the PowerPod controller. This action is undertaken by the operator when a Pod is created with a container requesting exclusive cores and a PowerProfile.
     
 PowerWorkload objects can also be created directly by the user via the PowerWorkload spec. This is only recommended when creating the Shared PowerWorkload for a given Node, as this is the responsibility of the user. If no Shared PowerWorkload is created, the cores that remain in the ‘shared pool’ on the Node will remain at their core frequency values instead of being tuned to lower frequencies. PowerWorkloads are specific to a given node, so one is created for each Node with a Pod requesting a PowerProfile, based on the PowerProfile requested.
  
@@ -132,7 +134,7 @@ spec:
        name: example-container
        pod: example-pod
        powerProfile: “performance-example-node”
-     name: “example”
+     name: “example-node”
      cpuIds:
      - 2
      - 3
@@ -160,7 +162,7 @@ spec:
      - 1
    powerNodeSelector:
      # Labels other than hostname can be used
-     - “Kubernetes.io/hostname”: “example-node”
+     - “kubernetes.io/hostname”: “example-node”
    powerProfile: "shared-example-node"
 ````
 
@@ -231,15 +233,15 @@ It details what workloads are being used currently, which profiles are being use
 #### Example
 ````
 activeProfiles:
-    performance-silpixa00401062: true
+    performance-example-node: true
   activeWorkloads:
   - cores:
     - 2
     - 3
     - 8
     - 9
-    name: performance-silpixa00401062-workload
-  nodeName: silpixa00401062
+    name: performance-example-node-workload
+  nodeName: example-node
   powerContainers:
   - exclusiveCpus:
     - 2
@@ -247,10 +249,10 @@ activeProfiles:
     - 8
     - 9
     id: c392f492e05fc245f77eba8a90bf466f70f19cb48767968f3bf44d7493e18e5b
-    name: ubuntu-one-container
-    pod: one-container
-    powerProfile: performance-silpixa00401062
-    workload: performance-silpixa00401062-workload
+    name: example-container
+    pod: example-pod
+    powerProfile: performance-example-node
+    workload: performance-example-node-workload
   sharedPools:
   - name: Default
     sharedPoolCpuIds:
@@ -264,15 +266,15 @@ activeProfiles:
 ````
 ````
 activeProfiles:
-    performance-silpixa00401062: true
+    performance-example-node: true
   activeWorkloads:
   - cores:
     - 2
     - 3
     - 8
     - 9
-    name: performance-silpixa00401062-workload
-  nodeName: silpixa00401062
+    name: performance-example-node-workload
+  nodeName: example-node
   powerContainers:
   - exclusiveCpus:
     - 2
@@ -280,10 +282,10 @@ activeProfiles:
     - 8
     - 9
     id: c392f492e05fc245f77eba8a90bf466f70f19cb48767968f3bf44d7493e18e5b
-    name: ubuntu-one-container
-    pod: one-container
-    powerProfile: performance-silpixa00401062
-    workload: performance-silpixa00401062-workload
+    name: example-container
+    pod: example-pod
+    powerProfile: performance-example-node
+    workload: performance-example-node-workload
   sharedPools:
   - name: Default
     sharedPoolCpuIds:
@@ -311,24 +313,19 @@ activeProfiles:
 
 
 ### App QoS Agent Pod
-There is an App QoS and a Node Agent on each node in the cluster that you want power optimization to occur. This is necessary because of node specific tuning. The App QoS agent keeps track of the shared pool. The PowerWorkload creates the pool in App QoS, which consists of the cores and the desired profile. This is where the call to the CommsPowerManagement library is made.
+There is an App QoS and a Node Agent on each node in the cluster that you want power optimization to occur. This is necessary because of node specific tuning. The App QoS agent keeps track of pools. The PowerWorkload creates a pool in App QoS, which consists of the cores and the desired profile. This is where the call to the CommsPowerManagement library is made.
 
 The App QoS agent will automatically create a Pool labeled "Default" which will contain all cores on the Node. The cores in this pool will not have their frequencies changed. When a Shared PowerWorkload is created, a new pool in the App QoS agent is created labeled "Shared", and removes all cores from the "Default" pool, excluding those in the reservedCPUs list, and reduces their frequencies to the desired state. When a non-shared PowerWorkload is created, the cores are removed from the "Shared" pool if it exists, or the "Default" pool if it does not.
 
 ### Node Agent Pod
-The Pod Controller watches for pods. When a pod comes along the Pod Controller checks if the pod is in the guaranteed quality of service class (using exclusive cores), taking a core out of the shared pool (it is the only option in Kubernetes that can do this operation). Then it examines the Pods to determine which PowerProfile has been requested and then creates or updates the appropriate PowerWorkload.
+The Pod Controller watches for pods. When a pod comes along the Pod Controller checks if the pod is in the guaranteed quality of service class (using exclusive cores, [see documentation](https://kubernetes.io/docs/tasks/configure-pod-container/quality-service-pod/), taking a core out of the shared pool (it is the only option in Kubernetes that can do this operation). Then it examines the Pods to determine which PowerProfile has been requested and then creates or updates the appropriate PowerWorkload.
 
 Note: the request and the limits must have a matching number of cores and are also in a container-by-container bases. Currently the Power Manager for Kubernetes only supports a single PowerProfile per Pod. If two profiles are requested in different containers, the pod will get created but the cores will not get tuned.
-
-### Pod
-The Pod Spec will contain the finer details of the deployment. It will list the number of cores required along with the requested PowerProfile.
-
-NOTE: The number of cores and the number of requested PowerProfiles must match.
-
 
 ## Repository Links
 ### App QoS repository
 [App QoS](https://github.com/intel/intel-cmt-cat)
+[CommsPowerManagement](https://github.com/intel/CommsPowerManagement)
 
 ## Installation 
 NOTE: For App QoS to work as intended, your Node must use a CPU that is capable of SST-CP configuration and it must be configured. The SST-CP enablement on a Node allows the App QoS agent to use power profiles. For more information on SST and SST-CP, see these documents:
@@ -469,9 +466,9 @@ spec:
 Apply the Config:
 `kubectl apply -f examples/example-powerconfig.yaml`
    
-Once deployed the controller-manager pod will see it via the Config controller and create an App QoS instance and a Node Agent instance on nodes specified with the ‘feature.node.kubernetes.io/appqos-node: "true"’ label.  
+Once deployed the controller-manager pod will see it via the Config controller and create an App QoS instance and a Node Agent instance on nodes specified with the ‘feature.node.kubernetes.io/appqos-node: "true"’ label.
 
-The power-node-agent DaemonSet will be created, managing the Power Node Agent Pods
+The power-node-agent DaemonSet will be created, managing the Power Node Agent Pods. The controller-manager will finally create the PowerProfiles that were requested on each Node.
 
 - **Shared Profile**
 
@@ -576,5 +573,5 @@ shared-<NODE_NAME>-workload            61m
 
 When a Pod that was associated with a PowerWorkload is deleted, the cores associated with that Pod will be removed from the corresponding PowerWorkload. If that Pod was the last requesting the use of that PowerWorkload, the workload will be deleted. All cores removed from the PowerWorkload are added back to the Shared PowerWorkload for that Node and retuned to the lower frequencies.
 
-DISCLAIMER:
+### DISCLAIMER:
 The App QoS Agent Pod requires elevated privileges to run, and the Container is run with Root privileges.
