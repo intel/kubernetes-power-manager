@@ -83,92 +83,32 @@ Note: NFD is recommended, but not essential. Node labels can also be applied man
 ### Power Node Agent
 The Power Node Agent is also a containerized application deployed by the operator in a DaemonSet. The primary function of the node agent is to communicate with the node's Kubelet PodResources endpoint to discover the exact cores that are allocated per container. The node agent watches for Pods that are created in your cluster and examines them to determine which Power Profile they have requested and then sets off the chain of events that tunes the frequencies of the cores designated to the Pod.
 
-### Config Controller
-The operator will wait for the PowerConfig to be created by the user, in which the desired PowerProfiles will be specified. The PowerConfig holds different values: what image is required, what Nodes the user wants to place the node agent on and what PowerProfiles are required. 
+### Power Config
+The operator will wait for the PowerConfig to be created by the user, in which the desired PowerProfiles will be specified. The PowerConfig holds different values:
 * appQoSImage: This is the name/tag given to the App QoS container image that will be deployed in a DaemonSet by the operator.
 * powerNodeSelector: This is a key/value map used for defining a list of node labels that a node must satisfy in order for App QoS and the Power Node Agent to be deployed.
 * powerProfiles: The list of PowerProfiles that the user wants available on the nodes.
 
-Once the Config Controller sees that the PowerConfig is created, it reads the values and then deploys the node agent and the App QoS agent on to each of the Nodes that are specified. It then creates the PowerProfiles and extended resources. Extended resources are resources created in the cluster that can be requested in the PodSpec. The Kubelet can then keep track of these requests. It is important to use as it can specify how many cores on the system can be run at a higher frequency before hitting the heat threshold.
+Once the Power Config Controller sees that the PowerConfig is created, it reads the values and then deploys the Power Node Agent and the App QoS Agent on to each of the Nodes that are specified. It then creates the PowerProfiles and Extended Resources. Extended Resources are resources created in the cluster that can be requested in the PodSpec. The Kubelet can then keep track of these requests. It is important to use as it can specify how many cores on the system can be run at a higher frequency before hitting the heat threshold.
 
-Note: Only one PowerConfig can be present in a cluster. The Config Controller will ignore and delete and subsequent PowerConfigs created after the first.
+Note: Only one PowerConfig can be present in a cluster. The Power Config Controller will ignore and delete any subsequent PowerConfigs created after the first.
+An example PowerConfig can be found in the examples folder, [here](https://github.com/intel/kubernetes-power-manager/blob/master/examples/example-powerconfig.yaml).
 
-### Example
-````yaml
-apiVersion: "power.intel.com/v1alpha1"
-kind: PowerConfig
-metadata:
-   name: power-config
-spec:
-   powerImage: "appqos:latest"
-   powerNodeSelector:
-      feature.node.kubernetes.io/appqos-node: "true"
-   powerProfiles:
-   - "performance"
-````
 
-### Workload Controller 
-The Workload Controller is responsible for the actual tuning of the cores. The Workload Controller contacts the App QoS agent and requests that it creates Pools in App QoS. The Pools hold the PowerProfile associated with the cores and the cores that need to be configured.
+### Power Workload
+The PowerWorkload is responsible for the actual tuning of the cores. The Power Workload Controller contacts the App QoS Agent and requests that it creates Pools in App QoS. The Pools hold the App QoS Power Profile (separate to the Power Manager's PowerProfile) associated with the cores and the actual cores themselves that need to be configured.
     
-The PowerWorkload objects are created automatically by the PowerPod controller. This action is undertaken by the operator when a Pod is created with a container requesting exclusive cores and a PowerProfile.
+The PowerWorkload objects are created automatically by the Pod Controller. This action is undertaken by the Power Manager when a Pod is created with a container requesting exclusive cores and a PowerProfile.
     
-PowerWorkload objects can also be created directly by the user via the PowerWorkload spec. This is only recommended when creating the Shared PowerWorkload for a given Node, as this is the responsibility of the user. If no Shared PowerWorkload is created, the cores that remain in the ‘shared pool’ on the Node will remain at their core frequency values instead of being tuned to lower frequencies. PowerWorkloads are specific to a given node, so one is created for each Node with a Pod requesting a PowerProfile, based on the PowerProfile requested.
- 
-    
-### Example
-````yaml
-apiVersion: "power.intel.com/v1alpha1"
-kind: PowerWorkload
-metadata:
-    name: performance-example-node-workload
-spec:
-   name: "performance-example-node-workload"
-   nodeInfo:
-     containers:
-     - exclusiveCPUs:
-       - 2
-       - 3
-       - 66
-       - 67
-       id: f1be89f7dda457a7bb8929d4da8d3b3092c9e2a35d91065f1b1c9e71d19bcd4f
-       name: example-container
-       pod: example-pod
-       powerProfile: “performance-example-node”
-     name: “example-node”
-     cpuIds:
-     - 2
-     - 3
-     - 66
-     - 67
-   powerProfile: "performance-example-node"
-````
-This workload assigns the “performance” PowerProfile to cores 2, 3, 66, and 67 on the node “example-node”
+PowerWorkload objects can also be created directly by the user via the PowerWorkload spec. This is only recommended when creating the Shared PowerWorkload for a given Node, as this is the responsibility of the user. If no Shared PowerWorkload is created, the cores that remain in the ‘Shared Pool’ on the Node will remain at their core frequency values instead of being tuned to lower frequencies. PowerWorkloads are specific to a given node, so one is created for each Node with a Pod requesting a PowerProfile, based on the PowerProfile requested. For more information on Shared PowerWorkloads and the Shared Pool, see the [Shared PowerWorkloads](#shared-powerworkloads) section.
 
-The Shared PowerWorkload created by the user is determined by the Workload controller to be the designated Shared PowerWorkload based on the AllCores value in the Workload spec. The reserved CPUs on the Node must also be specified, as these will not be considered for frequency tuning by the controller as they are always being used by Kubernetes’ processes. It is important that the reservedCPUs value directly corresponds to the reservedCPUs value in the user’s Kubelet config to keep them consistent. The user determines the Node for this PowerWorkload using the PowerNodeSelector to match the labels on the Node. The user then specifies the requested PowerProfile to use.
-
-A shared PowerWorkload must follow the naming convention of beginning with ‘shared-’. Any shared PowerWorkload that does not begin with ‘shared-’ is rejected and deleted by the PowerWorkload controller. The shared PowerWorkload powerNodeSelector must also select a unique node, so it is recommended that the ‘kubernetes.io/hostname’ label be used. A shared PowerProfile can be used for multiple shared PowerWorkloads.
-
-### Example
-````yaml
-apiVersion: "power.intel.com/v1alpha1"
-kind: PowerWorkload
-metadata:
-    name: shared-example-node-workload
-spec:
-   name: "shared-example-node-workload"
-   allCores: true
-   reservedCPUs:
-     - 0
-     - 1
-   powerNodeSelector:
-     # Labels other than hostname can be used
-     - “kubernetes.io/hostname”: “example-node”
-   powerProfile: "shared-example-node"
-````
+A PowerWorkload associated with a PowerProfile will have the following values:
+- Its Node Info: This holds all the necessary information about the PowerWorkload, such as the Containers using this PowerWorkload, the Pods using this PowerWorkload, and the cores that have been tuned by this PowerWorkload
+- The PowerProfile associated with this PowerWorkload
 
 
-### Profile Controller
-The Profile Controller holds values for specific SST settings which are then applied to cores at host level by the operator as requested. Power Profiles are advertised as extended resources and can be requested via the PodSpec. The Config controller creates the requested high-performance PowerProfiles depending on which are requested in the PowerConfig created by the user.
+### Power Profile
+The Power Profile Controller holds values for specific SST settings which are then applied to cores at host level by the Power Manager as requested. Power Profiles are advertised as extended resources and can be requested via the PodSpec. The Power Config Controller creates the requested high-performance PowerProfiles depending on which are requested in the PowerConfig created by the user.
 
 There are two kinds of PowerProfiles:
 
@@ -180,54 +120,24 @@ A Base PowerProfile can be one of three values:
 - balance-performance
 - balance-power
 
-These correspond to three of the EPP values associated with SST-CP. Base PowerProfiles are used to tell the Profile controller that the specified profile is being requested for the cluster. The Profile controller takes the created Profile and further creates an Extended PowerProfile. An Extended PowerProfile is Node-specific. The reason behind this is that different Nodes in your cluster may have different maximum frequency limitations. For example, one Node may have the maximum limitation of 3700GHz, while another may only be able to reach frequency levels of 3200GHz. An Extended PowerProfile queries the Node that it is running on to obtain this maximum limitation and sets the Max and Min values of the profile accordingly. An Extended PowerProfile’s name has the following form:
+These correspond to three of the EPP values associated with SST-CP. Base PowerProfiles are used to tell the Power Profile Controller that the specified profile is being requested for the cluster. The Power Profile Controller takes the created Profile and further creates an Extended PowerProfile. An Extended PowerProfile is Node-specific. The reason behind this is that different Nodes in your cluster may have different maximum frequency limitations. For example, one Node may have the maximum limitation of 3700GHz, while another may only be able to reach frequency levels of 3200GHz. An Extended PowerProfile queries the Node that it is running on to obtain this maximum limitation and sets the Max and Min values of the profile accordingly. An Extended PowerProfile’s name has the following form:
 
 BASE_PROFILE_NAME-NODE_NAME - for example: “performance-example-node”.
 
-Either the Base PowerProfile or the Extended PowerProfile can be requested in the PodSpec, as the Workload controller can determine the correct PowerProfile to use from the Base PowerProfile.
+Either the Base PowerProfile or the Extended PowerProfile can be requested in the PodSpec, as the Power Workload Controller can determine the correct PowerProfile to use from the Base PowerProfile.
 
-#### Example
-````yaml
-apiVersion: "power.intel.com/v1alpha1"
-kind: PowerProfile
-metadata:
-   name: performance-example-node
-spec:
-   name: "performance-example-node"
-   max: 3700
-   min: 3300
-   epp: "performance"
-````
+A PowerProfile has the following values when created:
+- Name: The name used to identify and specify the PowerProfile, used in the PodSpec
+- Max: The maximum frequency at which a core can run
+- Min: The minimum frequency at which a core can run
+- Epp: The EPP value for the core, specifying its priority in terms of the distribution of additional power on the Node
+- 
 
-The Shared PowerProfile must be created by the user and does not require a Base PowerProfile. This allows the user to have a Shared PowerProfile per Node in their cluster, giving more room for different configurations. The Power controller determines that a PowerProfile is being designated as ‘Shared’ through the use of the ‘power’ EPP value.
-    
-#### Example
-````yaml
-apiVersion: "power.intel.com/v1alpha1"
-kind: PowerProfile
-metadata:
-   name: shared-example-node1
-spec:
-   name: "shared-example-node1"
-   max: 1500
-   min: 1000
-   epp: "power"
-````
-````yaml
-apiVersion: "power.intel.com/v1alpha1"
-kind: PowerProfile
-metadata:
-   name: shared-example-node2
-spec:
-   name: "shared-example-node2"
-   max: 2000
-   min: 1500
-   epp: "power"
-````
+The Shared PowerProfile must be created by the user and does not require a Base PowerProfile. This allows the user to have a Shared PowerProfile per Node in their cluster, giving more room for different configurations. The Power Profile Controller determines that a PowerProfile is being designated as ‘Shared’ through the use of the ‘power’ EPP value. See the [Shared PowerWorkloads](#shared-powerworkloads) section for more information on Shared PowerProfile functionality.
 
 
-### PowerNode Controller
-The PowerNode controller is a way to have a view of what is going on in the cluster. 
+### Power Node
+The Power Node Controller is a way to have a view of what is going on in the cluster. 
 It details what workloads are being used currently, which profiles are being used, what cores are being used and what containers they are associated with. It also gives insight to the user as to which Shared Pool in the App QoS agent is being used. The two Shared Pools can be the Default Pool or the Shared Pool. If there is no Shared PowerProfile associated with the Node, then the Default Pool will hold all the cores in the ‘shared pool’, none of which will have their frequencies tuned to a lower value. If a Shared PowerProfile is associated with the Node, the cores in the ‘shared pool’ – excluding cores reserved for Kubernetes processes (reservedCPUs) - will be placed in the Shared Pool in App QoS and have their cores tuned.
 
 #### Example
@@ -300,6 +210,20 @@ activeProfiles:
     - 10
 ````
 
+### Shared PowerWorkloads
+In a Kubernetes cluster while using the Static CPU Manager Policy, a growing and shrinking 'Shared Pool' is maintained to keep track of cores on the Node that are used exclusively for certain Pods and cores that are available for use by all other Pods. Cores that are available to all non-exclusive Pods are considered to be in this 'Shared Pool'. The purpose of the Kubernetes Power Manager is to take the cores in this pool and set their frequencies to a lower threshold to lower the power output of that Node. This functionality will only happen when the user creates a Shared PowerWorkload, which is a special type of PowerWorkload. Without a Shared PowerWorkload the cores in this Shared Pool will not have their frequencies changed. It is the responsibility of the user to create a Shared PowerWorkload for each Node in their cluster. To create a Shared PowerWorkload, specific flags need to be set in the PowerWorkload's spec:
+- allCores must be set to True
+- reservedCPUs must be set to a list of the cores that are reserved for Kubernetes system processes, which will be the same as the reservedCPUs flag in the Kubelet config file
+
+A shared PowerWorkload must follow the naming convention of beginning with ‘shared-’. Any shared PowerWorkload that does not begin with ‘shared-’ is rejected and deleted by the Power Workload Controller. The shared PowerWorkload powerNodeSelector must also select a unique node, so it is recommended that the ‘kubernetes.io/hostname’ label be used. A shared PowerProfile can be used for multiple shared PowerWorkloads.
+
+After a Shared PowerWorkload is created for a Node, the cores in its Shared Pool - excluding those specified in the reservedCPUs flag - will have their frequencies set to that of the Shared PowerProfile requested. A single Shared PowerProfile can be used for multiple Shared PowerWorkloads, but a single Shared PowerWorkload cannot be used for multiple Nodes.
+
+A Shared PowerProfile is created by the user and is specified by setting the epp option to "power". This signals to the Power Profile Controller that the created PowerProfile is to be used as a Shared one and that no subsequent Extended PowerProfiles need to be created.
+An example of a Shared PowerProfile can be found [here](https://github.com/intel/kubernetes-power-manager/blob/master/examples/example-shared-profile.yaml).
+An example of a Shared PowerWorkload can be found [here](https://github.com/intel/kubernetes-power-manager/blob/master/examples/example-shared-workload.yaml).
+
+The App QoS Agent can store up to two Shared Pools at a time, with a minimum of one. Note that these are App QoS pools and are separate to the 'Shared Pool' in the Kubernetes cluster mentioned above. Upon startup, App QoS takes all of the cores on the Node it has been placed and places them in a Pool it maintains called the Default Pool. If no Shared PowerWorkload is present on that given Node, cores are taken out of and returned to this Default Pool when exclusive Pods are created. When a Shared PowerWorkload is created, all cores except for those specified in the reservedCPUs option are removed from the Default Pool and placed in a newly created App QoS Pool called the Shared Pool. Upon creation of this Shared Pool in App QoS, these cores have their frequencies tuned. The Kubernetes Power Manager will always remove cores from the Shared Pool in App QoS if it is available, only going to the Default Pool when it is absent.
 
 
 ### In the Kubernetes API
@@ -466,7 +390,7 @@ spec:
 Apply the Config:
 `kubectl apply -f examples/example-powerconfig.yaml`
    
-Once deployed the controller-manager pod will see it via the Config controller and create an App QoS instance and a Node Agent instance on nodes specified with the ‘feature.node.kubernetes.io/appqos-node: "true"’ label.
+Once deployed the controller-manager pod will see it via the Power Config Controller and create an App QoS instance and a Node Agent instance on nodes specified with the ‘feature.node.kubernetes.io/appqos-node: "true"’ label.
 
 The power-node-agent DaemonSet will be created, managing the Power Node Agent Pods. The controller-manager will finally create the PowerProfiles that were requested on each Node.
 
@@ -514,7 +438,7 @@ spec:
 Replace the necessary values with those that correspond to your cluster and apply the Workload:
  `kubectl apply -f examples/example-shared-workload.yaml`
  
-Once created the workload controller will see its creation and create the corresponding Pool in the App QoS agent and all of the cores on the system except for the reservedCPUs will be brought down to this lower frequency level.
+Once created the Power Workload Controller will see its creation and create the corresponding Pool in the App QoS agent and all of the cores on the system except for the reservedCPUs will be brought down to this lower frequency level.
  
 - **Performance Pod**
 
