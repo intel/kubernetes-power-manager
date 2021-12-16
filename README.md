@@ -1,17 +1,17 @@
-# Intel Power Manager for Kubernetes Software
+# Kubernetes Power Manager 
 
  
-## What is the Power Manager for Kubernetes?
+## What is the Kubernetes Power Manager?
 
 In a container orchestration engine such as Kubernetes, the allocation of CPU resources from a pool of platforms is based solely on availability with no consideration of individual capabilities such as Intel Speed Select Technology (SST).
 
-The Intel Power Manager for Kubernetes is a Kubernetes Operator designed to expose and utilize Intel specific power management technologies in a Kubernetes Environment.
+The Kubernetes Power Manager is a Kubernetes Operator designed to expose and utilize Intel specific power management technologies in a Kubernetes Environment.
 
 The SST is a powerful collection of features that offers more granular control over CPU performance and power consumption on a per-core basis. However, as a workload orchestrator, Kubernetes is intentionally designed to provide a layer of abstraction between the workload and such hardware capabilities. This presents a challenge to Kubernetes users running performance critical workloads with specific requirements dependent on hardware capabilities.
 
-The Power Manager for Kubernetes bridges the gap between the container orchestration layer and hardware features enablement, specifically Intel SST.
+The Kubernetes Power Manager bridges the gap between the container orchestration layer and hardware features enablement, specifically Intel SST.
 
-### Power Manager for Kubernetes' main responsibilities:
+### Kubernetes Power Manager' main responsibilities:
 
 - Deploying the Power Node Agent DaemonSet, targeting the nodes desired by the user, which contains the App QoS Agent and Node Agent in a single Pod
 - Managing all associated custom resources
@@ -29,7 +29,7 @@ The Power Manager for Kubernetes bridges the gap between the container orchestra
 - *Power Optimization over Performance.*
    A cloud may be interested in fast response time, but not in maximal response time, so may choose to spin up cores on demand and only those cores   used but want to remain in power-saving mode the rest of the time.  
 
-## Initial release functionality of the Power Manager for Kubernetes
+## Initial release functionality of the Kubernetes Power Manager
 
 - **SST-BF - (Speed Select Technology - Base Frequency)**
 
@@ -61,7 +61,7 @@ The Power Manager for Kubernetes bridges the gap between the container orchestra
 
 Note: In the future, we want to move away from the CommsPowerManagement library to create a Go Library that utilizes the Intel Pstate driver.
 
-## Future planned additions to the Power Manager for Kubernetes
+## Future planned additions to the Kubernetes Power Manager
 
 - **SST-TF - Turbo Frequency**
 
@@ -74,17 +74,17 @@ Note: In the future, we want to move away from the CommsPowerManagement library 
 ## Prerequisites
 * Node Feature Discovery ([NFD](https://github.com/kubernetes-sigs/node-feature-discovery)) should be deployed in the cluster before running the operator. NFD is used to detect node-level features such as *Intel Speed Select Technology - Base Frequency (SST-BF)*. Once detected, the user can instruct the operator to deploy the Power Node Agent to Nodes with SST-specific labels, allowing the Power Node Agent to take advantage of such features by configuring cores on the host to optimise performance for containerized workloads.
 Note: NFD is recommended, but not essential. Node labels can also be applied manually. See the [NFD repo](https://github.com/kubernetes-sigs/node-feature-discovery#feature-labels) for a full list of features labels.
-* A working App QoS container image from the [App QoS repo](https://github.com/intel/intel-cmt-cat/appqos).
+* A working App QoS container image from the [App QoS repo](https://github.com/intel/intel-cmt-cat/tree/master/appqos).
 
 ## Components
-### App QoS
-[App Qos](https://github.com/intel/intel-cmt-cat/appqos), an alias for “Application Quality of Service”, is an Intel software suite that provides node level configuration of hardware capabilities such as SST. App QoS is deployed on the host as a containerized application and exposes a REST interface to the orchestration layer. Using the Intel Comms Power libraries as a back end, App QoS can perform host-level configurations of SST features based on API calls from the Power Manager for Kubernetes.
+### App QoS   
+[App Qos](https://github.com/intel/intel-cmt-cat/tree/master/appqos), an alias for “Application Quality of Service”, is an Intel software suite that provides node level configuration of hardware capabilities such as SST. App QoS is deployed on the host as a containerized application and exposes a REST interface to the orchestration layer. Using the Intel Comms Power libraries as a back end, App QoS can perform host-level configurations of SST features based on API calls from the Kubernetes Power Manager.
 
 ### Power Node Agent
-The Power Node Agent is also a containerized application deployed by the operator in a DaemonSet. The primary function of the node agent is to communicate with the node's Kubelet PodResources endpoint to discover the exact cores that are allocated per container. The node agent watches for Pods that are created in your cluster and examines them to determine which Power Profile they have requested and then sets off the chain of events that tunes the frequencies of the cores designated to the Pod.
+The Power Node Agent is also a containerized application deployed by the Kubernetes Power Manager in a DaemonSet. The primary function of the node agent is to communicate with the node's Kubelet PodResources endpoint to discover the exact cores that are allocated per container. The node agent watches for Pods that are created in your cluster and examines them to determine which Power Profile they have requested and then sets off the chain of events that tunes the frequencies of the cores designated to the Pod.
 
 ### Config Controller
-The operator will wait for the PowerConfig to be created by the user, in which the desired PowerProfiles will be specified. The PowerConfig holds different values: what image is required, what Nodes the user wants to place the node agent on and what PowerProfiles are required. 
+The Kubernetes Power Manager will wait for the PowerConfig to be created by the user, in which the desired PowerProfiles will be specified. The PowerConfig holds different values: what image is required, what Nodes the user wants to place the node agent on and what PowerProfiles are required. 
 * appQoSImage: This is the name/tag given to the App QoS container image that will be deployed in a DaemonSet by the operator.
 * powerNodeSelector: This is a key/value map used for defining a list of node labels that a node must satisfy in order for App QoS and the Power Node Agent to be deployed.
 * powerProfiles: The list of PowerProfiles that the user wants available on the nodes.
@@ -110,7 +110,7 @@ spec:
 ### Workload Controller 
 The Workload Controller is responsible for the actual tuning of the cores. The Workload Controller contacts the App QoS agent and requests that it creates Pools in App QoS. The Pools hold the PowerProfile associated with the cores and the cores that need to be configured.
     
-The PowerWorkload objects are created automatically by the PowerPod controller. This action is undertaken by the operator when a Pod is created with a container requesting exclusive cores and a PowerProfile.
+The PowerWorkload objects are created automatically by the PowerPod controller. This action is undertaken by the Kubernetes Power Manager when a Pod is created with a container requesting exclusive cores and a PowerProfile.
     
 PowerWorkload objects can also be created directly by the user via the PowerWorkload spec. This is only recommended when creating the Shared PowerWorkload for a given Node, as this is the responsibility of the user. If no Shared PowerWorkload is created, the cores that remain in the ‘shared pool’ on the Node will remain at their core frequency values instead of being tuned to lower frequencies. PowerWorkloads are specific to a given node, so one is created for each Node with a Pod requesting a PowerProfile, based on the PowerProfile requested.
  
@@ -320,7 +320,7 @@ The App QoS agent will automatically create a Pool labeled "Default" which will 
 ### Node Agent Pod
 The Pod Controller watches for pods. When a pod comes along the Pod Controller checks if the pod is in the guaranteed quality of service class (using exclusive cores, [see documentation](https://kubernetes.io/docs/tasks/configure-pod-container/quality-service-pod/), taking a core out of the shared pool (it is the only option in Kubernetes that can do this operation). Then it examines the Pods to determine which PowerProfile has been requested and then creates or updates the appropriate PowerWorkload.
 
-Note: the request and the limits must have a matching number of cores and are also in a container-by-container bases. Currently the Power Manager for Kubernetes only supports a single PowerProfile per Pod. If two profiles are requested in different containers, the pod will get created but the cores will not get tuned.
+Note: the request and the limits must have a matching number of cores and are also in a container-by-container bases. Currently the Kubernetes Power Manager only supports a single PowerProfile per Pod. If two profiles are requested in different containers, the pod will get created but the cores will not get tuned.
 
 ## Repository Links
 ### App QoS repository
@@ -375,8 +375,8 @@ The following configuration is recommended for the appqos.conf file, which will 
 }
 ````
 
-### Setting up the Power Manager for Kubernetes 
-- Clone the Power Manager for Kubernetes  
+### Setting up the Kubernetes Power Manager 
+- Clone the Kubernetes Power Manager  
 ````
 git clone https://github.com/intel/kubernetes-power-manager
 cd kubernetes-power-manager
@@ -395,7 +395,7 @@ make images
 ````
 NOTE: The images will be labelled ‘intel-power-operator:latest’ and ‘intel-power-node-agent:latest’
 
-### Running the Power Manager for Kubernetes 
+### Running the Kubernetes Power Manager 
 - **Applying the manager**
 
 The manager Deployment in config/manager/manager.yaml contains the following:
