@@ -72,7 +72,7 @@ Note: In the future, we want to move away from the CommsPowerManagement library 
     This feature is only useful when all cores on the system are being utilized, but the user still wants to be able to configure certain cores to get a higher performance than others.
 
 ## Prerequisites
-* Node Feature Discovery ([NFD](https://github.com/kubernetes-sigs/node-feature-discovery)) should be deployed in the cluster before running the operator. NFD is used to detect node-level features such as *Intel Speed Select Technology - Base Frequency (SST-BF)*. Once detected, the user can instruct the operator to deploy the Power Node Agent to Nodes with SST-specific labels, allowing the Power Node Agent to take advantage of such features by configuring cores on the host to optimise performance for containerized workloads.
+* Node Feature Discovery ([NFD](https://github.com/kubernetes-sigs/node-feature-discovery)) should be deployed in the cluster before running the Kubernetes Power Manager. NFD is used to detect node-level features such as *Intel Speed Select Technology - Base Frequency (SST-BF)*. Once detected, the user can instruct the Kubernetes Power Manager to deploy the Power Node Agent to Nodes with SST-specific labels, allowing the Power Node Agent to take advantage of such features by configuring cores on the host to optimise performance for containerized workloads.
 Note: NFD is recommended, but not essential. Node labels can also be applied manually. See the [NFD repo](https://github.com/kubernetes-sigs/node-feature-discovery#feature-labels) for a full list of features labels.
 * A working App QoS container image from the [App QoS repo](https://github.com/intel/intel-cmt-cat/tree/master/appqos).
 
@@ -85,7 +85,7 @@ The Power Node Agent is also a containerized application deployed by the Kuberne
 
 ### Config Controller
 The Kubernetes Power Manager will wait for the PowerConfig to be created by the user, in which the desired PowerProfiles will be specified. The PowerConfig holds different values: what image is required, what Nodes the user wants to place the node agent on and what PowerProfiles are required. 
-* appQoSImage: This is the name/tag given to the App QoS container image that will be deployed in a DaemonSet by the operator.
+* appQoSImage: This is the name/tag given to the App QoS container image that will be deployed in a DaemonSet by the Kubernetes Power Manager.
 * powerNodeSelector: This is a key/value map used for defining a list of node labels that a node must satisfy in order for App QoS and the Power Node Agent to be deployed.
 * powerProfiles: The list of PowerProfiles that the user wants available on the nodes.
 
@@ -168,7 +168,7 @@ spec:
 
 
 ### Profile Controller
-The Profile Controller holds values for specific SST settings which are then applied to cores at host level by the operator as requested. Power Profiles are advertised as extended resources and can be requested via the PodSpec. The Config controller creates the requested high-performance PowerProfiles depending on which are requested in the PowerConfig created by the user.
+The Profile Controller holds values for specific SST settings which are then applied to cores at host level by the Kubernetes Power Manager as requested. Power Profiles are advertised as extended resources and can be requested via the PodSpec. The Config controller creates the requested high-performance PowerProfiles depending on which are requested in the PowerConfig created by the user.
 
 There are two kinds of PowerProfiles:
 
@@ -382,14 +382,14 @@ git clone https://github.com/intel/kubernetes-power-manager
 cd kubernetes-power-manager
 ````
 
-- Set up the necessary Namespace, Service Account, and RBAC rules for the operator:
+- Set up the necessary Namespace, Service Account, and RBAC rules for the Kubernetes Power Manager:
 ````
 kubectl apply -f config/rbac/namespace.yaml
 kubectl apply -f config/rbac/service_account.yaml
 kubectl apply -f config/rbac/rbac.yaml
 ````
 
-- Generate the CRD templates, create the Custom Resource Definitions, and build the operator and Power Node Agent Docker images:
+- Generate the CRD templates, create the Custom Resource Definitions, and build the Kubernetes Power Manager and Power Node Agent Docker images:
 ````
 make images
 ````
