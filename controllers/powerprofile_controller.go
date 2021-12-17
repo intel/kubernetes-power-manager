@@ -40,7 +40,8 @@ import (
 )
 
 const (
-	MaxFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"
+	MaxFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"
+	MinFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"
 )
 
 var AppQoSClientAddress = "https://localhost:5000"
@@ -225,6 +226,28 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 
 	maximumValueForProfile := maximumFrequency - extendedPowerProfileMaxMinDifference[profile.Spec.Name]
 	minimumValueForProfile := minimumFrequency - extendedPowerProfileMaxMinDifference[profile.Spec.Name]
+
+	// Check if either Max or Min frequencies fall below the absolute minimum frequency value for the CPU
+	absoluteMinFrequencyByte, err := ioutil.ReadFile(MinFrequencyFile)
+	if err != nil {
+                logger.Error(err, "error reading minimum frequency from file")
+                return ctrl.Result{}, err
+        }
+
+	absoluteMinFrequencyString := string(absoluteMinFrequencyByte)
+	absoluteMinFrequency, err := strconv.Atoi(strings.Split(absoluteMinFrequencyString, "\n")[0])
+	if err != nil {
+                logger.Error(err, "error reading minimum frequency value")
+                return ctrl.Result{}, err
+        }
+
+	if maximumValueForProfile < absoluteMinFrequency {
+		maximumValueForProfile = absoluteMinFrequency
+	}
+
+	if minimumValueForProfile < absoluteMinFrequency {
+		maximumValueForProfile = absoluteMinFrequency
+	}
 
 	// Check to see if the extended PowerProfile has already been created for this Node
 	if profile.Spec.Epp != "power" {
