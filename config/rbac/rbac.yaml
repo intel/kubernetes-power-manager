@@ -64,7 +64,7 @@ metadata:
   name: intel-power-operator
 rules:
 - apiGroups: [""]
-  resources: ["nodes"]
+  resources: ["nodes", "events"]
   verbs: ["get", "list", "watch", "patch", "update"]
 - apiGroups: [""]
   resources: ["nodes/status"] 
