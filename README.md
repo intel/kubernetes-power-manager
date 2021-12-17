@@ -16,7 +16,7 @@ The Kubernetes Power Manager bridges the gap between the container orchestration
 - Deploying the Power Node Agent DaemonSet, targeting the nodes desired by the user, which contains the App QoS Agent and Node Agent in a single Pod
 - Managing all associated custom resources
 - Discovery and advertisement of the Power Profile extended resources.
-- Sending HTTO requests to the App QoS daemons for SST configuration.
+- Sending HTTP requests to the App QoS daemons for SST configuration.
     
 
 ### Use Cases:
