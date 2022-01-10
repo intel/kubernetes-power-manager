@@ -2,6 +2,7 @@ apiVersion: "power.intel.com/v1alpha1"
 kind: PowerConfig
 metadata:
   name: power-config
+  namespace: intel-power
 spec:
   powerImage: "appqos:latest"
   powerNodeSelector:

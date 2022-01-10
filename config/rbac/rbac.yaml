@@ -6,54 +6,38 @@ metadata:
 
 ---
 
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+apiVersion: v1
+kind: ServiceAccount
 metadata:
-  creationTimestamp: null
-  name: intel-power-operator
-  namespace: intel-power
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - configmaps
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - "apps"
-  resources:
-  - deployments
-  - daemonsets
-  verbs:
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
+  name: intel-power-node-agent
+  namespace:  intel-power
 
 ---
 
-kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: 
+  name: operator-custom-resource-definitions-role
+  namespace: intel-power
+rules:
+- apiGroups: ["", "power.intel.com", "apps"]
+  resources: ["powerconfigs", "powerconfigs/status", "powerprofiles", "powerprofiles/status", "events", "daemonsets"]
+  verbs: ["*"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
 metadata:
-  name: intel-power-operator
+  name: operator-custom-resource-definitions-role-binding
   namespace: intel-power
 subjects:
 - kind: ServiceAccount
   name: intel-power-operator
+  namespace: intel-power
 roleRef:
   kind: Role
-  name: intel-power-operator
+  name: operator-custom-resource-definitions-role
   apiGroup: rbac.authorization.k8s.io
 
 ---
@@ -61,35 +45,51 @@ roleRef:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: intel-power-operator
+  name: operator-nodes
 rules:
 - apiGroups: [""]
-  resources: ["nodes", "events"]
-  verbs: ["get", "list", "watch", "patch", "update"]
-- apiGroups: [""]
-  resources: ["nodes/status"] 
-  verbs: ["get", "list", "watch", "patch", "update"]
-- apiGroups: [""]
-  resources: ["pods", "configmaps"]
-  verbs: ["get", "list", "watch", "patch", "create", "update"]
-- apiGroups: ["power.intel.com"]
-  resources: ["powerconfigs", "powerconfigs/status", "powernodes", "powernodes/status", "powerprofiles", "powerprofiles/status", "powerworkloads", "powerworkloads/status"] 
-  verbs: ["get", "list", "watch", "patch", "create", "update"]
-- apiGroups: ["apps"]
-  resources: ["daemonsets"]
-  verbs: ["get", "list", "watch", "patch", "create", "update"]
+  resources: ["nodes", "nodes/status"]
+  verbs: ["*"]
 
 ---
 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: intel-power-operator
-roleRef:
-  kind: ClusterRole
-  name: intel-power-operator 
-  apiGroup: rbac.authorization.k8s.io
+  name: operator-nodes-binding
 subjects:
 - kind: ServiceAccount
-  namespace: intel-power 
   name: intel-power-operator
+  namespace: intel-power
+roleRef:
+  kind: ClusterRole
+  name: operator-nodes
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-agent-cluster-resources
+rules:
+- apiGroups: ["", "power.intel.com"]
+  resources: ["nodes", "nodes/status", "pods", "pods/status", "powerprofiles", "powerprofiles/status", "powerworkloads", "powerworkloads/status", "powernodes", "powernodes/status"]
+  verbs: ["*"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-agent-cluster-resources-binding
+subjects:
+- kind: ServiceAccount
+  name: intel-power-node-agent
+  namespace: intel-power
+roleRef:
+  kind: ClusterRole
+  name: node-agent-cluster-resources
+  apiGroup: rbac.authorization.k8s.io
+
+---

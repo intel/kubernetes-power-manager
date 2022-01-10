@@ -13,7 +13,7 @@ spec:
       labels:
         name: power-node-agent-pod
     spec:
-      serviceAccountName: intel-power-operator
+      serviceAccountName: intel-power-node-agent
       containers:
         - image: 'intel-power-node-agent:latest'
           imagePullPolicy: IfNotPresent
