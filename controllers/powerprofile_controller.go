@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"reflect"
 	rt "runtime"
@@ -40,8 +41,9 @@ import (
 )
 
 const (
-	MaxFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"
-	MinFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"
+	MaxFrequencyFile         = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"
+	MinFrequencyFile         = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"
+	MinimumRequiredFrequency = 2000
 )
 
 var AppQoSClientAddress = "https://localhost:5000"
@@ -58,10 +60,22 @@ var extendedResourcePercentage map[string]float64 = map[string]float64{
 	"power":               1.0,
 }
 
-var extendedPowerProfileMaxMinDifference map[string]int = map[string]int{
-	"performance":         0,
-	"balance-performance": 500,
-	"balance-power":       1000,
+var extendedPowerProfileMaxMinDifference map[string]map[string]int = map[string]map[string]int{
+	"performance": map[string]int{
+		"baseMax":  400,
+		"baseMin":  600,
+		"modifier": 0,
+	},
+	"balance-performance": map[string]int{
+		"baseMax":  600,
+		"baseMin":  800,
+		"modifier": 100,
+	},
+	"balance-power": map[string]int{
+		"baseMax":  800,
+		"baseMin":  1000,
+		"modifier": 200,
+	},
 }
 
 var basePowerProfileToEppValue map[string]string = map[string]string{
@@ -208,45 +222,49 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	// Update the PowerProfile with the correct min/max values and name for the given node
 	profileName := fmt.Sprintf("%s-%s", profile.Spec.Name, nodeName)
 
-	maximumFrequencyByte, err := ioutil.ReadFile(MaxFrequencyFile)
+	absoluteMaximumFrequencyByte, err := ioutil.ReadFile(MaxFrequencyFile)
 	if err != nil {
 		logger.Error(err, "error reading maximum frequency from file")
 		return ctrl.Result{}, err
 	}
-
-	maximumFrequencyString := string(maximumFrequencyByte)
-	maximumFrequency, err := strconv.Atoi(strings.Split(maximumFrequencyString, "\n")[0])
+	absoluteMaximumFrequencyString := string(absoluteMaximumFrequencyByte)
+	absoluteMaximumFrequency, err := strconv.Atoi(strings.Split(absoluteMaximumFrequencyString, "\n")[0])
 	if err != nil {
 		logger.Error(err, "error reading maximum frequency value")
 		return ctrl.Result{}, err
 	}
 
-	maximumFrequency = (maximumFrequency / 1000) - 400
-	minimumFrequency := maximumFrequency - 400
-
-	maximumValueForProfile := maximumFrequency - extendedPowerProfileMaxMinDifference[profile.Spec.Name]
-	minimumValueForProfile := minimumFrequency - extendedPowerProfileMaxMinDifference[profile.Spec.Name]
-
-	// Check if either Max or Min frequencies fall below the absolute minimum frequency value for the CPU
-	absoluteMinFrequencyByte, err := ioutil.ReadFile(MinFrequencyFile)
+	absoluteMinimumFrequencyByte, err := ioutil.ReadFile(MinFrequencyFile)
 	if err != nil {
-                logger.Error(err, "error reading minimum frequency from file")
-                return ctrl.Result{}, err
-        }
-
-	absoluteMinFrequencyString := string(absoluteMinFrequencyByte)
-	absoluteMinFrequency, err := strconv.Atoi(strings.Split(absoluteMinFrequencyString, "\n")[0])
+		logger.Error(err, "error reading minimum frequency from file")
+		return ctrl.Result{}, err
+	}
+	absoluteMinimumFrequencyString := string(absoluteMinimumFrequencyByte)
+	absoluteMinimumFrequency, err := strconv.Atoi(strings.Split(absoluteMinimumFrequencyString, "\n")[0])
 	if err != nil {
-                logger.Error(err, "error reading minimum frequency value")
-                return ctrl.Result{}, err
-        }
-
-	if maximumValueForProfile < absoluteMinFrequency {
-		maximumValueForProfile = absoluteMinFrequency
+		logger.Error(err, "error reading minimum frequency value")
+		return ctrl.Result{}, err
 	}
 
-	if minimumValueForProfile < absoluteMinFrequency {
-		maximumValueForProfile = absoluteMinFrequency
+	if absoluteMaximumFrequency < MinimumRequiredFrequency {
+		maximumFrequencyTooLowError := errors.NewServiceUnavailable(fmt.Sprintf("Maximum CPU Frequency cannot be below %v", MinimumRequiredFrequency))
+		logger.Error(maximumFrequencyTooLowError, "maximum frequency too low")
+		return ctrl.Result{}, nil
+	}
+
+	frequencyModifier := math.Floor(float64((absoluteMaximumFrequency - MinimumRequiredFrequency) / 800))
+	frequencyModifier = frequencyModifier * float64(extendedPowerProfileMaxMinDifference[profile.Spec.Name]["modifier"])
+	maximumFrequencyModifier := extendedPowerProfileMaxMinDifference[profile.Spec.Name]["baseMax"] + int(frequencyModifier)
+	minimumFrequencyModifier := extendedPowerProfileMaxMinDifference[profile.Spec.Name]["baseMin"] + int(frequencyModifier)
+	maximumValueForProfile := absoluteMaximumFrequency - maximumFrequencyModifier
+	minimumValueForProfile := absoluteMaximumFrequency - minimumFrequencyModifier
+
+	if maximumValueForProfile < absoluteMinimumFrequency {
+		maximumValueForProfile = absoluteMinimumFrequency
+	}
+
+	if minimumValueForProfile < absoluteMinimumFrequency {
+		maximumValueForProfile = absoluteMinimumFrequency
 	}
 
 	// Check to see if the extended PowerProfile has already been created for this Node
