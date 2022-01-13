@@ -47,8 +47,8 @@ kind: ClusterRole
 metadata:
   name: operator-nodes
 rules:
-- apiGroups: [""]
-  resources: ["nodes", "nodes/status"]
+- apiGroups: ["", "power.intel.com", "apps"]
+  resources: ["nodes", "nodes/status", "configmaps", "powerconfigs", "powerconfigs/status", "powerprofiles", "powerprofiles/status", "events", "daemonsets"]
   verbs: ["*"]
 
 ---

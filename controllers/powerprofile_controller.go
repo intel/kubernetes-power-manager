@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"reflect"
 	rt "runtime"
@@ -255,7 +254,7 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
-	frequencyModifier := math.Floor(float64((absoluteMaximumFrequency - MinimumRequiredFrequency) / 800))
+	frequencyModifier := float64((absoluteMaximumFrequency - MinimumRequiredFrequency) / 800)
 	frequencyModifier = frequencyModifier * float64(extendedPowerProfileMaxMinDifference[profile.Spec.Name]["modifier"])
 	maximumFrequencyModifier := extendedPowerProfileMaxMinDifference[profile.Spec.Name]["baseMax"] + int(frequencyModifier)
 	minimumFrequencyModifier := extendedPowerProfileMaxMinDifference[profile.Spec.Name]["baseMin"] + int(frequencyModifier)
