@@ -3,6 +3,7 @@ kind: PowerWorkload
 metadata:
   # Replace <NODE_NAME> with the Node you intend this PowerWorkload to be associated with
   name: shared-<NODE_NAME>-workload
+  namespace: intel-power
 spec:
   # Replace <NODE_NAME> with the Node you intend this PowerWorkload to be associated with
   name: "shared-<NODE_NAME>-workload"

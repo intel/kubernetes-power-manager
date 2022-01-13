@@ -2,6 +2,7 @@ apiVersion: "power.intel.com/v1alpha1"
 kind: PowerProfile
 metadata:
   name: shared
+  namespace: intel-power
 spec:
   name: "shared"
   max: 1500

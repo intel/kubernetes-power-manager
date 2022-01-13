@@ -62,18 +62,18 @@ var extendedResourcePercentage map[string]float64 = map[string]float64{
 
 var extendedPowerProfileMaxMinDifference map[string]map[string]int = map[string]map[string]int{
 	"performance": map[string]int{
-		"baseMax":  400,
-		"baseMin":  600,
+		"baseMax":  500,
+		"baseMin":  700,
 		"modifier": 0,
 	},
 	"balance-performance": map[string]int{
-		"baseMax":  600,
-		"baseMin":  800,
+		"baseMax":  700,
+		"baseMin":  900,
 		"modifier": 100,
 	},
 	"balance-power": map[string]int{
-		"baseMax":  800,
-		"baseMin":  1000,
+		"baseMax":  900,
+		"baseMin":  1100,
 		"modifier": 200,
 	},
 }
@@ -245,6 +245,9 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		logger.Error(err, "error reading minimum frequency value")
 		return ctrl.Result{}, err
 	}
+
+	absoluteMaximumFrequency = absoluteMaximumFrequency / 1000
+	absoluteMinimumFrequency = absoluteMinimumFrequency / 1000
 
 	if absoluteMaximumFrequency < MinimumRequiredFrequency {
 		maximumFrequencyTooLowError := errors.NewServiceUnavailable(fmt.Sprintf("Maximum CPU Frequency cannot be below %v", MinimumRequiredFrequency))
