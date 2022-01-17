@@ -21,8 +21,8 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        imagePullPolicy: Never
-        image: intel/power-operator:v1.0.1
+        imagePullPolicy: IfNotPresent
+        image: intel/power-operator:v1.0.2
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
