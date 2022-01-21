@@ -385,15 +385,16 @@ cd kubernetes-power-manager
 - Set up the necessary Namespace, Service Account, and RBAC rules for the Kubernetes Power Manager:
 ````
 kubectl apply -f config/rbac/namespace.yaml
-kubectl apply -f config/rbac/service_account.yaml
 kubectl apply -f config/rbac/rbac.yaml
 ````
 
-- Generate the CRD templates, create the Custom Resource Definitions, and build the Kubernetes Power Manager and Power Node Agent Docker images:
+- Generate the CRD templates, create the Custom Resource Definitions, and install the CRDs:
 ````
-make images
+make
 ````
-NOTE: The images will be labelled ‘intel-power-operator:latest’ and ‘intel-power-node-agent:latest’
+NOTE: The images will not be built in this step as they are available on Intel's public Docker Hub at:
+ - intel/power-operator:TAG
+ - intel/power-node-agent:TAG
 
 ### Running the Kubernetes Power Manager 
 - **Applying the manager**
