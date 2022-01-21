@@ -48,7 +48,7 @@ metadata:
   name: operator-nodes
 rules:
 - apiGroups: ["", "power.intel.com", "apps"]
-  resources: ["nodes", "nodes/status", "configmaps", "powerconfigs", "powerconfigs/status", "powerprofiles", "powerprofiles/status", "events", "daemonsets"]
+  resources: ["nodes", "nodes/status", "configmaps", "powerconfigs", "powerconfigs/status", "powerprofiles", "powerprofiles/status", "powerworkloads", "powerworkloads/status", "powernodes", "powernodes/status", "events", "daemonsets"]
   verbs: ["*"]
 
 ---
