@@ -83,19 +83,19 @@ Note: NFD is recommended, but not essential. Node labels can also be applied man
 The Kubernetes Power Manager has been tested in different environments.  
 The below table are results that have been tested and confirmed to function as desired:
 
-|   OS           |   Kernel                    |  Container runtime         | Kubernetes   |
-| :------------: |  :------------------------: |  :-----------------------: |  :--------:  |
-| CentOS 7       | 3.10.0-1160.71.1.el7.x86_64 | Containerd v1.6.6          | v1.24.3      |
-| CentOS 7       | 3.10.0-1160.71.1.el7.x86_64 | Containerd v1.6.6          | v1.24.2      |
-| CentOS 7       | 3.10.0-1160.71.1.el7.x86_64 | Containerd v1.6.6          | v1.23.5      |
-| CentOS 7       | 5.4.0-113.el7.elrepo.x86    | Containerd v1.6.6          | v1.24.3      |
-| Ubuntu 22.04.1 | 5.15.0-43-generic           | Containerd v1.6.6          | v1.24.2      |
-| Ubuntu 22.04.1 | 5.15.0-43-generic           | Containerd v1.5.11         | v1.24.2      |
-| Ubuntu 22.04.1 | 5.15.0-43-generic           | Containerd v1.6.6-k3s1     | v1.24.3+k3s1 |
-| Ubuntu 22.04.1 | 5.4.0-122-generic           | Docker 20.10.12            | v1.23.3      |
-| Rocky Linux 8.6| 4.18.0-372.9.1.el8.x86_64   | Containerd v1.6.7          | v1.24.3      |
-| Rocky Linux 8.6| 4.18.0-372.9.1.el8.x86_64   | Containerd v1.5.10         | v1.24.3      |
-| Rocky Linux 8.6| 4.18.0-372.9.1.el8.x86_64   | cri-o://1.24.2             | v1.24.3      |
+|       OS        |           Kernel            |   Container runtime    |  Kubernetes  |
+|:---------------:|:---------------------------:|:----------------------:|:------------:|
+|    CentOS 7     | 3.10.0-1160.71.1.el7.x86_64 |   Containerd v1.6.6    |   v1.24.3    |
+|    CentOS 7     | 3.10.0-1160.71.1.el7.x86_64 |   Containerd v1.6.6    |   v1.24.2    |
+|    CentOS 7     | 3.10.0-1160.71.1.el7.x86_64 |   Containerd v1.6.6    |   v1.23.5    |
+|    CentOS 7     |  5.4.0-113.el7.elrepo.x86   |   Containerd v1.6.6    |   v1.24.3    |
+| Ubuntu 22.04.1  |      5.15.0-43-generic      |   Containerd v1.6.6    |   v1.24.2    |
+| Ubuntu 22.04.1  |      5.15.0-43-generic      |   Containerd v1.5.11   |   v1.24.2    |
+| Ubuntu 22.04.1  |      5.15.0-43-generic      | Containerd v1.6.6-k3s1 | v1.24.3+k3s1 |
+| Ubuntu 22.04.1  |      5.4.0-122-generic      |    Docker 20.10.12     |   v1.23.3    |
+| Rocky Linux 8.6 |  4.18.0-372.9.1.el8.x86_64  |   Containerd v1.6.7    |   v1.24.3    |
+| Rocky Linux 8.6 |  4.18.0-372.9.1.el8.x86_64  |   Containerd v1.5.10   |   v1.24.3    |
+| Rocky Linux 8.6 |  4.18.0-372.9.1.el8.x86_64  |     cri-o://1.24.2     |   v1.24.3    |
 
 
 ## Components
