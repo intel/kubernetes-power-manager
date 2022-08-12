@@ -15,11 +15,11 @@ spec:
         # Replace <POWER_PROFILE> with the PowerProfile you wish to request
         # IMPORTANT: The number of requested PowerProfiles must match the number of requested CPUs
         # IMPORTANT: If they do not match, the Pod will be successfully scheduled, but the PowerWorkload for the Pod will not be created
-        power.intel.com/<POWER_PROFILE>: "2"
+        power.intel.com/performance: "2"
       limits:
         memory: "200Mi"
         cpu: "2"
         # Replace <POWER_PROFILE> with the PowerProfile you wish to request
         # IMPORTANT: The number of requested PowerProfiles must match the number of requested CPUs
         # IMPORTANT: If they do not match, the Pod will be successfully scheduled, but the PowerWorkload for the Pod will not be created
-        power.intel.com/<POWER_PROFILE>: "2"
+        power.intel.com/performance: "2"

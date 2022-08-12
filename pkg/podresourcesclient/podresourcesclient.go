@@ -3,8 +3,8 @@ package podresourcesclient
 import (
 	"context"
 	"fmt"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/cpuset"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/util"
+	"github.com/intel/kubernetes-power-manager/pkg/cpuset"
+	"github.com/intel/kubernetes-power-manager/pkg/util"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/api/errors"
 	podresourcesapi "k8s.io/kubelet/pkg/apis/podresources/v1"

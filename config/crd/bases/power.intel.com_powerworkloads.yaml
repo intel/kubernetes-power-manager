@@ -1,10 +1,9 @@
-
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.3.0
+    controller-gen.kubebuilder.io/version: v0.9.0
   creationTimestamp: null
   name: powerworkloads.power.intel.com
 spec:
@@ -16,7 +15,7 @@ spec:
     singular: powerworkload
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1
     schema:
       openAPIV3Schema:
         description: PowerWorkload is the Schema for the powerworkloads API
@@ -43,12 +42,25 @@ spec:
               name:
                 description: The name of the workload
                 type: string
-              nodeInfo:
-                description: Holds the info on the node name and cpu ids for each
-                  node
+              powerNodeSelector:
+                additionalProperties:
+                  type: string
+                description: The labels signifying the nodes the user wants to use
+                type: object
+              powerProfile:
+                description: PowerProfile is the Profile that this PowerWorkload is
+                  based on
+                type: string
+              reservedCPUs:
+                description: Reserved CPUs are the CPUs that have been reserved by
+                  Kubelet for use by the Kubernetes admin process This list must match
+                  the list in the user's Kubelet configuration
+                items:
+                  type: integer
+                type: array
+              workloadNodes:
                 properties:
                   containers:
-                    description: The containers that are utilizing this workload
                     items:
                       properties:
                         exclusiveCpus:
@@ -75,31 +87,12 @@ spec:
                       type: object
                     type: array
                   cpuIds:
-                    description: All of the CPUs accross each container
                     items:
                       type: integer
                     type: array
                   name:
-                    description: The name of the node associated with these containers
-                      and CPUs
                     type: string
                 type: object
-              powerNodeSelector:
-                additionalProperties:
-                  type: string
-                description: The labels signifying the nodes the user wants to use
-                type: object
-              powerProfile:
-                description: PowerProfile is the Profile that this PowerWorkload is
-                  based on
-                type: string
-              reservedCPUs:
-                description: Reserved CPUs are the CPUs that have been reserved by
-                  Kubelet for use by the Kubernetes admin process This list must match
-                  the list in the user's Kubelet configuration
-                items:
-                  type: integer
-                type: array
             required:
             - name
             type: object
@@ -110,21 +103,9 @@ spec:
                 description: The Node that this Shared PowerWorkload is associated
                   with
                 type: string
-              sharedCores:
-                description: Shared Cores is the Core List that represents the Shared
-                  Cores on the node, only used by a Shared PowerWorkload
-                items:
-                  type: integer
-                type: array
             type: object
         type: object
     served: true
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

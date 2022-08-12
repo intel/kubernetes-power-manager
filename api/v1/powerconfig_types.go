@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,9 +27,6 @@ import (
 type PowerConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// The version of the image used for the Operator
-	PowerImage string `json:"powerImage,omitempty"`
 
 	// The label on the Nodes you the Operator will look for to deploy the Node Agent
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`

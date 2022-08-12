@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,17 +31,28 @@ type PowerNodeSpec struct {
 	// The name of the node
 	NodeName string `json:"nodeName,omitempty"`
 
-	// The PowerProfiles in the cluster that are currently being used by Pods
-	ActiveProfiles map[string]bool `json:"activeProfiles,omitempty"`
+	PowerProfiles []string `json:"powerProfiles,omitempty"`
 
-	// Information about the active PowerWorkloads in the cluster
-	ActiveWorkloads []WorkloadInfo `json:"activeWorkloads,omitempty"`
+	PowerWorkloads []string `json:"powerWorkloads,omitempty"`
+
+	SharedPool string `json:"sharedPool,omitempty"`
+
+	UneffectedCores string `json:"unaffectedCores,omitempty"`
 
 	// Information about the containers in the cluster utilizing some PowerWorkload
 	PowerContainers []Container `json:"powerContainers,omitempty"`
 
-	// Shows what cores are in the Default and Shared AppQoS Pools
-	SharedPools []SharedPoolInfo `json:"sharedPools,omitempty"`
+	// The PowerProfiles in the cluster that are currently being used by Pods
+	//ActiveProfiles map[string]bool `json:"activeProfiles,omitempty"`
+
+	// Information about the active PowerWorkloads in the cluster
+	//ActiveWorkloads []WorkloadInfo `json:"activeWorkloads,omitempty"`
+
+	// Shows what cores are in the Default and Shared Pools
+	//SharedPool SharedPoolInfo `json:"sharedPools,omitempty"`
+
+	// The CPUs that are not effected by any Power Profiles
+	//UneffectedCpus []int `json:"uneffectedCpus,omitempty"`
 }
 
 // PowerNodeStatus defines the observed state of PowerNode
@@ -104,11 +115,11 @@ type WorkloadInfo struct {
 }
 
 type SharedPoolInfo struct {
-	// The name of the AppQoS (either Default or Shared)
-	Name string `json:"name,omitempty"`
+	// The name or either Default or Shared pool
+	Profile string `json:"name,omitempty"`
 
-	// The cores that are a part of this Shared AppQoS Pool
-	SharedPoolCpuIds []int `json:"sharedPoolCpuIds,omitempty"`
+	// The cores that are a part of this Shared Pool
+	CpuIds []int `json:"sharedPoolCpuIds,omitempty"`
 }
 
 // +kubebuilder:object:root=true

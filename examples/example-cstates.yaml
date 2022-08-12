@@ -1,0 +1,15 @@
+apiVersion: power.intel.com/v1
+kind: CStates
+metadata:
+  # Replace <NODE_NAME> with the name of the node to configure the C-States on that node
+  name: <NODE_NAME>
+spec:
+  sharedPoolCStates:
+    C1: true
+  exclusivePoolCStates:
+    performance:
+      C1: false
+  individualCoreCStates:
+    "3":
+      C1: true
+      C6: false

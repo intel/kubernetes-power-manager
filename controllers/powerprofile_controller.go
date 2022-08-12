@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"reflect"
 	rt "runtime"
 	"strconv"
 	"strings"
@@ -33,66 +32,42 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
+	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+	"github.com/intel/power-optimization-library/pkg/power"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	MaxFrequencyFile         = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"
-	MinFrequencyFile         = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"
-	MinimumRequiredFrequency = 2000
+	MaxFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"
+	MinFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"
 )
-
-var AppQoSClientAddress = "https://localhost:5000"
 
 // performance          ===>  priority level 0
 // balance_performance  ===>  priority level 1
 // balance_power        ===>  priority level 2
 // power                ===>  priority level 3
 
-var extendedResourcePercentage map[string]float64 = map[string]float64{
-	"performance":         .40,
-	"balance-performance": .60,
-	"balance-power":       .80,
-	"power":               1.0,
-}
-
-var extendedPowerProfileMaxMinDifference map[string]map[string]int = map[string]map[string]int{
-	"performance": map[string]int{
-		"baseMax":  500,
-		"baseMin":  700,
-		"modifier": 0,
+var profilePercentages map[string]map[string]float64 = map[string]map[string]float64{
+	"performance": map[string]float64{
+		"resource":   .40,
+		"difference": 0.0,
 	},
-	"balance-performance": map[string]int{
-		"baseMax":  700,
-		"baseMin":  900,
-		"modifier": 100,
+	"balance_performance": map[string]float64{
+		"resource":   .60,
+		"difference": .25,
 	},
-	"balance-power": map[string]int{
-		"baseMax":  900,
-		"baseMin":  1100,
-		"modifier": 200,
+	"balance_power": map[string]float64{
+		"resource":   .80,
+		"difference": .50,
 	},
-}
-
-var basePowerProfileToEppValue map[string]string = map[string]string{
-	// The Kubernetes CRD naming convention doesn't allow underscores
-
-	"performance":         "performance",
-	"balance-performance": "balance_performance",
-	"balance-power":       "balance_power",
-	"power":               "power",
-}
-
-var allowedEppValues map[string]struct{} = map[string]struct{}{
-	// Empty structs hold no memory value
-
-	"performance":         struct{}{},
-	"balance_performance": struct{}{},
-	"balance_power":       struct{}{},
-	"power":               struct{}{},
+	"power": map[string]float64{
+		"resource":   1.0,
+		"difference": 0.0,
+	},
+	// We have the empty string here so users can create Power Profiles that are not associated with SST-CP
+	"": map[string]float64{},
 }
 
 // PowerProfileReconciler reconciles a PowerProfile object
@@ -100,14 +75,14 @@ type PowerProfileReconciler struct {
 	client.Client
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
-	AppQoSClient *appqos.AppQoSClient
+	PowerLibrary power.Node
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerprofiles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerprofiles/status,verbs=get;update;patch
 
 // Reconcile method that implements the reconcile loop
-func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 	logger.Info("Reconciling PowerProfile")
@@ -115,26 +90,36 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	// Node name is passed down via the downwards API and used to make sure the PowerProfile is for this node
 	nodeName := os.Getenv("NODE_NAME")
 
-	profile := &powerv1alpha1.PowerProfile{}
+	profile := &powerv1.PowerProfile{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, profile)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// When a PowerProfile cannot be found, we assume it has been deleted. We need to check if there is a
-			// corresponding PowerWorkload in App QoS and, if there is, delete that too. We leave the cleanup of requesting the
-			// frequency resets of the effected CPUs to the PowerWorkload controller. We also need to check to see
-			// if there are any AppQoS instances on other nodes
+			// First we need to remove the profile from the Power library, this will in turn remove the pool,
+			// which will also move the cores back to the Shared/Default pool and reconfigure them. We then
+			// need to remove the Power Workload from the cluster, which in this case will do nothing as
+			// everything has already been removed. Finally we remove the Extended Resources from the Node
 
-			profileFromAppQoS, err := r.AppQoSClient.GetProfileByName(req.NamespacedName.Name, AppQoSClientAddress)
+			err = r.PowerLibrary.DeleteProfile(profile.Spec.Name)
 			if err != nil {
-				logger.Error(err, "error retrieving PowerProfile from AppQoS instance")
+				logger.Error(err, "error deleting Power Profile from state")
 				return ctrl.Result{}, err
 			}
 
-			// Make sure the profile existed in AppQoS, if not we don't have to delete it
-			if !reflect.DeepEqual(*profileFromAppQoS, appqos.PowerProfile{}) {
-				err = r.AppQoSClient.DeletePowerProfile(AppQoSClientAddress, *profileFromAppQoS.ID)
+			powerWorkloadName := fmt.Sprintf("%s-%s", req.NamespacedName.Name, nodeName)
+			powerWorkload := &powerv1.PowerWorkload{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name:      powerWorkloadName,
+				Namespace: req.NamespacedName.Namespace,
+			}, powerWorkload)
+			if err != nil {
+				if !errors.IsNotFound(err) {
+					logger.Error(err, fmt.Sprintf("error deleting PowerWorkload '%s' from cluster", powerWorkloadName))
+					return ctrl.Result{}, err
+				}
+			} else {
+				err = r.Client.Delete(context.TODO(), powerWorkload)
 				if err != nil {
-					logger.Error(err, "error deleting PowerProfile from AppQoS instance")
+					logger.Error(err, fmt.Sprintf("error deleting Power Workload '%s' from cluster", powerWorkloadName))
 					return ctrl.Result{}, err
 				}
 			}
@@ -146,52 +131,6 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 				return ctrl.Result{}, err
 			}
 
-			if _, exists := extendedResourcePercentage[req.NamespacedName.Name]; exists {
-				// If this PowerProfile was a base profile, delete all appropriate extended profiles
-
-				profileList := &powerv1alpha1.PowerProfileList{}
-				err = r.Client.List(context.TODO(), profileList)
-				if err != nil {
-					logger.Error(err, "error retrieving PowerProfile list")
-					return ctrl.Result{}, err
-				}
-
-				for _, profileFromList := range profileList.Items {
-					if profileFromList.Spec.Epp == basePowerProfileToEppValue[req.NamespacedName.Name] {
-						// Only need to delete the PowerProfile CRD, profile will be deleted from AppQoS then
-
-						err = r.Client.Delete(context.TODO(), &profileFromList)
-						if err != nil {
-							logger.Error(err, "error deleting PowerProfile")
-							return ctrl.Result{}, err
-						}
-					}
-				}
-			}
-
-			if strings.HasSuffix(req.NamespacedName.Name, nodeName) {
-				workloadName := fmt.Sprintf("%s%s", req.NamespacedName.Name, WorkloadNameSuffix)
-				powerWorkload := &powerv1alpha1.PowerWorkload{}
-				err = r.Client.Get(context.TODO(), client.ObjectKey{
-					Name:      workloadName,
-					Namespace: req.NamespacedName.Namespace,
-				}, powerWorkload)
-				if err != nil {
-					if errors.IsNotFound(err) {
-						logger.Info("No PowerWorkload associated with this PowerProfile")
-					} else {
-						logger.Error(err, "error retrieving PowerWorkload")
-						return ctrl.Result{}, err
-					}
-				} else {
-					err = r.Client.Delete(context.TODO(), powerWorkload)
-					if err != nil {
-						logger.Error(err, "error deleting PowerWorkload")
-						return ctrl.Result{}, err
-					}
-				}
-			}
-
 			return ctrl.Result{}, nil
 		}
 
@@ -199,8 +138,8 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, err
 	}
 
-	// Make sure the EPP value is one of the four correct ones
-	if _, exists := allowedEppValues[profile.Spec.Epp]; !exists {
+	// Make sure the EPP value is one of the four correct ones or empty in the case of a user-created profile
+	if _, exists := profilePercentages[profile.Spec.Epp]; !exists {
 		incorrectEppErr := errors.NewServiceUnavailable(fmt.Sprintf("EPP value not allowed: %v - deleting PowerProfile CRD", profile.Spec.Epp))
 		logger.Error(incorrectEppErr, "error reconciling PowerProfile")
 
@@ -213,140 +152,135 @@ func (r *PowerProfileReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
-	if _, exists := extendedResourcePercentage[profile.Spec.Name]; !exists && profile.Spec.Epp != "power" {
-		logger.Info("PowerProfile is not a base profile or designated as a Shared Profile, skipping...")
+	if profile.Spec.Max < profile.Spec.Min {
+		maxLowerThanMaxError := errors.NewServiceUnavailable("Max frequency value cannot be lower than Minimum frequency value")
+		logger.Error(maxLowerThanMaxError, fmt.Sprintf("error creating Profile '%s'", profile.Spec.Name))
 		return ctrl.Result{}, nil
 	}
 
-	// Update the PowerProfile with the correct min/max values and name for the given node
-	profileName := fmt.Sprintf("%s-%s", profile.Spec.Name, nodeName)
-
-	absoluteMaximumFrequencyByte, err := ioutil.ReadFile(MaxFrequencyFile)
+	absoluteMaximumFrequency, absoluteMinimumFrequency, err := getMaxMinFrequencyValues()
 	if err != nil {
-		logger.Error(err, "error reading maximum frequency from file")
-		return ctrl.Result{}, err
-	}
-	absoluteMaximumFrequencyString := string(absoluteMaximumFrequencyByte)
-	absoluteMaximumFrequency, err := strconv.Atoi(strings.Split(absoluteMaximumFrequencyString, "\n")[0])
-	if err != nil {
-		logger.Error(err, "error reading maximum frequency value")
-		return ctrl.Result{}, err
-	}
-
-	absoluteMinimumFrequencyByte, err := ioutil.ReadFile(MinFrequencyFile)
-	if err != nil {
-		logger.Error(err, "error reading minimum frequency from file")
-		return ctrl.Result{}, err
-	}
-	absoluteMinimumFrequencyString := string(absoluteMinimumFrequencyByte)
-	absoluteMinimumFrequency, err := strconv.Atoi(strings.Split(absoluteMinimumFrequencyString, "\n")[0])
-	if err != nil {
-		logger.Error(err, "error reading minimum frequency value")
-		return ctrl.Result{}, err
-	}
-
-	absoluteMaximumFrequency = absoluteMaximumFrequency / 1000
-	absoluteMinimumFrequency = absoluteMinimumFrequency / 1000
-
-	if absoluteMaximumFrequency < MinimumRequiredFrequency {
-		maximumFrequencyTooLowError := errors.NewServiceUnavailable(fmt.Sprintf("Maximum CPU Frequency cannot be below %v", MinimumRequiredFrequency))
-		logger.Error(maximumFrequencyTooLowError, "maximum frequency too low")
+		logger.Error(err, "error retrieving frequency values from Node")
 		return ctrl.Result{}, nil
 	}
 
-	frequencyModifier := float64((absoluteMaximumFrequency - MinimumRequiredFrequency) / 800)
-	frequencyModifier = frequencyModifier * float64(extendedPowerProfileMaxMinDifference[profile.Spec.Name]["modifier"])
-	maximumFrequencyModifier := extendedPowerProfileMaxMinDifference[profile.Spec.Name]["baseMax"] + int(frequencyModifier)
-	minimumFrequencyModifier := extendedPowerProfileMaxMinDifference[profile.Spec.Name]["baseMin"] + int(frequencyModifier)
-	maximumValueForProfile := absoluteMaximumFrequency - maximumFrequencyModifier
-	minimumValueForProfile := absoluteMaximumFrequency - minimumFrequencyModifier
+	// If the Profile is shared (epp == power) then the associated Pool will not be created in the Power Library
+	if profile.Spec.Epp == "power" {
 
-	if maximumValueForProfile < absoluteMinimumFrequency {
-		maximumValueForProfile = absoluteMinimumFrequency
-	}
+		if profile.Spec.Max < absoluteMinimumFrequency || profile.Spec.Min < absoluteMinimumFrequency {
+			frequencyTooLowError := errors.NewServiceUnavailable(fmt.Sprintf("Maximum or Minimum frequency value cannot be below %d", absoluteMinimumFrequency))
+			logger.Error(frequencyTooLowError, "error creating Shared Power Profile")
+			return ctrl.Result{}, nil
+		}
 
-	if minimumValueForProfile < absoluteMinimumFrequency {
-		maximumValueForProfile = absoluteMinimumFrequency
-	}
-
-	// Check to see if the extended PowerProfile has already been created for this Node
-	if profile.Spec.Epp != "power" {
-		profileForNode := &powerv1alpha1.PowerProfile{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Namespace: req.NamespacedName.Namespace,
-			Name:      profileName,
-		}, profileForNode)
-
-		if err != nil {
-			if errors.IsNotFound(err) {
-				powerProfile := &powerv1alpha1.PowerProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: req.NamespacedName.Namespace,
-						Name:      profileName,
-					},
-				}
-
-				powerProfileSpec := &powerv1alpha1.PowerProfileSpec{
-					Name: profileName,
-					Max:  maximumValueForProfile,
-					Min:  minimumValueForProfile,
-					Epp:  profile.Spec.Epp,
-				}
-
-				powerProfile.Spec = *powerProfileSpec
-				err = r.Client.Create(context.TODO(), powerProfile)
+		profileFromLibrary := r.PowerLibrary.GetProfile(profile.Spec.Name)
+		if profileFromLibrary == nil {
+			_, err = r.PowerLibrary.AddProfile(profile.Spec.Name, profile.Spec.Min, profile.Spec.Max, profile.Spec.Epp)
+			if err != nil {
+				logger.Error(err, fmt.Sprintf("error adding Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
+				return ctrl.Result{}, err
+			}
+		} else {
+			updatedSharedProfile := power.NewProfile(profile.Spec.Name, profile.Spec.Min, profile.Spec.Max, profile.Spec.Epp)
+			if updatedSharedProfile != nil {
+				err = r.PowerLibrary.GetSharedPool().SetPowerProfile(updatedSharedProfile)
 				if err != nil {
-					logger.Error(err, "error creating PowerProfile CRD")
-					return ctrl.Result{}, err
-				}
-
-				err = r.createExtendedResources(nodeName, profileName, req.NamespacedName.Name)
-				if err != nil {
-					logger.Error(err, "error creating Extended resources")
+					logger.Error(err, fmt.Sprintf("error setting shared Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
 					return ctrl.Result{}, err
 				}
 			} else {
+				incorrectProfile := errors.NewServiceUnavailable("Incorrect values for new Shared Power Profile")
+				logger.Error(incorrectProfile, fmt.Sprintf("error updating Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
+				return ctrl.Result{}, incorrectProfile
+			}
+		}
+
+		logger.Info(fmt.Sprintf("Shared Power Profile successfully created: Name - %s Max - %d Min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp))
+		return ctrl.Result{}, nil
+	} else {
+		var profileMaxFreq int
+		var profileMinFreq int
+		if profile.Spec.Epp != "" && profile.Spec.Max == 0 && profile.Spec.Min == 0 {
+			profileMaxFreq = int(float64(absoluteMaximumFrequency) - (float64((absoluteMaximumFrequency - absoluteMinimumFrequency)) * profilePercentages[profile.Spec.Epp]["difference"]))
+			profileMinFreq = int(profileMaxFreq) - 200
+		} else {
+			profileMaxFreq = profile.Spec.Max
+			profileMinFreq = profile.Spec.Min
+		}
+
+		if profileMaxFreq == 0 || profileMinFreq == 0 {
+			cannotBeZeroError := errors.NewServiceUnavailable("Max or Min frequency cannot be zero")
+			logger.Error(cannotBeZeroError, "error creating Profile '%s'", profile.Spec.Name)
+			return ctrl.Result{}, nil
+		}
+
+		profileFromLibrary := r.PowerLibrary.GetProfile(profile.Spec.Name)
+		if profileFromLibrary == nil {
+			_, err = r.PowerLibrary.AddProfile(profile.Spec.Name, profileMinFreq, profileMaxFreq, profile.Spec.Epp)
+			if err != nil {
+				logger.Error(err, fmt.Sprintf("error adding Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
+				return ctrl.Result{}, err
+			}
+
+			// Create the Extended Resources for the profile
+			err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp)
+			if err != nil {
+				logger.Error(err, "error creating extended resources for base profile")
+				return ctrl.Result{}, err
+			}
+		} else {
+			err = r.PowerLibrary.UpdateProfile(profile.Spec.Name, profileMinFreq, profileMaxFreq, profile.Spec.Epp)
+			if err != nil {
+				logger.Error(err, fmt.Sprintf("error updating Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
 				return ctrl.Result{}, err
 			}
 		}
+
+		logger.Info(fmt.Sprintf("Power Profile successfully created: Name - %s Max - %d Min - %d EPP - %s", profile.Spec.Name, profileMaxFreq, profileMinFreq, profile.Spec.Epp))
 	}
 
-	// Create the Extended Resources for the base profile as well so the Pod controller can determine the Profile if necessary
-	err = r.createExtendedResources(nodeName, profile.Spec.Name, req.NamespacedName.Name)
+	workloadName := fmt.Sprintf("%s-%s", profile.Spec.Name, nodeName)
+	workload := &powerv1.PowerWorkload{}
+	err = r.Client.Get(context.TODO(), client.ObjectKey{
+		Name:      workloadName,
+		Namespace: req.NamespacedName.Namespace,
+	}, workload)
 	if err != nil {
-		logger.Error(err, "error creating extended resources for base profile")
+		if errors.IsNotFound(err) {
+			powerWorkloadSpec := &powerv1.PowerWorkloadSpec{
+				Name: workloadName,
+				Node: powerv1.WorkloadNode{
+					Name: nodeName,
+				},
+				PowerProfile: profile.Spec.Name,
+			}
+
+			powerWorkload := &powerv1.PowerWorkload{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workloadName,
+					Namespace: req.NamespacedName.Namespace,
+				},
+			}
+			powerWorkload.Spec = *powerWorkloadSpec
+
+			err = r.Client.Create(context.TODO(), powerWorkload)
+			if err != nil {
+				logger.Error(err, fmt.Sprintf("error creating Power Workload '%s'", workloadName))
+				return ctrl.Result{}, err
+			}
+
+			logger.Info(fmt.Sprintf("Power Workload successfully created: Name - %s Profile - %s", workloadName, profile.Spec.Name))
+			return ctrl.Result{}, nil
+		}
+
 		return ctrl.Result{}, err
 	}
 
-	if _, exists := extendedResourcePercentage[profileName]; !exists {
-		powerProfile := &appqos.PowerProfile{}
-		if profile.Spec.Epp == "power" {
-			powerProfile.Name = &profile.Spec.Name
-		} else {
-			powerProfile.Name = &profileName
-		}
-		powerProfile.Epp = &profile.Spec.Epp
-		if profile.Spec.Epp == "power" {
-			powerProfile.MinFreq = &profile.Spec.Min
-			powerProfile.MaxFreq = &profile.Spec.Max
-		} else {
-			powerProfile.MinFreq = &minimumValueForProfile
-			powerProfile.MaxFreq = &maximumValueForProfile
-		}
-
-		// Create PowerProfile
-
-		appqosPostResp, err := r.AppQoSClient.PostPowerProfile(powerProfile, AppQoSClientAddress)
-		if err != nil {
-			logger.Error(err, appqosPostResp)
-			return ctrl.Result{}, err
-		}
-	}
-
+	// If the workload already exists then the Power Profile was just updated and the Power Library will take care of reconfiguring cores
 	return ctrl.Result{}, nil
 }
 
-func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profileName string, baseProfile string) error {
+func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profileName string, eppValue string) error {
 	node := &corev1.Node{}
 	err := r.Client.Get(context.TODO(), client.ObjectKey{
 		Name: nodeName,
@@ -356,7 +290,7 @@ func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profil
 	}
 
 	numCPUsOnNode := float64(rt.NumCPU())
-	numExtendedResources := int64(numCPUsOnNode * extendedResourcePercentage[baseProfile])
+	numExtendedResources := int64(numCPUsOnNode * profilePercentages[eppValue]["resource"])
 	profilesAvailable := resource.NewQuantity(numExtendedResources, resource.DecimalSI)
 	extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
 	node.Status.Capacity[extendedResourceName] = *profilesAvailable
@@ -396,9 +330,36 @@ func (r *PowerProfileReconciler) removeExtendedResources(nodeName string, profil
 	return nil
 }
 
+func getMaxMinFrequencyValues() (int, int, error) {
+	absoluteMaximumFrequencyByte, err := ioutil.ReadFile(MaxFrequencyFile)
+	if err != nil {
+		return 0, 0, err
+	}
+	absoluteMaximumFrequencyString := string(absoluteMaximumFrequencyByte)
+	absoluteMaximumFrequency, err := strconv.Atoi(strings.Split(absoluteMaximumFrequencyString, "\n")[0])
+	if err != nil {
+		return 0, 0, err
+	}
+
+	absoluteMinimumFrequencyByte, err := ioutil.ReadFile(MinFrequencyFile)
+	if err != nil {
+		return 0, 0, err
+	}
+	absoluteMinimumFrequencyString := string(absoluteMinimumFrequencyByte)
+	absoluteMinimumFrequency, err := strconv.Atoi(strings.Split(absoluteMinimumFrequencyString, "\n")[0])
+	if err != nil {
+		return 0, 0, err
+	}
+
+	absoluteMaximumFrequency = absoluteMaximumFrequency / 1000
+	absoluteMinimumFrequency = absoluteMinimumFrequency / 1000
+
+	return absoluteMaximumFrequency, absoluteMinimumFrequency, nil
+}
+
 // SetupWithManager specifies how the controller is built and watch a CR and other resources that are owned and managed by the controller
 func (r *PowerProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&powerv1alpha1.PowerProfile{}).
+		For(&powerv1.PowerProfile{}).
 		Complete(r)
 }

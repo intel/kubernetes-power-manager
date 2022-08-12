@@ -1,10 +1,9 @@
-
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.3.0
+    controller-gen.kubebuilder.io/version: v0.9.0
   creationTimestamp: null
   name: powerprofiles.power.intel.com
 spec:
@@ -16,7 +15,7 @@ spec:
     singular: powerprofile
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1
     schema:
       openAPIV3Schema:
         description: PowerProfile is the Schema for the powerprofiles API
@@ -40,10 +39,9 @@ spec:
                 description: The priority value associated with this Power Profile
                 type: string
               max:
-                description: The maximum frequency the core is allowed go
+                description: ProfileNodes []ProfileNode `json:"profileNodes,omitempty"`
                 type: integer
               min:
-                description: The minimum frequency the core is allowed go
                 type: integer
               name:
                 description: The name of the PowerProfile
@@ -56,7 +54,7 @@ spec:
             description: PowerProfileStatus defines the observed state of PowerProfile
             properties:
               id:
-                description: The ID given to the power profile by AppQoS
+                description: The ID given to the power profile
                 type: integer
             required:
             - id
@@ -66,9 +64,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

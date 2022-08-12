@@ -15,13 +15,10 @@ spec:
     spec:
       serviceAccountName: intel-power-node-agent
       containers:
-        - image: intel/power-node-agent:v1.0.2
+        - image: intel/power-node-agent:v2.0.0
           imagePullPolicy: IfNotPresent
           securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
+            privileged: true
           name: power-node-agent
           env:
             - name: NODE_NAME
@@ -39,36 +36,13 @@ spec:
             - mountPath: /sys/fs
               name: cgroup
               readOnly: true
-            - mountPath: /etc/certs/public
-              name: appqoscerts
-              readOnly: true
             - mountPath: /var/lib/kubelet/pod-resources/
               name: kubesock
               readOnly: true
-        - image: 'appqos:latest'
-          imagePullPolicy: IfNotPresent
-          name: appqos
-          ports:
-          - containerPort: 5000
-          volumeMounts:
-          - mountPath: /appqos_workspace/appqos/ca
-            name: appqoscerts
-            readOnly: true
-          - mountPath: /dev/cpu/0
-            name: dev
-            readOnly: true
-          securityContext:
-            privileged: true
       volumes:
-        - name: appqoscerts
-          hostPath:
-            path: /etc/certs/public/
         - name: cgroup
           hostPath:
             path: /sys/fs
         - name: kubesock
           hostPath:
             path: /var/lib/kubelet/pod-resources
-        - name: dev
-          hostPath:
-            path: /dev/cpu/0

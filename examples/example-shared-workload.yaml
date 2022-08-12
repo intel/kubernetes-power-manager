@@ -1,4 +1,4 @@
-apiVersion: "power.intel.com/v1alpha1"
+apiVersion: power.intel.com/v1
 kind: PowerWorkload
 metadata:
   # Replace <NODE_NAME> with the Node you intend this PowerWorkload to be associated with

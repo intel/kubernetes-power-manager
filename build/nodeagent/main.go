@@ -20,6 +20,7 @@ import (
 	"flag"
 	"os"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -27,12 +28,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podresourcesclient"
+	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+	"github.com/intel/kubernetes-power-manager/pkg/podresourcesclient"
 
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/podstate"
+	"github.com/intel/kubernetes-power-manager/controllers"
+	"github.com/intel/kubernetes-power-manager/pkg/podstate"
+	"github.com/intel/power-optimization-library/pkg/power"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -44,7 +45,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(powerv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(powerv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -58,6 +59,7 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	nodeName := os.Getenv("NODE_NAME")
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
@@ -71,10 +73,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	appQoSClient, err := appqos.NewOperatorAppQoSClient()
+	powerLibrary, err := power.CreateInstance(nodeName)
 	if err != nil {
-		setupLog.Error(err, "unable to create AppQoSClient")
-		os.Exit(1)
+		if !power.IsFeatureSupported(power.SSTBFFeature) {
+			pStatesNotSupported := errors.NewServiceUnavailable("P-States not supported")
+			setupLog.Error(pStatesNotSupported, "error setting up P-States in Power Library")
+		}
+
+		if !power.IsFeatureSupported(power.CStatesFeature) {
+			cStateNotSupported := errors.NewServiceUnavailable("C-States not supported")
+			setupLog.Error(cStateNotSupported, "error setting up C-States in Power Library")
+		}
+
+		if powerLibrary == nil {
+			setupLog.Error(err, "unable to create Power Library instance")
+			os.Exit(1)
+		}
 	}
 
 	powerNodeState, err := podstate.NewState()
@@ -88,11 +102,12 @@ func main() {
 		setupLog.Error(err, "unable to create internal client")
 		os.Exit(1)
 	}
+
 	if err = (&controllers.PowerProfileReconciler{
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerProfile"),
 		Scheme:       mgr.GetScheme(),
-		AppQoSClient: appQoSClient,
+		PowerLibrary: powerLibrary,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerProfile")
 		os.Exit(1)
@@ -101,7 +116,7 @@ func main() {
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerWorkload"),
 		Scheme:       mgr.GetScheme(),
-		AppQoSClient: appQoSClient,
+		PowerLibrary: powerLibrary,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerWorkload")
 		os.Exit(1)
@@ -110,7 +125,7 @@ func main() {
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerNode"),
 		Scheme:       mgr.GetScheme(),
-		AppQoSClient: appQoSClient,
+		PowerLibrary: powerLibrary,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerNode")
 		os.Exit(1)
@@ -125,6 +140,16 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerPod")
 		os.Exit(1)
 	}
+	if err = (&controllers.CStatesReconciler{
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName("controllers").WithName("CState"),
+		Scheme:       mgr.GetScheme(),
+		PowerLibrary: powerLibrary,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CStates")
+		os.Exit(1)
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

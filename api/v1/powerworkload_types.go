@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,14 +23,11 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type NodeInfo struct {
-	// The name of the node associated with these containers and CPUs
+type WorkloadNode struct {
 	Name string `json:"name,omitempty"`
 
-	// The containers that are utilizing this workload
 	Containers []Container `json:"containers,omitempty"`
 
-	// All of the CPUs accross each container
 	CpuIds []int `json:"cpuIds,omitempty"`
 }
 
@@ -53,7 +50,9 @@ type PowerWorkloadSpec struct {
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
 
 	// Holds the info on the node name and cpu ids for each node
-	Node NodeInfo `json:"nodeInfo,omitempty"`
+	//Node NodeInfo `json:"nodeInfo,omitempty"`
+
+	Node WorkloadNode `json:"workloadNodes,omitempty"`
 
 	// PowerProfile is the Profile that this PowerWorkload is based on
 	PowerProfile string `json:"powerProfile,omitempty"`
@@ -63,9 +62,6 @@ type PowerWorkloadSpec struct {
 type PowerWorkloadStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Shared Cores is the Core List that represents the Shared Cores on the node, only used by a Shared PowerWorkload
-	SharedCores []int `json:"sharedCores,omitempty"`
 
 	// The Node that this Shared PowerWorkload is associated with
 	Node string `json:"node:,omitempty"`

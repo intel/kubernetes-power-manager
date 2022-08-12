@@ -14,7 +14,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true,crdVersions=v1"
+CRD_OPTIONS ?= "crd:crdVersions=v1"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -32,12 +32,13 @@ test: generate fmt vet manifests
 
 # Build manager binary
 build: generate manifests install
-	go build -ldflags "-s -w" -buildmode=pie -o build/_output/bin/intel-rmd-node-agent cmd/nodeagent/main.go
-	go build -ldflags "-s -w" -buildmode=pie -o build/_output/bin/intel-rmd-operator cmd/manager/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o build/bin/manager build/manager/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o build/bin/nodeagent build/nodeagent/main.go
 
+# Build the Manager and Node Agent images
 images: generate manifests install
-	docker build -f build/Dockerfile -t power-operator:v1.0.2 .
-	docker build -f build/Dockerfile.nodeagent -t power-node-agent:v1.0.2 .
+	docker build -f build/Dockerfile -t power-operator:v2.0.0 .
+	docker build -f build/Dockerfile.nodeagent -t power-node-agent:v2.0.0 .
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
@@ -76,14 +77,11 @@ tls:
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
-# Build the docker image
-docker-build:
-	docker build -f build/Dockerfile -t intel-power-operator .
-	docker build -f build/Dockerfile.nodeagent -t intel-power-node-agent .
-
+# Build the Manager's image
 build-controller:
 	docker build -f build/Dockerfile -t intel-power-operator .
 
+# Build the Node Agent's image
 build-agent:
 	docker build -f build/Dockerfile.nodeagent -t intel-power-node-agent .
 
@@ -95,14 +93,7 @@ docker-push:
 # download controller-gen if necessary
 controller-gen:
 ifeq (, $(shell which controller-gen))
-	@{ \
-	set -e ;\
-	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
-	cd $$CONTROLLER_GEN_TMP_DIR ;\
-	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.3.0 ;\
-	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
-	}
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
@@ -110,14 +101,7 @@ endif
 
 kustomize:
 ifeq (, $(shell which kustomize))
-	@{ \
-	set -e ;\
-	KUSTOMIZE_GEN_TMP_DIR=$$(mktemp -d) ;\
-	cd $$KUSTOMIZE_GEN_TMP_DIR ;\
-	go mod init tmp ;\
-	go get sigs.k8s.io/kustomize/kustomize/v3@v3.5.4 ;\
-	rm -rf $$KUSTOMIZE_GEN_TMP_DIR ;\
-	}
+	go install sigs.k8s.io/kustomize/kustomize/v4@latest
 KUSTOMIZE=$(GOBIN)/kustomize
 else
 KUSTOMIZE=$(shell which kustomize)

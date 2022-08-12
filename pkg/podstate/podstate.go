@@ -1,23 +1,22 @@
 package podstate
 
 import (
-	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
+	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 )
 
 type State struct {
-	GuaranteedPods []powerv1alpha1.GuaranteedPod
+	GuaranteedPods []powerv1.GuaranteedPod
 }
 
-//func NewState(appqosclient *appqos.AppQoSClient) (*State, error) {
 func NewState() (*State, error) {
 	state := &State{}
-	guaranteedPods := make([]powerv1alpha1.GuaranteedPod, 0)
+	guaranteedPods := make([]powerv1.GuaranteedPod, 0)
 	state.GuaranteedPods = guaranteedPods
 
 	return state, nil
 }
 
-func (s *State) UpdateStateGuaranteedPods(guaranteedPod powerv1alpha1.GuaranteedPod) error {
+func (s *State) UpdateStateGuaranteedPods(guaranteedPod powerv1.GuaranteedPod) error {
 	for i, existingPod := range s.GuaranteedPods {
 		if existingPod.Name == guaranteedPod.Name {
 			s.GuaranteedPods[i] = guaranteedPod
@@ -29,17 +28,17 @@ func (s *State) UpdateStateGuaranteedPods(guaranteedPod powerv1alpha1.Guaranteed
 	return nil
 }
 
-func (s *State) GetPodFromState(podName string) powerv1alpha1.GuaranteedPod {
+func (s *State) GetPodFromState(podName string) powerv1.GuaranteedPod {
 	for _, existingPod := range s.GuaranteedPods {
 		if existingPod.Name == podName {
 			return existingPod
 		}
 	}
 
-	return powerv1alpha1.GuaranteedPod{}
+	return powerv1.GuaranteedPod{}
 }
 
-func (s *State) GetCPUsFromPodState(podState powerv1alpha1.GuaranteedPod) []int {
+func (s *State) GetCPUsFromPodState(podState powerv1.GuaranteedPod) []int {
 	cpus := make([]int, 0)
 	for _, container := range podState.Containers {
 		cpus = append(cpus, container.ExclusiveCPUs...)

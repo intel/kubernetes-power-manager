@@ -1,10 +1,9 @@
-
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.3.0
+    controller-gen.kubebuilder.io/version: v0.9.0
   creationTimestamp: null
   name: powernodes.power.intel.com
 spec:
@@ -16,7 +15,7 @@ spec:
     singular: powernode
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1
     schema:
       openAPIV3Schema:
         description: PowerNode is the Schema for the powernodes API
@@ -36,26 +35,6 @@ spec:
           spec:
             description: PowerNodeSpec defines the desired state of PowerNode
             properties:
-              activeProfiles:
-                additionalProperties:
-                  type: boolean
-                description: The PowerProfiles in the cluster that are currently being
-                  used by Pods
-                type: object
-              activeWorkloads:
-                description: Information about the active PowerWorkloads in the cluster
-                items:
-                  properties:
-                    cores:
-                      description: The CPUs that are utilizing the PowerWorkload
-                      items:
-                        type: integer
-                      type: array
-                    name:
-                      description: The name of the PowerWorkload
-                      type: string
-                  type: object
-                type: array
               nodeName:
                 description: The name of the node
                 type: string
@@ -86,22 +65,18 @@ spec:
                       type: string
                   type: object
                 type: array
-              sharedPools:
-                description: Shows what cores are in the Default and Shared AppQoS
-                  Pools
+              powerProfiles:
                 items:
-                  properties:
-                    name:
-                      description: The name of the AppQoS (either Default or Shared)
-                      type: string
-                    sharedPoolCpuIds:
-                      description: The cores that are a part of this Shared AppQoS
-                        Pool
-                      items:
-                        type: integer
-                      type: array
-                  type: object
+                  type: string
                 type: array
+              powerWorkloads:
+                items:
+                  type: string
+                type: array
+              sharedPool:
+                type: string
+              unaffectedCores:
+                type: string
             type: object
           status:
             description: PowerNodeStatus defines the observed state of PowerNode
@@ -168,9 +143,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

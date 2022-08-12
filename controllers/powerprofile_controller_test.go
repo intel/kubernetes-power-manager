@@ -1,14 +1,22 @@
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net"
-	"net/http"
-	"net/http/httptest"
-	"strconv"
-	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -20,1914 +28,992 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
+	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	PowerProfileName      = "TestPowerProfile"
-	PowerProfileNamespace = "default"
-)
-
-func createPowerProfileReconcileObject(powerProfile *powerv1alpha1.PowerProfile) (*PowerProfileReconciler, error) {
+func createProfileReconcilerObject(objs []runtime.Object) (*PowerProfileReconciler, error) {
+	// Register operator types with the runtime scheme.
 	s := scheme.Scheme
 
-	if err := powerv1alpha1.AddToScheme(s); err != nil {
+	// Add route Openshift scheme
+	if err := powerv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 
-	objs := []runtime.Object{powerProfile}
-
-	s.AddKnownTypes(powerv1alpha1.GroupVersion)
-
+	// Create a fake client to mock API calls.
 	cl := fake.NewFakeClient(objs...)
 
-	appqosCl := appqos.NewDefaultAppQoSClient()
-
-	r := &PowerProfileReconciler{Client: cl, Log: ctrl.Log.WithName("controllers").WithName("PowerProfile"), Scheme: s, AppQoSClient: appqosCl}
+	// Create a ReconcileNode object with the scheme and fake client.
+	r := &PowerProfileReconciler{cl, ctrl.Log.WithName("testing"), s, nil}
 
 	return r, nil
 }
 
-func createPowerProfileListeners(appqosPowerProfiles []appqos.PowerProfile) (*httptest.Server, error) {
-	var err error
-
-	newListener, err := net.Listen("tcp", "127.0.0.1:5000")
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create Listerner: %v", err)
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", (func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "DELETE" {
-			path := strings.Split(r.URL.Path, "/")
-			id, _ := strconv.Atoi(path[len(path)-1])
-			for i, pool := range appqosPowerProfiles {
-				if *pool.ID == id {
-					appqosPowerProfiles = append(appqosPowerProfiles[:i], appqosPowerProfiles[i+1:]...)
-				}
-			}
-		}
-	}))
-	mux.HandleFunc("/power_profiles", (func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			b, err := json.Marshal(appqosPowerProfiles)
-			if err == nil {
-				fmt.Fprintln(w, string(b[:]))
-			}
-		} else if r.Method == "POST" {
-			b, err := json.Marshal("okay")
-			if err == nil {
-				w.WriteHeader(http.StatusCreated)
-				fmt.Fprintln(w, string(b[:]))
-			}
-		}
-	}))
-
-	ts := httptest.NewUnstartedServer(mux)
-
-	ts.Listener.Close()
-	ts.Listener = newListener
-
-	// Start the server.
-	ts.Start()
-
-	return ts, nil
-}
-
-func TestBaseProfileCreation(t *testing.T) {
+func TestPowerProfileCreationNonPowerProfileNotInLibrary(t *testing.T) {
 	tcases := []struct {
-		testCase                     string
-		basePowerProfile             *powerv1alpha1.PowerProfile
-		node                         *corev1.Node
-		expectedNumberOfProfiles     int
-		expectedExtendedProfile      string
-		expectedPowerProfileTests    map[string]map[string]bool
-		expectedPowerProfileEppValue string
+		testCase    string
+		nodeName    string
+		profileName string
+		clientObjs  []runtime.Object
 	}{
 		{
-			testCase: "Test Case 1",
-			basePowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "performance",
-					Namespace: PowerProfileNamespace,
+			testCase:    "Test Case 1 - Max|Min non zero, epp performance",
+			nodeName:    "TestNode",
+			profileName: "performance",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "performance",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "performance",
+						Max:  3600,
+						Min:  3200,
+						Epp:  "performance",
+					},
 				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "performance",
-					Epp:  "performance",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
 					},
 				},
 			},
-			expectedNumberOfProfiles: 2,
-			expectedExtendedProfile:  "performance-example-node1",
-			expectedPowerProfileTests: map[string]map[string]bool{
-				"performance": map[string]bool{
-					"extendedResourcesCreated": true,
-					"maxMinValuesToEqualZero":  true,
-				},
-				"performance-example-node1": map[string]bool{
-					"extendedResourcesCreated": true,
-					"maxMinValuesToEqualZero":  false,
-				},
-			},
-			expectedPowerProfileEppValue: "performance",
 		},
 		{
-			testCase: "Test Case 2",
-			basePowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-performance",
-					Namespace: PowerProfileNamespace,
+			testCase:    "Test Case 2 - Max|Min zero, epp performance",
+			nodeName:    "TestNode",
+			profileName: "performance",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "performance",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "performance",
+						Max:  0,
+						Min:  0,
+						Epp:  "performance",
+					},
 				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-performance",
-					Epp:  "balance_performance",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
 					},
 				},
 			},
-			expectedNumberOfProfiles: 2,
-			expectedExtendedProfile:  "balance-performance-example-node1",
-			expectedPowerProfileTests: map[string]map[string]bool{
-				"balance-performance": map[string]bool{
-					"extendedResourcesCreated": true,
-					"maxMinValuesToEqualZero":  true,
-				},
-				"balance-performance-example-node1": map[string]bool{
-					"extendedResourcesCreated": true,
-					"maxMinValuesToEqualZero":  false,
-				},
-			},
-			expectedPowerProfileEppValue: "balance_performance",
 		},
 		{
-			testCase: "Test Case 3",
-			basePowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-power",
-					Namespace: PowerProfileNamespace,
+			testCase:    "Test Case 3 - Max|Min non zero, epp empty",
+			nodeName:    "TestNode",
+			profileName: "user-created",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "user-created",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "user-created",
+						Max:  3600,
+						Min:  3200,
+						Epp:  "",
+					},
 				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-power",
-					Epp:  "balance_power",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
 					},
 				},
 			},
-			expectedNumberOfProfiles: 2,
-			expectedExtendedProfile:  "balance-power-example-node1",
-			expectedPowerProfileTests: map[string]map[string]bool{
-				"balance-power": map[string]bool{
-					"extendedResourcesCreated": true,
-					"maxMinValuesToEqualZero":  true,
-				},
-				"balance-power-example-node1": map[string]bool{
-					"extendedResourcesCreated": true,
-					"maxMinValuesToEqualZero":  false,
-				},
-			},
-			expectedPowerProfileEppValue: "balance_power",
-		},
-		{
-			testCase: "Test Case 4",
-			basePowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "power",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "power",
-					Max:  1500,
-					Min:  1100,
-					Epp:  "power",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			expectedNumberOfProfiles: 1,
-			expectedPowerProfileTests: map[string]map[string]bool{
-				"power": map[string]bool{
-					"extendedResourcesCreated": true,
-					"maxMinValuesToEqualZero":  false,
-				},
-			},
-			expectedPowerProfileEppValue: "power",
 		},
 	}
 
 	for _, tc := range tcases {
-		t.Setenv("NODE_NAME", tc.node.Name)
-		AppQoSClientAddress = "http://localhost:5000"
+		t.Setenv("NODE_NAME", tc.nodeName)
 
-		r, err := createPowerProfileReconcileObject(tc.basePowerProfile)
-		if err != nil {
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-		}
-
-		server, err := createPowerProfileListeners([]appqos.PowerProfile{})
+		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Listener", tc.testCase))
+			t.Fatalf("%s - error creating reconciler object", tc.testCase)
 		}
 
-		err = r.Client.Create(context.TODO(), tc.node)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Node object", tc.testCase))
-		}
+		nodemk := new(nodeMock)
+		nodemk.On("GetProfile", mock.Anything).Return(nil)
+		nodemk.On("AddProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockProfile{}, nil)
+		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name:      tc.basePowerProfile.Name,
-				Namespace: PowerProfileNamespace,
+				Name:      tc.profileName,
+				Namespace: "default",
 			},
 		}
 
-		_, err = r.Reconcile(req)
+		_, err = r.Reconcile(context.TODO(), req)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
+			t.Fatalf("%s - error reconciling object", tc.testCase)
 		}
 
-		server.Close()
-
-		updatedNode := &corev1.Node{}
+		workload := &powerv1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.node.Name,
-		}, updatedNode)
+			Name:      fmt.Sprintf("%s-%s", tc.profileName, tc.nodeName),
+			Namespace: "default",
+		}, workload)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Object", tc.testCase))
+		}
+
+		node := &corev1.Node{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name: tc.nodeName,
+		}, node)
 		if err != nil {
 			t.Error(err)
 			t.Fatal(fmt.Sprintf("%s - error retrieving Node object", tc.testCase))
 		}
 
-		powerProfileList := &powerv1alpha1.PowerProfileList{}
-		err = r.Client.List(context.TODO(), powerProfileList)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile list", tc.testCase))
-		}
-
-		if len(powerProfileList.Items) != tc.expectedNumberOfProfiles {
-			t.Errorf("%s - Failed: Expected number of PowerProfiles to be %v, got %v", tc.testCase, tc.expectedNumberOfProfiles, len(powerProfileList.Items))
-		}
-
-		for powerProfileName, expectedTests := range tc.expectedPowerProfileTests {
-			powerProfile := &powerv1alpha1.PowerProfile{}
-			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name:      powerProfileName,
-				Namespace: PowerProfileNamespace,
-			}, powerProfile)
-			if err != nil {
-				if errors.IsNotFound(err) {
-					t.Errorf("%s - Failed: Expected PowerProfile '%s' to exist", tc.testCase, powerProfileName)
-				} else {
-					t.Error(err)
-					t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile object", tc.testCase))
-				}
-			}
-
-			resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, powerProfileName))
-			if _, exists := updatedNode.Status.Capacity[resourceName]; exists != expectedTests["extendedResourcesCreated"] {
-				t.Errorf("%s - Failed: Expected '%s' extended resources to be created to be %v, got %v", tc.testCase, powerProfileName, expectedTests["extendedResourcesCreated"], exists)
-			}
-
-			if (powerProfile.Spec.Max == 0) != expectedTests["maxMinValuesToEqualZero"] {
-				t.Errorf("%s - Failed: Expected PowerProfile '%s' Max value to be 0 to be %v, got %v", tc.testCase, powerProfileName, expectedTests["maxMinValuesToEqualZero"], (powerProfile.Spec.Max == 0))
-			}
-
-			if powerProfile.Spec.Epp != tc.expectedPowerProfileEppValue {
-				t.Errorf("%s - Failed: Expected PowerProfile '%s' Epp value to be %v, got %v", tc.testCase, powerProfileName, tc.expectedPowerProfileEppValue, powerProfile.Spec.Epp)
-			}
+		resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
+		if _, exists := node.Status.Capacity[resourceName]; !exists {
+			t.Errorf("%s - Failed: Expected Extended Resource '%s' to be created", tc.testCase, fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
 		}
 	}
 }
 
-func TestExtendedNonPowerEppProfileCreation(t *testing.T) {
+func TestPowerProfileCreationNonPowerProfileInLibrary(t *testing.T) {
 	tcases := []struct {
-		testCase                             string
-		extendedPowerProfile                 *powerv1alpha1.PowerProfile
-		node                                 *corev1.Node
-		otherPowerProfiles                   *powerv1alpha1.PowerProfileList
-		expectedExtendedResourcesToBeCreated bool
+		testCase    string
+		nodeName    string
+		profileName string
+		clientObjs  []runtime.Object
 	}{
 		{
-			testCase: "Test Case 1",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "performance-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "performance-example-node1",
-					Max:  3700,
-					Min:  3400,
-					Epp:  "performance",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+			testCase:    "Test Case 1 - Max|Min non zero, epp performance",
+			nodeName:    "TestNode",
+			profileName: "performance",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "performance",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "performance",
+						Max:  3600,
+						Min:  3200,
+						Epp:  "performance",
 					},
 				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance",
-							Epp:  "performance",
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
 						},
 					},
 				},
 			},
-			expectedExtendedResourcesToBeCreated: false,
 		},
 		{
-			testCase: "Test Case 2",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "performance-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "performance-example-node1",
-					Max:  3700,
-					Min:  3400,
-					Epp:  "performance",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+			testCase:    "Test Case 2 - Max|Min zero, epp performance",
+			nodeName:    "TestNode",
+			profileName: "performance",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "performance",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "performance",
+						Max:  0,
+						Min:  0,
+						Epp:  "performance",
 					},
 				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance",
-							Epp:  "performance",
-						},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
 					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance-example-node2",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance-example-node2",
-							Epp:  "performance",
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
 						},
 					},
 				},
 			},
-			expectedExtendedResourcesToBeCreated: false,
 		},
 		{
-			testCase: "Test Case 3",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "performance-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "performance-example-node1",
-					Max:  3700,
-					Min:  3400,
-					Epp:  "performance",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+			testCase:    "Test Case 3 - Max|Min non zero, epp empty",
+			nodeName:    "TestNode",
+			profileName: "user-created",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "user-created",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "user-created",
+						Max:  3600,
+						Min:  3200,
+						Epp:  "",
 					},
 				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance",
-							Epp:  "performance",
-						},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
 					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance-example-node2",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance-example-node2",
-							Epp:  "performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-performance",
-							Epp:  "balance_performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-performance-example-node1",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-performance-example-node1",
-							Epp:  "balance_performance",
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
 						},
 					},
 				},
 			},
-			expectedExtendedResourcesToBeCreated: false,
-		},
-		{
-			testCase: "Test Case 3",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-performance-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-performance-example-node1",
-					Max:  3700,
-					Min:  3400,
-					Epp:  "balance_performance",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-performance",
-							Epp:  "balance_performance",
-						},
-					},
-				},
-			},
-			expectedExtendedResourcesToBeCreated: false,
-		},
-		{
-			testCase: "Test Case 4",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-performance-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-performance-example-node1",
-					Max:  3700,
-					Min:  3400,
-					Epp:  "balance_performance",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-performance",
-							Epp:  "balance_performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-performance-example-node2",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-performance-example-node2",
-							Epp:  "balance_performance",
-						},
-					},
-				},
-			},
-			expectedExtendedResourcesToBeCreated: false,
-		},
-		{
-			testCase: "Test Case 5",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-performance-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-performance-example-node1",
-					Max:  3200,
-					Min:  2800,
-					Epp:  "balance_performance",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-performance",
-							Epp:  "balance_performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-performance-example-node2",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-performance-example-node2",
-							Epp:  "balance_performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance",
-							Epp:  "performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance-example-node1",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance-example-node1",
-							Epp:  "performance",
-						},
-					},
-				},
-			},
-			expectedExtendedResourcesToBeCreated: false,
-		},
-		{
-			testCase: "Test Case 6",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-power-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-power-example-node1",
-					Max:  3700,
-					Min:  3400,
-					Epp:  "balance_power",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-power",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-power",
-							Epp:  "balance_power",
-						},
-					},
-				},
-			},
-			expectedExtendedResourcesToBeCreated: false,
-		},
-		{
-			testCase: "Test Case 7",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-power-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-power-example-node1",
-					Max:  3700,
-					Min:  3400,
-					Epp:  "balance_performance",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-power",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-power",
-							Epp:  "balance_power",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-power-example-node2",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-power-example-node2",
-							Epp:  "balance_power",
-						},
-					},
-				},
-			},
-			expectedExtendedResourcesToBeCreated: false,
-		},
-		{
-			testCase: "Test Case 8",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-power-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-power",
-					Max:  3200,
-					Min:  2800,
-					Epp:  "balance_power",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-power",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-power",
-							Epp:  "balance_power",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-power-example-node2",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-power-example-node2",
-							Epp:  "balance_power",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance",
-							Epp:  "performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance-example-node1",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance-example-node1",
-							Epp:  "performance",
-						},
-					},
-				},
-			},
-			expectedExtendedResourcesToBeCreated: false,
 		},
 	}
 
 	for _, tc := range tcases {
-		t.Setenv("NODE_NAME", tc.node.Name)
-		AppQoSClientAddress = "http://localhost:5000"
+		t.Setenv("NODE_NAME", tc.nodeName)
 
-		r, err := createPowerProfileReconcileObject(tc.extendedPowerProfile)
+		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
+			t.Error(err)
 			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
 		}
 
-		server, err := createPowerProfileListeners([]appqos.PowerProfile{})
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Listener", tc.testCase))
-		}
-
-		err = r.Client.Create(context.TODO(), tc.node)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Node object", tc.testCase))
-		}
-
-		for _, profile := range tc.otherPowerProfiles.Items {
-			err = r.Client.Create(context.TODO(), &profile)
-			if err != nil {
-				t.Error(err)
-				t.Fatal(fmt.Sprintf("%s - error creating PowerProfile object '%s'", tc.testCase, profile.Name))
-			}
-		}
+		nodemk := new(nodeMock)
+		nodemk.On("GetProfile", mock.Anything).Return(&mockProfile{})
+		nodemk.On("UpdateProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name:      tc.extendedPowerProfile.Name,
-				Namespace: PowerProfileNamespace,
+				Name:      tc.profileName,
+				Namespace: "default",
 			},
 		}
 
-		_, err = r.Reconcile(req)
+		_, err = r.Reconcile(context.TODO(), req)
+		if err != nil {
+			t.Error(err)
+			t.Fatalf("%s - error reconciling object", tc.testCase)
+		}
+
+		workload := &powerv1.PowerWorkload{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name:      fmt.Sprintf("%s-%s", tc.profileName, tc.nodeName),
+			Namespace: "default",
+		}, workload)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Object", tc.testCase))
+		}
+	}
+}
+
+func TestPowerProfileCreationMaxMinValuesZero(t *testing.T) {
+	tcases := []struct {
+		testCase    string
+		nodeName    string
+		profileName string
+		clientObjs  []runtime.Object
+	}{
+		{
+			testCase:    "Test Case 1 - Max value zero",
+			nodeName:    "TestNode",
+			profileName: "user-created",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "user-created",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "user-created",
+						Max:  0,
+						Min:  3200,
+						Epp:  "",
+					},
+				},
+			},
+		},
+		{
+			testCase:    "Test Case 2 - Min value zero",
+			nodeName:    "TestNode",
+			profileName: "user-created",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "user-created",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "user-created",
+						Max:  3600,
+						Min:  0,
+						Epp:  "",
+					},
+				},
+			},
+		},
+		{
+			testCase:    "Test Case 3 - Max/Min value zero",
+			nodeName:    "TestNode",
+			profileName: "user-created",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "user-created",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "user-created",
+						Max:  0,
+						Min:  0,
+						Epp:  "",
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+
+		r, err := createProfileReconcilerObject(tc.clientObjs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		nodemk := new(nodeMock)
+		r.PowerLibrary = nodemk
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.profileName,
+				Namespace: "default",
+			},
+		}
+
+		_, err = r.Reconcile(context.TODO(), req)
 		if err != nil {
 			t.Error(err)
 			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
 		}
 
-		server.Close()
+		workloads := &powerv1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), workloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Objects", tc.testCase))
+		}
 
-		updatedNode := &corev1.Node{}
+		if len(workloads.Items) > 0 {
+			t.Errorf("%s - Failed - Expected number of Power Workload Objects to be zero", tc.testCase)
+		}
+	}
+}
+
+func TestPowerProfileCreationIncorrectEppValue(t *testing.T) {
+	tcases := []struct {
+		testCase    string
+		nodeName    string
+		profileName string
+		clientObjs  []runtime.Object
+	}{
+		{
+			testCase:    "Test Case 1 - Epp value incorrect",
+			nodeName:    "TestNode",
+			profileName: "user-created",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "user-created",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "user-created",
+						Max:  3600,
+						Min:  3200,
+						Epp:  "incorrect",
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+
+		r, err := createProfileReconcilerObject(tc.clientObjs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		nodemk := new(nodeMock)
+		r.PowerLibrary = nodemk
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.profileName,
+				Namespace: "default",
+			},
+		}
+
+		_, err = r.Reconcile(context.TODO(), req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
+		}
+
+		profile := &powerv1.PowerProfile{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.node.Name,
-		}, updatedNode)
+			Name:      tc.profileName,
+			Namespace: "default",
+		}, profile)
+		if err == nil {
+			t.Errorf("%s Failed - Expected Power Profile %s to not exist", tc.testCase, tc.profileName)
+		}
+
+		workloads := &powerv1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), workloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Objects", tc.testCase))
+		}
+
+		if len(workloads.Items) > 0 {
+			t.Errorf("%s - Failed - Expected number of Power Workload Objects to be zero", tc.testCase)
+		}
+	}
+}
+
+func TestSharedPowerProfileCreationProfileDoesNotExistInLibrary(t *testing.T) {
+	tcases := []struct {
+		testCase    string
+		nodeName    string
+		profileName string
+		clientObjs  []runtime.Object
+	}{
+		{
+			testCase:    "Test Case 1 - Profile does not exists in Power Library",
+			nodeName:    "TestNode",
+			profileName: "shared",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "shared",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "shared",
+						Max:  800,
+						Min:  800,
+						Epp:  "power",
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+
+		r, err := createProfileReconcilerObject(tc.clientObjs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		nodemk := new(nodeMock)
+		nodemk.On("GetProfile", mock.Anything).Return(nil)
+		nodemk.On("AddProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockProfile{}, nil)
+		r.PowerLibrary = nodemk
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.profileName,
+				Namespace: "default",
+			},
+		}
+
+		_, err = r.Reconcile(context.TODO(), req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
+		}
+
+		workloads := &powerv1.PowerWorkloadList{}
+		err = r.Client.List(context.TODO(), workloads)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Objects", tc.testCase))
+		}
+
+		if len(workloads.Items) > 0 {
+			t.Errorf("%s - Failed - Expected number of Power Workload Objects to be zero", tc.testCase)
+		}
+	}
+}
+
+func TestPowerProfileDeletion(t *testing.T) {
+	tcases := []struct {
+		testCase    string
+		nodeName    string
+		profileName string
+		clientObjs  []runtime.Object
+	}{
+		{
+			testCase:    "Test Case 1 - Profile performance, ERs present",
+			nodeName:    "TestNode",
+			profileName: "performance",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerWorkload{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "performance-TestNode",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerWorkloadSpec{},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource:                   *resource.NewQuantity(42, resource.DecimalSI),
+							"power.intel.com/performance": *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+		},
+		{
+			testCase:    "Test Case 2 - Profile user-created, ERs not present",
+			nodeName:    "TestNode",
+			profileName: "user-created",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerWorkload{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "user-created-TestNode",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerWorkloadSpec{},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+		},
+		{
+			testCase:    "Test Case 3 - Profile user-created, ERs not present, workload not present",
+			nodeName:    "TestNode",
+			profileName: "user-created",
+			clientObjs: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+
+		r, err := createProfileReconcilerObject(tc.clientObjs)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		nodemk := new(nodeMock)
+		nodemk.On("DeleteProfile", mock.Anything).Return(nil)
+		r.PowerLibrary = nodemk
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.profileName,
+				Namespace: "default",
+			},
+		}
+
+		_, err = r.Reconcile(context.TODO(), req)
+		if err != nil {
+			t.Error(err)
+			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
+		}
+
+		workload := &powerv1.PowerWorkload{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name:      fmt.Sprintf("%s-%s", tc.profileName, tc.nodeName),
+			Namespace: "default",
+		}, workload)
+		if err == nil {
+			t.Errorf("%s Failed - Expected Power Workload Object '%s-%s' to have been deleted", tc.testCase, tc.profileName, tc.nodeName)
+		}
+
+		node := &corev1.Node{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name: tc.nodeName,
+		}, node)
 		if err != nil {
 			t.Error(err)
 			t.Fatal(fmt.Sprintf("%s - error retrieving Node object", tc.testCase))
 		}
 
-		resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.extendedPowerProfile.Name))
-		if _, exists := updatedNode.Status.Capacity[resourceName]; exists != tc.expectedExtendedResourcesToBeCreated {
-			t.Errorf("%s - Failed: Expected extended resources to be created to be %v, got %v", tc.testCase, tc.expectedExtendedResourcesToBeCreated, exists)
-		}
-
-		powerProfileList := &powerv1alpha1.PowerProfileList{}
-		err = r.Client.List(context.TODO(), powerProfileList)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfileList", tc.testCase))
-		}
-
-		if len(powerProfileList.Items) != len(tc.otherPowerProfiles.Items)+1 {
-			t.Errorf("%s - Failed: Expected number of PowerProfiles to be %v, got %v", tc.testCase, len(tc.otherPowerProfiles.Items)+1, len(powerProfileList.Items))
+		resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
+		if _, exists := node.Status.Capacity[resourceName]; exists {
+			t.Errorf("%s - Failed: Expected Extended Resource '%s' to have been deleted", tc.testCase, fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
 		}
 	}
 }
 
-func TestExtendedPowerEppProfileCreation(t *testing.T) {
+func TestMaxValueLowerThanMinValue(t *testing.T) {
 	tcases := []struct {
-		testCase                             string
-		extendedPowerProfile                 *powerv1alpha1.PowerProfile
-		node                                 *corev1.Node
-		otherPowerProfiles                   *powerv1alpha1.PowerProfileList
-		expectedExtendedResourcesToBeCreated bool
-		expectedMaxFrequencyValue            int
-		expectedMinFrequencyValue            int
-		expectedNumberOfPowerProfiles        int
+		testCase    string
+		nodeName    string
+		profileName string
+		clientObjs  []runtime.Object
 	}{
 		{
-			testCase: "Test Case 1",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "shared",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "shared",
-					Max:  1500,
-					Min:  1100,
-					Epp:  "power",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+			testCase:    "Test 1 - Max value less then Min value",
+			nodeName:    "TestNode",
+			profileName: "user-created",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "user-created",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "user-created",
+						Max:  2600,
+						Min:  2800,
+						Epp:  "performance",
 					},
 				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{},
-			},
-			expectedExtendedResourcesToBeCreated: true,
-			expectedMaxFrequencyValue:            1500,
-			expectedMinFrequencyValue:            1100,
-			expectedNumberOfPowerProfiles:        1,
-		},
-		{
-			testCase: "Test Case 2",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "shared",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "shared",
-					Max:  1500,
-					Min:  1100,
-					Epp:  "power",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
 					},
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance",
-							Epp:  "performance",
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
 						},
 					},
 				},
-			},
-			expectedExtendedResourcesToBeCreated: true,
-			expectedMaxFrequencyValue:            1500,
-			expectedMinFrequencyValue:            1100,
-			expectedNumberOfPowerProfiles:        2,
-		},
-		{
-			testCase: "Test Case 3",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "shared",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "shared",
-					Max:  1500,
-					Min:  1100,
-					Epp:  "power",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance",
-							Epp:  "performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance-example-node1",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance-example-node1",
-							Max:  3700,
-							Min:  3400,
-							Epp:  "performance",
-						},
-					},
-				},
-			},
-			expectedExtendedResourcesToBeCreated: true,
-			expectedMaxFrequencyValue:            1500,
-			expectedMinFrequencyValue:            1100,
-			expectedNumberOfPowerProfiles:        3,
-		},
-		{
-			testCase: "Test Case 4",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "shared",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "shared",
-					Max:  1500,
-					Min:  1100,
-					Epp:  "power",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance",
-							Epp:  "performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance-example-node1",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance-example-node1",
-							Max:  3700,
-							Min:  3400,
-							Epp:  "performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-performance",
-							Epp:  "balance_performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "balance-performance-example-node1",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "balance-performance-example-node1",
-							Epp:  "balance_performance",
-						},
-					},
-				},
-			},
-			expectedExtendedResourcesToBeCreated: true,
-			expectedMaxFrequencyValue:            1500,
-			expectedMinFrequencyValue:            1100,
-			expectedNumberOfPowerProfiles:        5,
-		},
-	}
-
-	for _, tc := range tcases {
-		t.Setenv("NODE_NAME", tc.node.Name)
-		AppQoSClientAddress = "http://localhost:5000"
-
-		r, err := createPowerProfileReconcileObject(tc.extendedPowerProfile)
-		if err != nil {
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-		}
-
-		server, err := createPowerProfileListeners([]appqos.PowerProfile{})
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Listener", tc.testCase))
-		}
-
-		err = r.Client.Create(context.TODO(), tc.node)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Node object", tc.testCase))
-		}
-
-		for _, profile := range tc.otherPowerProfiles.Items {
-			err = r.Client.Create(context.TODO(), &profile)
-			if err != nil {
-				t.Error(err)
-				t.Fatal(fmt.Sprintf("%s - error creating PowerProfile object '%s'", tc.testCase, profile.Name))
-			}
-		}
-
-		req := reconcile.Request{
-			NamespacedName: client.ObjectKey{
-				Name:      tc.extendedPowerProfile.Name,
-				Namespace: PowerProfileNamespace,
-			},
-		}
-
-		_, err = r.Reconcile(req)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
-		}
-
-		server.Close()
-
-		updatedNode := &corev1.Node{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.node.Name,
-		}, updatedNode)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Node object", tc.testCase))
-		}
-
-		resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.extendedPowerProfile.Name))
-		if _, exists := updatedNode.Status.Capacity[resourceName]; exists != tc.expectedExtendedResourcesToBeCreated {
-			t.Errorf("%s - Failed: Expected extended resources to be created to be %v, got %v", tc.testCase, tc.expectedExtendedResourcesToBeCreated, exists)
-		}
-
-		updatedPowerProfile := &powerv1alpha1.PowerProfile{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name:      tc.extendedPowerProfile.Name,
-			Namespace: PowerProfileNamespace,
-		}, updatedPowerProfile)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile object", tc.testCase))
-		}
-
-		if updatedPowerProfile.Spec.Max != tc.expectedMaxFrequencyValue {
-			t.Errorf("%s - Failed: Expected max frequency value to be %v, got %v", tc.testCase, tc.expectedMaxFrequencyValue, tc.expectedMaxFrequencyValue)
-		}
-
-		if updatedPowerProfile.Spec.Min != tc.expectedMinFrequencyValue {
-			t.Errorf("%s - Failed: Expected min frequency value to be %v, got %v", tc.testCase, tc.expectedMinFrequencyValue, updatedPowerProfile.Spec.Min)
-		}
-
-		powerProfileList := &powerv1alpha1.PowerProfileList{}
-		err = r.Client.List(context.TODO(), powerProfileList)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile list", tc.testCase))
-		}
-
-		if len(powerProfileList.Items) != tc.expectedNumberOfPowerProfiles {
-			t.Errorf("%s - Failed: Expected number of PowerProfiles to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerProfiles, len(powerProfileList.Items))
-		}
-	}
-}
-
-func TestIncorrectEppValue(t *testing.T) {
-	tcases := []struct {
-		testCase                             string
-		powerProfile                         *powerv1alpha1.PowerProfile
-		node                                 *corev1.Node
-		otherPowerProfiles                   *powerv1alpha1.PowerProfileList
-		expectedNumberOfPowerProfiles        int
-		expectedExtendedResourcesToBeCreated bool
-	}{
-		{
-			testCase: "Test Case 1",
-			powerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "performance",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "performance",
-					Epp:  "incorrect",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{},
-			},
-			expectedNumberOfPowerProfiles:        0,
-			expectedExtendedResourcesToBeCreated: false,
-		},
-		{
-			testCase: "Test Case 2",
-			powerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "performance",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "performance",
-					Epp:  "incorrect",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance-example-node1",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance-example-node1",
-							Epp:  "performance",
-						},
-					},
-				},
-			},
-			expectedNumberOfPowerProfiles:        1,
-			expectedExtendedResourcesToBeCreated: false,
-		},
-		{
-			testCase: "Test Case 3",
-			powerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "performance-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "performance-example-node1",
-					Epp:  "performance-example-node1",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-			},
-			otherPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance",
-							Epp:  "performance",
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance-example-node2",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance-example-node2",
-							Epp:  "performance",
-						},
-					},
-				},
-			},
-			expectedNumberOfPowerProfiles:        2,
-			expectedExtendedResourcesToBeCreated: false,
-		},
-	}
-
-	for _, tc := range tcases {
-		t.Setenv("NODE_NAME", tc.node.Name)
-		AppQoSClientAddress = "http://localhost:5000"
-
-		r, err := createPowerProfileReconcileObject(tc.powerProfile)
-		if err != nil {
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
-		}
-
-		server, err := createPowerProfileListeners([]appqos.PowerProfile{})
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Listener", tc.testCase))
-		}
-
-		err = r.Client.Create(context.TODO(), tc.node)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Node object", tc.testCase))
-		}
-
-		for _, profile := range tc.otherPowerProfiles.Items {
-			err = r.Client.Create(context.TODO(), &profile)
-			if err != nil {
-				t.Error(err)
-				t.Fatal(fmt.Sprintf("%s - error creating PowerProfile object '%s'", tc.testCase, profile.Name))
-			}
-		}
-
-		req := reconcile.Request{
-			NamespacedName: client.ObjectKey{
-				Name:      tc.powerProfile.Name,
-				Namespace: PowerProfileNamespace,
-			},
-		}
-
-		_, err = r.Reconcile(req)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
-		}
-
-		server.Close()
-
-		updatedNode := &corev1.Node{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.node.Name,
-		}, updatedNode)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Node object", tc.testCase))
-		}
-
-		resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.powerProfile.Name))
-		if _, exists := updatedNode.Status.Capacity[resourceName]; exists != tc.expectedExtendedResourcesToBeCreated {
-			t.Errorf("%s - Failed: Expected extended resources to be created to be %v, got %v", tc.testCase, tc.expectedExtendedResourcesToBeCreated, exists)
-		}
-
-		powerProfileList := &powerv1alpha1.PowerProfileList{}
-		err = r.Client.List(context.TODO(), powerProfileList)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile list", tc.testCase))
-		}
-
-		if len(powerProfileList.Items) != tc.expectedNumberOfPowerProfiles {
-			t.Errorf("%s - Failed: Expected number of PowerProfiles to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerProfiles, len(powerProfileList.Items))
-		}
-
-		powerProfile := &powerv1alpha1.PowerProfile{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name:      tc.powerProfile.Name,
-			Namespace: PowerProfileNamespace,
-		}, powerProfile)
-		if !errors.IsNotFound(err) {
-			t.Errorf("%s - Failed: Expected PowerProfile '%s' to not exist", tc.testCase, tc.powerProfile.Name)
-		}
-	}
-}
-
-func TestExtendedPowerProfileDeletion(t *testing.T) {
-	tcases := []struct {
-		testCase                         string
-		extendedPowerProfile             *powerv1alpha1.PowerProfile
-		basePowerProfile                 *powerv1alpha1.PowerProfile
-		node                             *corev1.Node
-		powerWorkload                    *powerv1alpha1.PowerWorkload
-		expectedExtendedResourcesToExist map[string]bool
-	}{
-		{
-			testCase: "Test Case 1",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "performance-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "performance-example-node1",
-					Max:  3700,
-					Min:  3400,
-					Epp:  "performance",
-				},
-			},
-			basePowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "performance",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "performance",
-					Epp:  "performance",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						"cpu:":                        *resource.NewQuantity(42, resource.DecimalSI),
-						"power.intel.com/performance": *resource.NewQuantity(42, resource.DecimalSI),
-						"power.intel.com/performance-example-node1": *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			powerWorkload: &powerv1alpha1.PowerWorkload{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "performance-example-node1-workload",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "performance-example-node1-workload",
-					PowerNodeSelector: map[string]string{
-						"exmple-node": "true",
-					},
-					Node: powerv1alpha1.NodeInfo{
-						Name: "exmple-node1",
-					},
-					PowerProfile: "performance-example-node1",
-				},
-			},
-			expectedExtendedResourcesToExist: map[string]bool{
-				"performance":               true,
-				"performance-example-node1": false,
-			},
-		},
-		{
-			testCase: "Test Case 2",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-performance-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-performance-example-node1",
-					Max:  3700,
-					Min:  3400,
-					Epp:  "balance_performance",
-				},
-			},
-			basePowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-performance",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-performance",
-					Epp:  "balance_performance",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						"cpu:":                                *resource.NewQuantity(42, resource.DecimalSI),
-						"power.intel.com/balance-performance": *resource.NewQuantity(42, resource.DecimalSI),
-						"power.intel.com/balance-performance-example-node1": *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			powerWorkload: &powerv1alpha1.PowerWorkload{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-performance-example-node1-workload",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "balance-performance-example-node1-workload",
-					PowerNodeSelector: map[string]string{
-						"exmple-node": "true",
-					},
-					Node: powerv1alpha1.NodeInfo{
-						Name: "exmple-node1",
-					},
-					PowerProfile: "balance-performance-example-node1",
-				},
-			},
-			expectedExtendedResourcesToExist: map[string]bool{
-				"balance-performance":               true,
-				"balance-performance-example-node1": false,
-			},
-		},
-		{
-			testCase: "Test Case 3",
-			extendedPowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-power-example-node1",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-power-example-node1",
-					Max:  3700,
-					Min:  3400,
-					Epp:  "balance_power",
-				},
-			},
-			basePowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-power",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "balance-power",
-					Epp:  "balance-power",
-				},
-			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						"cpu:":                          *resource.NewQuantity(42, resource.DecimalSI),
-						"power.intel.com/balance-power": *resource.NewQuantity(42, resource.DecimalSI),
-						"power.intel.com/balance-power-example-node1": *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			powerWorkload: &powerv1alpha1.PowerWorkload{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "balance-power-example-node1-workload",
-					Namespace: PowerProfileNamespace,
-				},
-				Spec: powerv1alpha1.PowerWorkloadSpec{
-					Name: "balance-power-example-node1-workload",
-					PowerNodeSelector: map[string]string{
-						"exmple-node": "true",
-					},
-					Node: powerv1alpha1.NodeInfo{
-						Name: "exmple-node1",
-					},
-					PowerProfile: "balance-power-example-node1",
-				},
-			},
-			expectedExtendedResourcesToExist: map[string]bool{
-				"balance-power":               true,
-				"balance-power-example-node1": false,
 			},
 		},
 	}
 
 	for _, tc := range tcases {
-		t.Setenv("NODE_NAME", tc.node.Name)
-		AppQoSClientAddress = "http://localhost:5000"
+		t.Setenv("NODE_NAME", tc.nodeName)
 
-		r, err := createPowerProfileReconcileObject(tc.extendedPowerProfile)
+		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
+			t.Error(err)
 			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
 		}
 
-		server, err := createPowerProfileListeners([]appqos.PowerProfile{})
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Listener", tc.testCase))
-		}
-
-		err = r.Client.Create(context.TODO(), tc.node)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Node object", tc.testCase))
-		}
-
-		err = r.Client.Create(context.TODO(), tc.basePowerProfile)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating base PowerProfile object", tc.testCase))
-		}
-
-		err = r.Client.Create(context.TODO(), tc.powerWorkload)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating PowerWorkload object", tc.testCase))
-		}
-
-		err = r.Client.Delete(context.TODO(), tc.extendedPowerProfile)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error deleting PowerProfile object", tc.testCase))
-		}
+		nodemk := new(nodeMock)
+		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name:      tc.extendedPowerProfile.Name,
-				Namespace: PowerProfileNamespace,
+				Name:      tc.profileName,
+				Namespace: "default",
 			},
 		}
 
-		_, err = r.Reconcile(req)
+		_, err = r.Reconcile(context.TODO(), req)
 		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
-		}
-
-		server.Close()
-
-		updatedNode := &corev1.Node{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.node.Name,
-		}, updatedNode)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving updated Node object", tc.testCase))
-		}
-
-		for powerProfileName, shouldExist := range tc.expectedExtendedResourcesToExist {
-			resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, powerProfileName))
-			if _, exists := updatedNode.Status.Capacity[resourceName]; exists != shouldExist {
-				t.Errorf("%s - Failed: Expected extended resource '%s' to exist to be %v, got %v", tc.testCase, resourceName, shouldExist, exists)
-			}
-		}
-
-		extendedPowerProfile := &powerv1alpha1.PowerProfile{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name:      tc.extendedPowerProfile.Name,
-			Namespace: PowerProfileNamespace,
-		}, extendedPowerProfile)
-		if !errors.IsNotFound(err) {
-			t.Errorf("%s - Failed: Expected exteended PowerProfile '%s' to not exist", tc.testCase, tc.extendedPowerProfile.Name)
-		}
-
-		basePowerProfile := &powerv1alpha1.PowerProfile{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name:      tc.basePowerProfile.Name,
-			Namespace: PowerProfileNamespace,
-		}, basePowerProfile)
-		if err != nil {
-			if errors.IsNotFound(err) {
-				t.Errorf("%s - Failed: Expected base PowerProfile '%s' to exist", tc.testCase, tc.basePowerProfile.Name)
-			} else {
-				t.Error(err)
-				t.Fatal(fmt.Sprintf("%s - error retrieving base PoewrProfile object '%s'", tc.testCase, tc.basePowerProfile.Name))
-			}
-		}
-
-		powerWorkload := &powerv1alpha1.PowerWorkload{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name:      tc.powerWorkload.Name,
-			Namespace: PowerProfileNamespace,
-		}, powerWorkload)
-		if !errors.IsNotFound(err) {
-			t.Errorf("%s - Failed: Expected PowerWorkload '%s' to not exist", tc.testCase, tc.powerWorkload.Name)
+			t.Errorf("%s Failed - expected reconciler to not have failed", tc.testCase)
 		}
 	}
 }
 
-func TestBasePowerProfileDeletion(t *testing.T) {
+func TestSharedFrequencyValuesLessThanAbsoluteValue(t *testing.T) {
 	tcases := []struct {
-		testCase                         string
-		basePowerProfile                 *powerv1alpha1.PowerProfile
-		extendedPowerProfiles            *powerv1alpha1.PowerProfileList
-		node                             *corev1.Node
-		powerWorkloads                   *powerv1alpha1.PowerWorkloadList
-		appqosPowerProfiles              []AppQoSPowerProfile
-		expectedProfilesToExist          []string
-		expectedProfilesToNotExist       []string
-		expectedWorkloadsToExist         []string
-		expectedWorkloadsToNotExist      []string
-		expectedExtendedResourcesToExist map[string]bool
-		expectedNumberOfPowerProfiles    int
-		expectedNumberOfPowerWorkloads   int
+		testCase    string
+		nodeName    string
+		profileName string
+		clientObjs  []runtime.Object
 	}{
 		{
-			testCase: "Test Case 1",
-			basePowerProfile: &powerv1alpha1.PowerProfile{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "performance",
-					Namespace: PowerProfileNamespace,
+			testCase:    "Test 1 - Shared Frequency values less than absolute minimum",
+			nodeName:    "TestNode",
+			profileName: "shared",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "shared",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "shared",
+						Max:  100,
+						Min:  100,
+						Epp:  "power",
+					},
 				},
-				Spec: powerv1alpha1.PowerProfileSpec{
-					Name: "performance",
-					Epp:  "performance",
-				},
-			},
-			extendedPowerProfiles: &powerv1alpha1.PowerProfileList{
-				Items: []powerv1alpha1.PowerProfile{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance-example-node1",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerProfileSpec{
-							Name: "performance-example-node1",
-							Max:  3700,
-							Min:  3400,
-							Epp:  "performance",
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
 						},
 					},
 				},
 			},
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "example-node1",
-				},
-				Status: corev1.NodeStatus{
-					Capacity: map[corev1.ResourceName]resource.Quantity{
-						"cpu:":                        *resource.NewQuantity(42, resource.DecimalSI),
-						"power.intel.com/performance": *resource.NewQuantity(42, resource.DecimalSI),
-						"power.intel.com/performance-example-node1": *resource.NewQuantity(42, resource.DecimalSI),
-					},
-				},
-			},
-			powerWorkloads: &powerv1alpha1.PowerWorkloadList{
-				Items: []powerv1alpha1.PowerWorkload{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "performance-example-node1-workload",
-							Namespace: PowerProfileNamespace,
-						},
-						Spec: powerv1alpha1.PowerWorkloadSpec{
-							Name: "performance-example-node1-workload",
-							PowerNodeSelector: map[string]string{
-								"example-node": "true",
-							},
-							Node: powerv1alpha1.NodeInfo{
-								Name: "example-node1",
-							},
-							PowerProfile: "performance-example-node1",
-						},
-					},
-				},
-			},
-			appqosPowerProfiles: []AppQoSPowerProfile{
-				{
-					Node: "example-node1",
-					Name: "performance",
-					Id:   1,
-				},
-				{
-					Node: "example-node1",
-					Name: "performance-example-node1",
-					Id:   2,
-				},
-			},
-			expectedProfilesToNotExist: []string{
-				"performance",
-				"performance-example-node1",
-			},
-			expectedWorkloadsToNotExist: []string{
-				"performance-example-node1-workload",
-			},
-			expectedExtendedResourcesToExist: map[string]bool{
-				"performance":               false,
-				"performance-example-node1": false,
-			},
-			expectedNumberOfPowerProfiles:  0,
-			expectedNumberOfPowerWorkloads: 0,
 		},
 	}
 
 	for _, tc := range tcases {
-		t.Setenv("NODE_NAME", tc.node.Name)
-		AppQoSClientAddress = "http://localhost:5000"
+		t.Setenv("NODE_NAME", tc.nodeName)
 
-		appqosPowerProfiles := make([]appqos.PowerProfile, 0)
-		for i := range tc.appqosPowerProfiles {
-			profile := appqos.PowerProfile{
-				Name: &tc.appqosPowerProfiles[i].Name,
-				ID:   &tc.appqosPowerProfiles[i].Id,
-			}
-			appqosPowerProfiles = append(appqosPowerProfiles, profile)
-		}
-
-		r, err := createPowerProfileReconcileObject(tc.basePowerProfile)
+		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
+			t.Error(err)
 			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
 		}
 
-		server, err := createPowerProfileListeners(appqosPowerProfiles)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Listener", tc.testCase))
-		}
-
-		err = r.Client.Create(context.TODO(), tc.node)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating Node object", tc.testCase))
-		}
-
-		for _, extendedProfile := range tc.extendedPowerProfiles.Items {
-			err = r.Client.Create(context.TODO(), &extendedProfile)
-			if err != nil {
-				t.Error(err)
-				t.Fatal(fmt.Sprintf("%s - error creating extended PowerProfile object", tc.testCase))
-			}
-		}
-
-		err = r.Client.Delete(context.TODO(), tc.basePowerProfile)
-		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error deleting PowerProfile object", tc.testCase))
-		}
+		nodemk := new(nodeMock)
+		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name:      tc.basePowerProfile.Name,
-				Namespace: PowerProfileNamespace,
+				Name:      tc.profileName,
+				Namespace: "default",
 			},
 		}
 
-		_, err = r.Reconcile(req)
+		_, err = r.Reconcile(context.TODO(), req)
 		if err != nil {
-			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
+			t.Errorf("%s Failed - expected reconciler to not have failed", tc.testCase)
 		}
+	}
+}
 
-		for _, powerProfileName := range tc.expectedProfilesToNotExist {
-			if powerProfileName != tc.basePowerProfile.Name {
-				extendedReq := reconcile.Request{
-					NamespacedName: client.ObjectKey{
-						Name:      powerProfileName,
-						Namespace: PowerProfileName,
+func TestMaxValueZeroMinValueGreaterThanZero(t *testing.T) {
+	tcases := []struct {
+		testCase    string
+		nodeName    string
+		profileName string
+		clientObjs  []runtime.Object
+	}{
+		{
+			testCase:    "Test 1 - Max value less then Min value",
+			nodeName:    "TestNode",
+			profileName: "user-created",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "user-created",
+						Namespace: "default",
 					},
-				}
+					Spec: powerv1.PowerProfileSpec{
+						Name: "user-created",
+						Max:  0,
+						Min:  2800,
+						Epp:  "performance",
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+		},
+	}
 
-				_, err = r.Reconcile(extendedReq)
-				if err != nil {
-					t.Error(err)
-					t.Fatal(fmt.Sprintf("%s - error reconciling extended PowerProfile", tc.testCase))
-				}
-			}
-		}
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
 
-		server.Close()
-
-		updatedNode := &corev1.Node{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name: tc.node.Name,
-		}, updatedNode)
+		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Updated Node", tc.testCase))
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
 		}
 
-		for powerProfileName, shouldExist := range tc.expectedExtendedResourcesToExist {
-			resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, powerProfileName))
-			if _, exists := updatedNode.Status.Capacity[resourceName]; exists != shouldExist {
-				t.Errorf("%s - Failed: Expected extended resource '%s' to exist to be %v, got %v", tc.testCase, resourceName, shouldExist, exists)
-			}
+		nodemk := new(nodeMock)
+		r.PowerLibrary = nodemk
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.profileName,
+				Namespace: "default",
+			},
 		}
 
-		for _, powerProfileName := range tc.expectedProfilesToExist {
-			profile := &powerv1alpha1.PowerProfile{}
-			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name:      powerProfileName,
-				Namespace: PowerProfileNamespace,
-			}, profile)
-			if err != nil {
-				t.Errorf("%s - Failed: Expected PowerProfile '%s' to exist", tc.testCase, powerProfileName)
-			}
+		_, err = r.Reconcile(context.TODO(), req)
+		if err != nil {
+			t.Errorf("%s Failed - expected reconciler to not have failed", tc.testCase)
 		}
+	}
+}
 
-		for _, powerProfileName := range tc.expectedProfilesToExist {
-			profile := &powerv1alpha1.PowerProfile{}
-			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name:      powerProfileName,
-				Namespace: PowerProfileNamespace,
-			}, profile)
-			if !errors.IsNotFound(err) {
-				t.Errorf("%s - Failed: Expected PowerProfile '%s' to not exist", tc.testCase, powerProfileName)
-			}
-		}
+func TestSharedProfileReturningNil(t *testing.T) {
+	tcases := []struct {
+		testCase    string
+		nodeName    string
+		profileName string
+		clientObjs  []runtime.Object
+	}{
+		{
+			testCase:    "Test 1 - library.AddProfile returns error",
+			nodeName:    "TestNode",
+			profileName: "shared1",
+			clientObjs: []runtime.Object{
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "shared1",
+						Namespace: "default",
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "shared1",
+						Max:  1000,
+						Min:  1000,
+						Epp:  "power",
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+		},
+	}
 
-		for _, powerWorkloadName := range tc.expectedWorkloadsToExist {
-			workload := &powerv1alpha1.PowerWorkload{}
-			err = r.Client.Get(context.TODO(), client.ObjectKey{
-				Name:      powerWorkloadName,
-				Namespace: PowerProfileNamespace,
-			}, workload)
-			if err != nil {
-				t.Errorf("%s - Failed: Expected PowerWorkload '%s' to exist", tc.testCase, powerWorkloadName)
-			}
-		}
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
 
-		powerProfileList := &powerv1alpha1.PowerProfileList{}
-		err = r.Client.List(context.TODO(), powerProfileList)
+		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving PowerProfile list", tc.testCase))
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
 		}
 
-		if len(powerProfileList.Items) != tc.expectedNumberOfPowerProfiles {
-			t.Errorf("%s - Failed: Expected number of PowerProfiles to be %v, got %v", tc.testCase, tc.expectedNumberOfPowerProfiles, len(powerProfileList.Items))
+		nodemk := new(nodeMock)
+		nodemk.On("GetProfile", "shared1").Return(nil)
+		nodemk.On("GetProfile", "shared2").Return(&mockProfile{})
+		nodemk.On("AddProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockProfile{}, errors.NewServiceUnavailable("test error"))
+		nodemk.On("NewProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		r.PowerLibrary = nodemk
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.profileName,
+				Namespace: "default",
+			},
 		}
 
-		powerWorkloadList := &powerv1alpha1.PowerWorkloadList{}
-		err = r.Client.List(context.TODO(), powerWorkloadList)
+		_, err = r.Reconcile(context.TODO(), req)
+		if err == nil {
+			t.Errorf("%s Failed - expected reconciler to have failed", tc.testCase)
+		}
+	}
+}
+
+func TestProfileReturnsErrors(t *testing.T) {
+	tcases := []struct {
+		testCase    string
+		nodeName    string
+		profileName string
+		clientObjs  []runtime.Object
+	}{
+		{
+			testCase:    "Test 1 - Profile deleted, library.DeleteProfile returns error",
+			nodeName:    "TestNode",
+			profileName: "performance",
+			clientObjs: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+
+		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving PowerWorkload list", tc.testCase))
+			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+		}
+
+		nodemk := new(nodeMock)
+		nodemk.On("DeleteProfile", mock.Anything).Return(errors.NewServiceUnavailable("test error"))
+		r.PowerLibrary = nodemk
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.profileName,
+				Namespace: "default",
+			},
+		}
+
+		_, err = r.Reconcile(context.TODO(), req)
+		if err == nil {
+			t.Errorf("%s Failed - expected reconciler to have failed", tc.testCase)
 		}
 	}
 }

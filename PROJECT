@@ -1,20 +1,20 @@
 domain: intel.com
 layout: go.kubebuilder.io/v2
-projectName: power-operator
-repo: gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git
+projectName: kubernetes-power-manager
+repo: github.com/intel/kubernetes-power-manager
 resources:
 - group: power
   kind: PowerNode
-  version: v1alpha1
+  version: v1
 - group: power
   kind: PowerProfile
-  version: v1alpha1
+  version: v1
 - group: power
   kind: PowerPod
-  version: v1alpha1
+  version: v1
 - group: power
   kind: PowerConfig
-  version: v1alpha1
+  version: v1
 version: 3-alpha
 plugins:
   go.sdk.operatorframework.io/v2-alpha: {}

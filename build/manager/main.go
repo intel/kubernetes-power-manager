@@ -27,10 +27,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
+	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/controllers"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/state"
+	"github.com/intel/kubernetes-power-manager/controllers"
+	"github.com/intel/kubernetes-power-manager/pkg/state"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -42,7 +42,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(powerv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(powerv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 

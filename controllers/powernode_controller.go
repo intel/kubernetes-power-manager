@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -29,8 +28,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
-	"gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/pkg/appqos"
+	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+	"github.com/intel/power-optimization-library/pkg/power"
 )
 
 // PowerNodeReconciler reconciles a PowerNode object
@@ -38,15 +37,14 @@ type PowerNodeReconciler struct {
 	client.Client
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
-	AppQoSClient *appqos.AppQoSClient
+	PowerLibrary power.Node
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powernodes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=power.intel.com,resources=powernodes/status,verbs=get;update;patch
 
-func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
-	logger := r.Log.WithValues("powernode", req.NamespacedName)
 
 	nodeName := os.Getenv("NODE_NAME")
 	if nodeName != req.NamespacedName.Name {
@@ -55,11 +53,11 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	powerProfilesInUse := make(map[string]bool)
-	powerWorkloads := make([]powerv1alpha1.WorkloadInfo, 0)
-	powerContainers := make([]powerv1alpha1.Container, 0)
+	powerProfileStrings := make([]string, 0)
+	powerWorkloadStrings := make([]string, 0)
+	powerContainers := make([]powerv1.Container, 0)
 
-	powerNode := &powerv1alpha1.PowerNode{}
+	powerNode := &powerv1.PowerNode{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, powerNode)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -69,8 +67,8 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	profiles := &powerv1alpha1.PowerProfileList{}
-	err = r.Client.List(context.TODO(), profiles)
+	powerProfiles := &powerv1.PowerProfileList{}
+	err = r.Client.List(context.TODO(), powerProfiles)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
@@ -79,79 +77,66 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	workloads := &powerv1alpha1.PowerWorkloadList{}
-	err = r.Client.List(context.TODO(), workloads)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
-		}
-
-		return ctrl.Result{}, err
-	}
-
-	for _, profile := range profiles.Items {
-		if _, exists := extendedResourcePercentage[profile.Spec.Name]; exists || profile.Spec.Epp == "power" {
-			// Base or Shared profile, skip
-
+	for _, profile := range powerProfiles.Items {
+		profileFromLibrary := r.PowerLibrary.GetProfile(profile.Spec.Name)
+		if profileFromLibrary == nil {
 			continue
 		}
 
-		powerProfilesInUse[profile.Name] = false
-
-		workloadName := fmt.Sprintf("%s-workload", profile.Name)
-		for _, workload := range workloads.Items {
-			if workload.Name == workloadName && workload.Spec.Node.Name == req.NamespacedName.Name {
-				powerProfilesInUse[profile.Name] = true
-
-				workloadInfo := &powerv1alpha1.WorkloadInfo{}
-				workloadInfo.Name = workload.Name
-				workloadInfo.CpuIds = workload.Spec.Node.CpuIds
-				powerWorkloads = append(powerWorkloads, *workloadInfo)
-
-				for _, container := range workload.Spec.Node.Containers {
-					container.Workload = workload.Name
-					powerContainers = append(powerContainers, container)
-				}
-
-				continue
-			}
-		}
+		profileString := fmt.Sprintf("%s: %v || %v || %s", profileFromLibrary.GetName(), profileFromLibrary.GetMaxFreq(), profileFromLibrary.GetMinFreq(), profileFromLibrary.GetEpp())
+		powerProfileStrings = append(powerProfileStrings, profileString)
 	}
 
-	defaultPool, err := r.AppQoSClient.GetPoolByName(AppQoSClientAddress, "Default")
+	powerWorkloads := &powerv1.PowerWorkloadList{}
+	err = r.Client.List(context.TODO(), powerWorkloads)
 	if err != nil {
-		logger.Error(err, "error retrieving Default AppQoS Pool")
+		if errors.IsNotFound(err) {
+			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+		}
+
 		return ctrl.Result{}, err
 	}
 
-	sharedPool, err := r.AppQoSClient.GetPoolByName(AppQoSClientAddress, "Shared")
-	if err != nil {
-		logger.Error(err, "error retrieving Shared AppQoS Pool")
-		return ctrl.Result{}, err
-	}
-
-	sharedPools := make([]powerv1alpha1.SharedPoolInfo, 0)
-
-	if !reflect.DeepEqual(defaultPool, &appqos.Pool{}) {
-		defaultPoolInfo := &powerv1alpha1.SharedPoolInfo{
-			Name:             "Default",
-			SharedPoolCpuIds: *defaultPool.Cores,
+	for _, workload := range powerWorkloads.Items {
+		if workload.Spec.AllCores || workload.Spec.Node.Name != nodeName {
+			continue
 		}
-		sharedPools = append(sharedPools, *defaultPoolInfo)
-	}
 
-	if !reflect.DeepEqual(sharedPool, &appqos.Pool{}) {
-		sharedPoolInfo := &powerv1alpha1.SharedPoolInfo{
-			Name:             "Shared",
-			SharedPoolCpuIds: *sharedPool.Cores,
+		poolFromLibrary := r.PowerLibrary.GetExclusivePool(workload.Spec.Name)
+		if poolFromLibrary == nil {
+			continue
 		}
-		sharedPools = append(sharedPools, *sharedPoolInfo)
+
+		cores := prettifyCoreList(poolFromLibrary.GetCoreIds())
+		profile := poolFromLibrary.GetPowerProfile()
+		workloadString := fmt.Sprintf("%s: %s || %s", poolFromLibrary.GetName(), profile.GetName(), cores)
+		powerWorkloadStrings = append(powerWorkloadStrings, workloadString)
+
+		for _, container := range workload.Spec.Node.Containers {
+			container.Workload = workload.Name
+			powerContainers = append(powerContainers, container)
+		}
 	}
 
-	powerNode.Spec.ActiveProfiles = powerProfilesInUse
-	powerNode.Spec.ActiveWorkloads = powerWorkloads
+	powerNode.Spec.PowerProfiles = powerProfileStrings
+	powerNode.Spec.PowerWorkloads = powerWorkloadStrings
 	powerNode.Spec.PowerContainers = powerContainers
-	powerNode.Spec.SharedPools = sharedPools
+
+	sharedPool := r.PowerLibrary.GetSharedPool()
+	sharedCores := sharedPool.GetCoreIds()
+	sharedProfile := sharedPool.GetPowerProfile()
+	reservedSystemCpus := r.PowerLibrary.GetReservedCoreIds()
+
+	powerNode.Spec.PowerContainers = powerContainers
+	if len(sharedCores) > 0 {
+		cores := prettifyCoreList(sharedCores)
+		powerNode.Spec.SharedPool = fmt.Sprintf("%s || %v || %v || %s", sharedProfile.GetName(), sharedProfile.GetMaxFreq(), sharedProfile.GetMinFreq(), cores)
+	}
+
+	if len(reservedSystemCpus) > 0 {
+		cores := prettifyCoreList(reservedSystemCpus)
+		powerNode.Spec.UneffectedCores = fmt.Sprintf("%s", cores)
+	}
 
 	err = r.Client.Update(context.TODO(), powerNode)
 	if err != nil {
@@ -161,8 +146,39 @@ func (r *PowerNodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 }
 
+func prettifyCoreList(cores []int) string {
+	prettified := ""
+
+	for i := 0; i < len(cores); i++ {
+		start := i
+		end := i
+
+		for end < len(cores)-1 {
+			if cores[end+1]-cores[end] == 1 {
+				end++
+			} else {
+				break
+			}
+		}
+
+		if end-start > 0 {
+			prettified += fmt.Sprintf("%d-%d", cores[start], cores[end])
+		} else {
+			prettified += fmt.Sprintf("%d", cores[start])
+		}
+
+		if end < len(cores)-1 {
+			prettified += ","
+		}
+
+		i = end
+	}
+
+	return prettified
+}
+
 func (r *PowerNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&powerv1alpha1.PowerNode{}).
+		For(&powerv1.PowerNode{}).
 		Complete(r)
 }

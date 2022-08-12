@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,6 +22,16 @@ import (
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+/*
+type ProfileNode struct {
+	NodeName string `json:"name,omitempty"`
+
+	Max int `json:"max,omitempty"`
+
+	Min int `json:"min,omitempty"`
+}
+*/
 
 // PowerProfileSpec defines the desired state of PowerProfile
 type PowerProfileSpec struct {
@@ -31,10 +41,9 @@ type PowerProfileSpec struct {
 	// The name of the PowerProfile
 	Name string `json:"name"`
 
-	// The maximum frequency the core is allowed go
+	//ProfileNodes []ProfileNode `json:"profileNodes,omitempty"`
 	Max int `json:"max,omitempty"`
 
-	// The minimum frequency the core is allowed go
 	Min int `json:"min,omitempty"`
 
 	// The priority value associated with this Power Profile
@@ -46,7 +55,7 @@ type PowerProfileStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// The ID given to the power profile by AppQoS
+	// The ID given to the power profile
 	ID int `json:"id"`
 }
 

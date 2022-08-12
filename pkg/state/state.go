@@ -1,7 +1,7 @@
 package state
 
 import (
-	powerv1alpha1 "gitlab.devtools.intel.com/OrchSW/CNO/power-operator.git/api/v1alpha1"
+	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 )
 
 type PowerNodeData struct {
@@ -32,7 +32,7 @@ func (nd *PowerNodeData) DeletePowerNodeData(nodeName string) {
 	}
 }
 
-func (nd *PowerNodeData) Difference(nodeInfo []powerv1alpha1.NodeInfo) []string {
+func (nd *PowerNodeData) Difference(nodeInfo []powerv1.WorkloadNode) []string {
 	difference := make([]string, 0)
 
 	for _, node := range nd.PowerNodeList {
@@ -44,7 +44,7 @@ func (nd *PowerNodeData) Difference(nodeInfo []powerv1alpha1.NodeInfo) []string 
 	return difference
 }
 
-func NodeNotInNodeInfo(nodeName string, nodeInfo []powerv1alpha1.NodeInfo) bool {
+func NodeNotInNodeInfo(nodeName string, nodeInfo []powerv1.WorkloadNode) bool {
 	for _, node := range nodeInfo {
 		if nodeName == node.Name {
 			return false
