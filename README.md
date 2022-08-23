@@ -441,7 +441,7 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         image: power-operator:v2.0.0
         securityContext:
           allowPrivilegeEscalation: false
