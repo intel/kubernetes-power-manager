@@ -37,8 +37,8 @@ build: generate manifests install
 
 # Build the Manager and Node Agent images
 images: generate manifests install
-	docker build -f build/Dockerfile -t power-operator:v2.0.0 .
-	docker build -f build/Dockerfile.nodeagent -t power-node-agent:v2.0.0 .
+	docker build -f build/Dockerfile -t intel/power-operator:v2.0.0 .
+	docker build -f build/Dockerfile.nodeagent -t intel/power-node-agent:v2.0.0 .
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests

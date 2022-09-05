@@ -16,7 +16,7 @@ spec:
       serviceAccountName: intel-power-node-agent
       containers:
         - image: intel/power-node-agent:v2.0.0
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             privileged: true
           name: power-node-agent
@@ -33,6 +33,8 @@ spec:
               cpu: 100m
               memory: 30Mi
           volumeMounts:
+            - mountPath: /sys/devices/system/cpu
+              name: CPUsetup
             - mountPath: /sys/fs
               name: cgroup
               readOnly: true
@@ -40,6 +42,9 @@ spec:
               name: kubesock
               readOnly: true
       volumes:
+        - name: CPUsetup
+          hostPath:
+            path: /sys/devices/system/cpu
         - name: cgroup
           hostPath:
             path: /sys/fs
