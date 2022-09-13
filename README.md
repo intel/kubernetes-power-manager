@@ -73,10 +73,23 @@ The Kubernetes Power Manager bridges the gap between the container orchestration
     All-Core Turbo is the Turbo Frequency at which all cores can run on the system at the same time.
     The user can set certain cores to have a higher All-Core Turbo Frequency by lowering this value for other cores or setting them to no value at all.
 
-    This feature is only useful when all cores on the system are being utilized, but the user still wants to be able to configure certain cores to get a higher performance than others.
+    This feature is only useful when all cores on the system are being utilized, but the user still wants to be able to configure certain cores to get a higher    performance than others.
 
 ## Prerequisites
-* Node Feature Discovery ([NFD](https://github.com/kubernetes-sigs/node-feature-discovery)) should be deployed in the cluster before running the Kubernetes Power Manager. NFD is used to detect node-level features such as *Intel Speed Select Technology - Base Frequency (SST-BF)*. Once detected, the user can instruct the Kubernetes Power Manager to deploy the Power Node Agent to Nodes with SST-specific labels, allowing the Power Node Agent to take advantage of such features by configuring cores on the host to optimise performance for containerized workloads.
+
+### CPU Manager
+Confirm that CPU Manager Policy is configured to `static` in the kubelet config.yaml file.
+````yaml
+cpuManagerPolicy: "static"
+````
+Confirm the desired CPUs are set in reservedSystemCPUs:
+````yaml
+reservedSystemCPUs: "0"
+````
+NOTE: only necessary if the user is using default Kubernetes CPU Manager.
+
+### NFD
+* Optional - Node Feature Discovery ([NFD](https://github.com/kubernetes-sigs/node-feature-discovery)) should be deployed in the cluster before running the Kubernetes Power Manager. NFD is used to detect node-level features such as *Intel Speed Select Technology - Base Frequency (SST-BF)*. Once detected, the user can instruct the Kubernetes Power Manager to deploy the Power Node Agent to Nodes with SST-specific labels, allowing the Power Node Agent to take advantage of such features by configuring cores on the host to optimise performance for containerized workloads.
 Note: NFD is recommended, but not essential. Node labels can also be applied manually. See the [NFD repo](https://github.com/kubernetes-sigs/node-feature-discovery#feature-labels) for a full list of features labels.
 
 ## Working environments
@@ -192,12 +205,8 @@ spec:
 ### Profile Controller
 The Profile Controller holds values for specific SST settings which are then applied to cores at host level by the Kubernetes Power Manager as requested. Power Profiles are advertised as extended resources and can be requested via the PodSpec. The Config controller creates the requested high-performance PowerProfiles depending on which are requested in the PowerConfig created by the user.
 
-There are two kinds of PowerProfiles:
 
-- Base PowerProfiles
-- Extended PowerProfiles
-
-A Base PowerProfile can be one of three values:
+PowerProfile can be one of three values:
 - performance
 - balance-performance
 - balance-power
@@ -330,6 +339,8 @@ The driver that is used for C-States is the intel_idle driver. Everything associ
 
 C-States have to be confirmed if they are actually active on the system. If a user requests any C-States, they need to check on the system if they are activated and if they are not, reject the PowerConfig. The C-States are found in /sys/devices/system/cpu/cpuN/cpuidle/stateN/.
 
+[C-States - Power Management - Technology Overview](https://builders.intel.com/docs/networkbuilders/power-management-technology-overview-technology-guide.pdf)
+
 #### C-State Ranges
 ````
 C0      Operating State
@@ -405,13 +416,15 @@ make
 ````
 
 - Docker Images
-Docker images can either be built locally by using the command:
+
+Images will be pulled from the Intel's public Docker Hub at:
+ - intel/power-operator:TAG 
+ - intel/power-node-agent:TAG
+
+Or the docker images can be built locally by using the command:
 ````
 make images
 ````
-or available by pulling from the Intel's public Docker Hub at:
- - intel/power-operator:TAG 
- - intel/power-node-agent:TAG
 
 ### Running the Kubernetes Power Manager 
 - **Applying the manager**
@@ -441,8 +454,8 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        imagePullPolicy: IfNotPresent
-        image: power-operator:v2.0.0
+        imagePullPolicy: Always
+        image: intel/power-operator:v2.0.0
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -578,7 +591,6 @@ At this point, if only the ‘performance’ PowerProfile was selected in the Po
 `kubectl get powerprofiles -n intel-power`
 ````
 NAME                          AGE
-performance                   59m
 performance-<NODE_NAME>       58m
 shared-<NODE_NAME>            60m
 ````
