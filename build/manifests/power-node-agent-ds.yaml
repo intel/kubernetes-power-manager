@@ -34,7 +34,7 @@ spec:
               memory: 30Mi
           volumeMounts:
             - mountPath: /sys/devices/system/cpu
-              name: CPUsetup
+              name: cpusetup
             - mountPath: /sys/fs
               name: cgroup
               readOnly: true
@@ -42,7 +42,7 @@ spec:
               name: kubesock
               readOnly: true
       volumes:
-        - name: CPUsetup
+        - name: cpusetup
           hostPath:
             path: /sys/devices/system/cpu
         - name: cgroup

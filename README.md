@@ -607,4 +607,7 @@ shared-<NODE_NAME>-workload            61m
 `kubectl delete pods <name>`
 
 When a Pod that was associated with a PowerWorkload is deleted, the cores associated with that Pod will be removed from the corresponding PowerWorkload. If that Pod was the last requesting the use of that PowerWorkload, the workload will be deleted. All cores removed from the PowerWorkload are added back to the Shared PowerWorkload for that Node and returned to the lower frequencies.
+<<<<<<< HEAD
 
+=======
+>>>>>>> external/master
