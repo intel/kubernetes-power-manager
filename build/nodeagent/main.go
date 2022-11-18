@@ -74,8 +74,16 @@ func main() {
 	}
 
 	powerLibrary, err := power.CreateInstance(nodeName)
+	for _, feature := range powerLibrary.GetFeaturesInfo() {
+		setupLog.Info(
+			"feature status",
+			"feature", feature.Name,
+			"driver", feature.Driver,
+			"available", power.IsFeatureSupported(feature.Feature))
+	}
+
 	if err != nil {
-		if !power.IsFeatureSupported(power.SSTBFFeature) {
+		if !power.IsFeatureSupported(power.PStatesFeature) {
 			pStatesNotSupported := errors.NewServiceUnavailable("P-States not supported")
 			setupLog.Error(pStatesNotSupported, "error setting up P-States in Power Library")
 		}
@@ -149,7 +157,23 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "CStates")
 		os.Exit(1)
 	}
-
+	if err = (&controllers.TimeOfDayReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("TimeOfDay"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TimeOfDay")
+		os.Exit(1)
+	}
+	if err = (&controllers.TimeOfDayCronJobReconciler{
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName("controllers").WithName("TimeOfDayCronJob"),
+		Scheme:       mgr.GetScheme(),
+		PowerLibrary: powerLibrary,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TimeOfDayCronJob")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

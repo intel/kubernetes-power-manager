@@ -20,15 +20,15 @@ func (m *nodeMock) AvailableCStates() ([]string, error) {
 	return args.Get(0).([]string), args.Error(1)
 }
 
-func (m *nodeMock) ApplyCStatesToSharedPool(cStates map[string]bool) error {
+func (m *nodeMock) ApplyCStatesToSharedPool(cStates power.CStates) error {
 	return m.Called(cStates).Error(0)
 }
 
-func (m *nodeMock) ApplyCStateToPool(poolName string, cStates map[string]bool) error {
+func (m *nodeMock) ApplyCStateToPool(poolName string, cStates power.CStates) error {
 	return m.Called(poolName, cStates).Error(0)
 }
 
-func (m *nodeMock) ApplyCStatesToCore(coreID int, cStates map[string]bool) error {
+func (m *nodeMock) ApplyCStatesToCore(coreID int, cStates power.CStates) error {
 	args := m.Called(coreID, cStates)
 	return args.Error(0)
 }
@@ -53,13 +53,13 @@ func (m *nodeMock) GetReservedCoreIds() []int {
 	return args.Get(0).([]int)
 }
 
-func (m *nodeMock) AddProfile(name string, minFreq int, maxFreq int, epp string) (power.Profile, error) {
-	args := m.Called(name, minFreq, maxFreq, epp)
+func (m *nodeMock) AddProfile(name string, minFreq int, maxFreq int, governor string, epp string) (power.Profile, error) {
+	args := m.Called(name, minFreq, maxFreq, governor, epp)
 	return args.Get(0).(power.Profile), args.Error(1)
 }
 
-func (m *nodeMock) UpdateProfile(name string, minFreq int, maxFreq int, epp string) error {
-	args := m.Called(name, minFreq, maxFreq, epp)
+func (m *nodeMock) UpdateProfile(name string, minFreq int, maxFreq int, governor string, epp string) error {
+	args := m.Called(name, minFreq, maxFreq, governor, epp)
 	return args.Error(0)
 }
 
@@ -122,6 +122,10 @@ func (m *nodeMock) GetSharedPool() power.Pool {
 	return args.Get(0).(power.Pool)
 }
 
+func (m *nodeMock) GetFeaturesInfo() power.FeatureSet {
+	return m.Called().Get(0).(power.FeatureSet)
+}
+
 type mockProfile struct {
 	mock.Mock
 }
@@ -146,7 +150,12 @@ func (m *mockProfile) GetMinFreq() int {
 	return args.Int(0)
 }
 
+func (m *mockProfile) GetGovernor() string {
+	return m.Called().String(0)
+}
+
 type mockPool struct {
+	power.Pool
 	mock.Mock
 }
 
@@ -177,6 +186,9 @@ func (m *mockPool) SetPowerProfile(profile power.Profile) error {
 
 func (m *mockPool) GetPowerProfile() power.Profile {
 	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
 	return args.Get(0).(power.Profile)
 }
 
@@ -190,12 +202,12 @@ func (m *mockPool) GetCoreIds() []int {
 	return args.Get(0).([]int)
 }
 
-func (m *mockPool) SetCStates(states map[string]bool) error {
+func (m *mockPool) SetCStates(states power.CStates) error {
 	args := m.Called(states)
 	return args.Error(0)
 }
 
-func (m *mockPool) getCStates() map[string]bool {
+func (m *mockPool) getCStates() power.CStates {
 	args := m.Called()
-	return args.Get(0).(map[string]bool)
+	return args.Get(0).(power.CStates)
 }

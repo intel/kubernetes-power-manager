@@ -1,20 +1,47 @@
 domain: intel.com
-layout: go.kubebuilder.io/v2
+layout:
+- go.kubebuilder.io/v2
+plugins:
+  go.sdk.operatorframework.io/v2-alpha: {}
 projectName: kubernetes-power-manager
 repo: github.com/intel/kubernetes-power-manager
 resources:
-- group: power
+- domain: intel.com
+  group: power
   kind: PowerNode
+  path: github.com/intel/kubernetes-power-manager/api/v1
   version: v1
-- group: power
+- domain: intel.com
+  group: power
   kind: PowerProfile
+  path: github.com/intel/kubernetes-power-manager/api/v1
   version: v1
-- group: power
+- domain: intel.com
+  group: power
   kind: PowerPod
+  path: github.com/intel/kubernetes-power-manager/api/v1
   version: v1
-- group: power
+- domain: intel.com
+  group: power
   kind: PowerConfig
+  path: github.com/intel/kubernetes-power-manager/api/v1
   version: v1
-version: 3-alpha
-plugins:
-  go.sdk.operatorframework.io/v2-alpha: {}
+- api:
+    crdVersion: v1beta1
+    namespaced: true
+  controller: true
+  domain: intel.com
+  group: power
+  kind: Time
+  path: github.com/intel/kubernetes-power-manager/api/v1
+  version: v1
+- api:
+    crdVersion: v1beta1
+    namespaced: true
+  controller: true
+  domain: intel.com
+  group: power
+  kind: TimeOfDay
+  path: github.com/intel/kubernetes-power-manager/api/v1
+  version: v1
+version: "3"

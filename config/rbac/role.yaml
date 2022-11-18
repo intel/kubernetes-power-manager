@@ -125,3 +125,23 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - power.intel.com
+  resources:
+  - timeofdays
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - power.intel.com
+  resources:
+  - timeofdays/status
+  verbs:
+  - get
+  - patch
+  - update

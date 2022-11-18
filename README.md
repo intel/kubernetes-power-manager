@@ -56,12 +56,8 @@ The Kubernetes Power Manager bridges the gap between the container orchestration
     How exactly the frequency of the cores is changed is by simply writing the new frequency value to the /sys/devices/system/cpu/cpuN/cpufreq/scaling_max|min_freq file for the given core.
 
 
+
 ## Future planned additions to the Kubernetes Power Manager
-
-
-- **Time of Day**
-    Time of Day is designed to allow the user to select a specific time of day that they can put all their unused CPUs into “sleep” state and then reverse the process and select another time to return to an “active” state.
-
 
 - **Uncore**
 
@@ -73,42 +69,29 @@ The Kubernetes Power Manager bridges the gap between the container orchestration
     All-Core Turbo is the Turbo Frequency at which all cores can run on the system at the same time.
     The user can set certain cores to have a higher All-Core Turbo Frequency by lowering this value for other cores or setting them to no value at all.
 
-    This feature is only useful when all cores on the system are being utilized, but the user still wants to be able to configure certain cores to get a higher    performance than others.
+    This feature is only useful when all cores on the system are being utilized, but the user still wants to be able to configure certain cores to get a higher performance than others.
 
 ## Prerequisites
-
-### CPU Manager
-Confirm that CPU Manager Policy is configured to `static` in the kubelet config.yaml file.
-````yaml
-cpuManagerPolicy: "static"
-````
-Confirm the desired CPUs are set in reservedSystemCPUs:
-````yaml
-reservedSystemCPUs: "0"
-````
-NOTE: only necessary if the user is using default Kubernetes CPU Manager.
-
-### NFD
-* Optional - Node Feature Discovery ([NFD](https://github.com/kubernetes-sigs/node-feature-discovery)) should be deployed in the cluster before running the Kubernetes Power Manager. NFD is used to detect node-level features such as *Intel Speed Select Technology - Base Frequency (SST-BF)*. Once detected, the user can instruct the Kubernetes Power Manager to deploy the Power Node Agent to Nodes with SST-specific labels, allowing the Power Node Agent to take advantage of such features by configuring cores on the host to optimise performance for containerized workloads.
+* Node Feature Discovery ([NFD](https://github.com/kubernetes-sigs/node-feature-discovery)) should be deployed in the cluster before running the Kubernetes Power Manager. NFD is used to detect node-level features such as *Intel Speed Select Technology - Base Frequency (SST-BF)*. Once detected, the user can instruct the Kubernetes Power Manager to deploy the Power Node Agent to Nodes with SST-specific labels, allowing the Power Node Agent to take advantage of such features by configuring cores on the host to optimise performance for containerized workloads.
 Note: NFD is recommended, but not essential. Node labels can also be applied manually. See the [NFD repo](https://github.com/kubernetes-sigs/node-feature-discovery#feature-labels) for a full list of features labels.
 
 ## Working environments
 The Kubernetes Power Manager has been tested in different environments.  
 The below table are results that have been tested and confirmed to function as desired:
 
-|       OS        |           Kernel            |   Container runtime    |  Kubernetes  |
-|:---------------:|:---------------------------:|:----------------------:|:------------:|
-|    CentOS 7     | 3.10.0-1160.71.1.el7.x86_64 |   Containerd v1.6.6    |   v1.24.3    |
-|    CentOS 7     | 3.10.0-1160.71.1.el7.x86_64 |   Containerd v1.6.6    |   v1.24.2    |
-|    CentOS 7     | 3.10.0-1160.71.1.el7.x86_64 |   Containerd v1.6.6    |   v1.23.5    |
-|    CentOS 7     |  5.4.0-113.el7.elrepo.x86   |   Containerd v1.6.6    |   v1.24.3    |
-| Ubuntu 22.04.1  |      5.15.0-43-generic      |   Containerd v1.6.6    |   v1.24.2    |
-| Ubuntu 22.04.1  |      5.15.0-43-generic      |   Containerd v1.5.11   |   v1.24.2    |
-| Ubuntu 22.04.1  |      5.15.0-43-generic      | Containerd v1.6.6-k3s1 | v1.24.3+k3s1 |
-| Ubuntu 22.04.1  |      5.4.0-122-generic      |    Docker 20.10.12     |   v1.23.3    |
-| Rocky Linux 8.6 |  4.18.0-372.9.1.el8.x86_64  |   Containerd v1.6.7    |   v1.24.3    |
-| Rocky Linux 8.6 |  4.18.0-372.9.1.el8.x86_64  |   Containerd v1.5.10   |   v1.24.3    |
-| Rocky Linux 8.6 |  4.18.0-372.9.1.el8.x86_64  |     cri-o://1.24.2     |   v1.24.3    |
+|   OS           |   Kernel                    |  Container runtime         | Kubernetes   |
+| :------------: |  :------------------------: |  :-----------------------: |  :--------:  |
+| CentOS 7       | 3.10.0-1160.71.1.el7.x86_64 | Containerd v1.6.6          | v1.24.3      |
+| CentOS 7       | 3.10.0-1160.71.1.el7.x86_64 | Containerd v1.6.6          | v1.24.2      |
+| CentOS 7       | 3.10.0-1160.71.1.el7.x86_64 | Containerd v1.6.6          | v1.23.5      |
+| CentOS 7       | 5.4.0-113.el7.elrepo.x86    | Containerd v1.6.6          | v1.24.3      |
+| Ubuntu 22.04.1 | 5.15.0-43-generic           | Containerd v1.6.6          | v1.24.2      |
+| Ubuntu 22.04.1 | 5.15.0-43-generic           | Containerd v1.5.11         | v1.24.2      |
+| Ubuntu 22.04.1 | 5.15.0-43-generic           | Containerd v1.6.6-k3s1     | v1.24.3+k3s1 |
+| Ubuntu 22.04.1 | 5.4.0-122-generic           | Docker 20.10.12            | v1.23.3      |
+| Rocky Linux 8.6| 4.18.0-372.9.1.el8.x86_64   | Containerd v1.6.7          | v1.24.3      |
+| Rocky Linux 8.6| 4.18.0-372.9.1.el8.x86_64   | Containerd v1.5.10         | v1.24.3      |
+| Rocky Linux 8.6| 4.18.0-372.9.1.el8.x86_64   | cri-o://1.24.2             | v1.24.3      |
 
 
 ## Components
@@ -205,8 +188,12 @@ spec:
 ### Profile Controller
 The Profile Controller holds values for specific SST settings which are then applied to cores at host level by the Kubernetes Power Manager as requested. Power Profiles are advertised as extended resources and can be requested via the PodSpec. The Config controller creates the requested high-performance PowerProfiles depending on which are requested in the PowerConfig created by the user.
 
+There are two kinds of PowerProfiles:
 
-PowerProfile can be one of three values:
+- Base PowerProfiles
+- Extended PowerProfiles
+
+A Base PowerProfile can be one of three values:
 - performance
 - balance-performance
 - balance-power
@@ -228,6 +215,7 @@ spec:
    max: 3700
    min: 3300
    epp: "performance"
+   governor: "performance"
 ````
 
 The Shared PowerProfile must be created by the user and does not require a Base PowerProfile. This allows the user to have a Shared PowerProfile per Node in their cluster, giving more room for different configurations. The Power controller determines that a PowerProfile is being designated as ‘Shared’ through the use of the ‘power’ EPP value.
@@ -243,6 +231,7 @@ spec:
    max: 1500
    min: 1000
    epp: "power"
+   governor: "powersave"
 ````
 ````yaml
 apiVersion: "power.intel.com/v1"
@@ -254,6 +243,7 @@ spec:
    max: 2000
    min: 1500
    epp: "power"
+   governor: "powersave"
 ````
 
 
@@ -339,8 +329,6 @@ The driver that is used for C-States is the intel_idle driver. Everything associ
 
 C-States have to be confirmed if they are actually active on the system. If a user requests any C-States, they need to check on the system if they are activated and if they are not, reject the PowerConfig. The C-States are found in /sys/devices/system/cpu/cpuN/cpuidle/stateN/.
 
-[C-States - Power Management - Technology Overview](https://builders.intel.com/docs/networkbuilders/power-management-technology-overview-technology-guide.pdf)
-
 #### C-State Ranges
 ````
 C0      Operating State
@@ -373,6 +361,65 @@ spec:
       C1: true
       C6: false
 ````
+### Time Of Day
+The TIme Of Day feature allows users to change the configuration of their system at a given time each day. This is done through the use of a `timeofdaycronjob`
+which schedules itself for a specific time each day and gives users the option of tuning cstates, the shared pool profile as well as the profile used by individual pods.
+#### Example
+````yaml
+apiVersion: power.intel.com/v1
+kind: TimeOfDay
+metadata:
+  name: timeofday-sample
+  namespace: intel-power
+spec:
+  timeZone: "Eire"
+  schedule:
+    - time: "14:24"
+      # this sets the profile for the shared pool
+      powerProfile: balance-performance
+      # this transitions a pod with the given name from one profile to another
+      pods: 
+        four-pod-v2: 
+          performance: balance-performance
+        four-pod-v4:
+          balance-power: performance
+      # this field simply takes a cstate spec
+      cState: 
+        sharedPoolCStates:
+          C1: false
+          C6: true
+    - time: "14:26"
+      powerProfile: performance
+      cState: 
+        sharedPoolCStates:
+          C1: true
+          C6: false
+    - time: "14:28"
+      powerProfile: balance-power
+  reservedCPUs: [0,1]
+````
+When applying changes to the shared pool, users must specify the CPUs reserved by the system. Additionally the user must specify a timezone to schedule with.
+The configuration for Time Of Day consists of a schedule list. Each item in the list consists of a time and any desired changes to the system.
+The `profile` field specifies the desired profile for the shared pool.
+The `pods` field is used to change the profile associated with a specific pod.
+It should be noted that when changing the profile of an individual pod, the user must specify its name and current profile at the time as well as the desired new profile.
+Finally the `cState` field accepts the spec values from a CStates configuration and applies them to the system.
+
+### intel-pstate CPU Performance Scaling Driver
+  The intel_pstate is a part of the CPU performance scaling subsystem in the Linux kernel (CPUFreq).
+
+  In some situations it is desirable or even necessary to run the program as fast as possible and then there is no reason to use any P-states different from the highest one (i.e. the highest-performance frequency/voltage configuration available). In some other cases, however, it may not be necessary to execute instructions so quickly and maintaining the highest available CPU capacity for a relatively long time without utilizing it entirely may be regarded as wasteful. It also may not be physically possible to maintain maximum CPU capacity for too long for thermal or power supply capacity reasons or similar. To cover those cases, there are hardware interfaces allowing CPUs to be switched between different frequency/voltage configurations or (in the ACPI terminology) to be put into different P-states.
+
+  #### P-State Governors 
+  In order to offer dynamic frequency scaling, the cpufreq core must be able to tell these drivers of a "target frequency". So these specific drivers will be transformed to offer a "->target/target_index/fast_switch()" call instead of the "->setpolicy()" call. For set_policy drivers, all stays the same, though.
+
+  The cpufreq governors decide what frequency within the CPUfreq policy should be used.  The P-state driver utilizes the "powersave" and "performance" governors.
+  ##### Powersave Governor
+  The CPUfreq governor "powersave" sets the CPU statically to the lowest frequency within the borders of scaling_min_freq and scaling_max_freq.
+
+  ##### Performance Governor
+  The CPUfreq governor "performance" sets the CPU statically to the highest frequency within the borders of scaling_min_freq and scaling_max_freq.
+
 
 ### In the Kubernetes API
 - PowerConfig CRD
@@ -416,15 +463,13 @@ make
 ````
 
 - Docker Images
-
-Images will be pulled from the Intel's public Docker Hub at:
- - intel/power-operator:TAG 
- - intel/power-node-agent:TAG
-
-Or the docker images can be built locally by using the command:
+Docker images can either be built locally by using the command:
 ````
 make images
 ````
+or available by pulling from the Intel's public Docker Hub at:
+ - intel/power-operator:TAG 
+ - intel/power-node-agent:TAG
 
 ### Running the Kubernetes Power Manager 
 - **Applying the manager**
@@ -454,8 +499,8 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        imagePullPolicy: Always
-        image: intel/power-operator:v2.0.0
+        imagePullPolicy: Never
+        image: power-operator:v2.1.0
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -519,6 +564,7 @@ spec:
   min: 1000
   # A shared PowerProfile must have the EPP value of 'power'
   epp: "power"
+  governor: "powersave"
 ````
 Apply the Profile:
 `kubectl apply -f examples/example-shared-profile.yaml`
@@ -591,6 +637,7 @@ At this point, if only the ‘performance’ PowerProfile was selected in the Po
 `kubectl get powerprofiles -n intel-power`
 ````
 NAME                          AGE
+performance                   59m
 performance-<NODE_NAME>       58m
 shared-<NODE_NAME>            60m
 ````
@@ -607,7 +654,4 @@ shared-<NODE_NAME>-workload            61m
 `kubectl delete pods <name>`
 
 When a Pod that was associated with a PowerWorkload is deleted, the cores associated with that Pod will be removed from the corresponding PowerWorkload. If that Pod was the last requesting the use of that PowerWorkload, the workload will be deleted. All cores removed from the PowerWorkload are added back to the Shared PowerWorkload for that Node and returned to the lower frequencies.
-<<<<<<< HEAD
 
-=======
->>>>>>> external/master

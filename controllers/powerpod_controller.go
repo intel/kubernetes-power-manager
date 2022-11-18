@@ -78,7 +78,6 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 		logger.Error(err, "error while trying to retrieve Pod")
 		return ctrl.Result{}, err
 	}
-
 	// First thing to check is if this pod is on the same node as the node agent that intercepted it
 	// The NODE_NAME environment variable is passed in via the downwards API in the PodSpec
 	nodeName := os.Getenv("NODE_NAME")
@@ -90,7 +89,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 
-	if !pod.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !pod.ObjectMeta.DeletionTimestamp.IsZero() || pod.Status.Phase == corev1.PodSucceeded {
 		// If the Pod's DeletionTimestamp is not zero then the Pod has been deleted
 
 		powerPodState := r.State.GetPodFromState(pod.GetName())
@@ -157,7 +156,6 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 		logger.Info("No containers are requesting exclusive CPUs")
 		return ctrl.Result{}, nil
 	}
-
 	podUID := pod.GetUID()
 	if podUID == "" {
 		logger.Info("No pod UID found")
@@ -170,13 +168,11 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 		logger.Error(err, "Error retrieving Power Profiles from cluster")
 		return ctrl.Result{}, nil
 	}
-
 	powerProfilesFromContainers, powerContainers, err := r.getPowerProfileRequestsFromContainers(containersRequestingExclusiveCPUs, powerProfileCRs.Items, pod)
 	if err != nil {
 		logger.Error(err, "Error retrieving Power Profile from Pod requests")
 		return ctrl.Result{}, err
 	}
-
 	for profile, cores := range powerProfilesFromContainers {
 		workloadName := fmt.Sprintf("%s-%s", profile, nodeName)
 		workload := &powerv1.PowerWorkload{}
@@ -209,8 +205,15 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 			workloadContainer.Pod = pod.Name
 			containerList = append(containerList, workloadContainer)
 		}
+		for i, newContainer := range containerList {
+			for _, oldContainer := range workload.Spec.Node.Containers {
+				if newContainer.Name == oldContainer.Name && reflect.DeepEqual(newContainer.ExclusiveCPUs, oldContainer.ExclusiveCPUs) {
+					containerList[i] = containerList[len(containerList)-1]
+					containerList = containerList[:len(containerList)-1]
+				}
+			}
+		}
 		workload.Spec.Node.Containers = append(workload.Spec.Node.Containers, containerList...)
-
 		err = r.Client.Update(context.TODO(), workload)
 		if err != nil {
 			logger.Error(err, "error while trying to update PowerWorkload")
@@ -375,8 +378,10 @@ func getContainerProfileFromRequests(container corev1.Container) (string, error)
 }
 
 func getContainersRequestingExclusiveCPUs(pod *corev1.Pod) []corev1.Container {
+
 	containersRequestingExclusiveCPUs := make([]corev1.Container, 0)
-	for _, container := range append(pod.Spec.InitContainers, pod.Spec.Containers...) {
+	containerList := append(pod.Spec.InitContainers, pod.Spec.Containers...)
+	for _, container := range containerList {
 		if exclusiveCPUs(pod, &container) {
 			containersRequestingExclusiveCPUs = append(containersRequestingExclusiveCPUs, container)
 		}
