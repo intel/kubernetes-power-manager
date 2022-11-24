@@ -44,7 +44,7 @@ func createProfileReconcilerObject(objs []runtime.Object) (*PowerProfileReconcil
 	}
 
 	// Create a fake client to mock API calls.
-	cl := fake.NewFakeClient(objs...)
+	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).WithScheme(s).Build()
 
 	// Create a ReconcileNode object with the scheme and fake client.
 	r := &PowerProfileReconciler{cl, ctrl.Log.WithName("testing"), s, nil}
@@ -159,7 +159,7 @@ func TestPowerProfileCreationNonPowerProfileNotInLibrary(t *testing.T) {
 
 		nodemk := new(nodeMock)
 		nodemk.On("GetProfile", mock.Anything).Return(nil)
-		nodemk.On("AddProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockProfile{}, nil)
+		nodemk.On("AddProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockProfile{}, nil)
 		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
@@ -308,7 +308,7 @@ func TestPowerProfileCreationNonPowerProfileInLibrary(t *testing.T) {
 
 		nodemk := new(nodeMock)
 		nodemk.On("GetProfile", mock.Anything).Return(&mockProfile{})
-		nodemk.On("UpdateProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		nodemk.On("UpdateProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
@@ -551,7 +551,7 @@ func TestSharedPowerProfileCreationProfileDoesNotExistInLibrary(t *testing.T) {
 
 		nodemk := new(nodeMock)
 		nodemk.On("GetProfile", mock.Anything).Return(nil)
-		nodemk.On("AddProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockProfile{}, nil)
+		nodemk.On("AddProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockProfile{}, nil)
 		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
@@ -947,8 +947,8 @@ func TestSharedProfileReturningNil(t *testing.T) {
 		nodemk := new(nodeMock)
 		nodemk.On("GetProfile", "shared1").Return(nil)
 		nodemk.On("GetProfile", "shared2").Return(&mockProfile{})
-		nodemk.On("AddProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockProfile{}, errors.NewServiceUnavailable("test error"))
-		nodemk.On("NewProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		nodemk.On("AddProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockProfile{}, errors.NewServiceUnavailable("test error"))
+		nodemk.On("NewProfile", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{

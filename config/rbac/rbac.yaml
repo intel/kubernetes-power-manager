@@ -73,8 +73,8 @@ kind: ClusterRole
 metadata:
   name: node-agent-cluster-resources
 rules:
-- apiGroups: ["", "power.intel.com"]
-  resources: ["nodes", "nodes/status", "pods", "pods/status", "powerprofiles", "powerprofiles/status", "powerworkloads", "powerworkloads/status", "powernodes", "powernodes/status", "cstates", "cstates/status"]
+- apiGroups: ["", "batch", "power.intel.com"]
+  resources: ["nodes", "nodes/status", "pods", "pods/status", "cronjobs", "cronjobs/status", "powerprofiles", "powerprofiles/status", "powerworkloads", "powerworkloads/status", "powernodes", "powernodes/status", "cstates", "cstates/status", "timeofdays", "timeofdays/status", "timeofdaycronjobs", "timeofdaycronjobs/status"]
   verbs: ["*"]
 
 ---

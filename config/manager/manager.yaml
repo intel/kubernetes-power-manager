@@ -22,7 +22,7 @@ spec:
         args:
         - --enable-leader-election
         imagePullPolicy: IfNotPresent
-        image: intel/power-operator:v2.0.0
+        image: intel/power-operator:v2.1.0
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

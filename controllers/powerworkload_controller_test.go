@@ -3,8 +3,9 @@ package controllers
 import (
 	"context"
 	"errors"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -15,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
-	//"github.com/intel/power-optimization-library/pkg/power"
 	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,6 +59,7 @@ func TestPowerWorkload(t *testing.T) {
 			},
 		},
 	}
+
 	nodeObj := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   testNode,
@@ -112,9 +113,11 @@ func TestPowerWorkload(t *testing.T) {
 	sharedPowerWorkloadName = "something"
 	nodemk = new(nodeMock)
 	profilemk := new(mockProfile)
-
+	poolmk := new(mockPool)
 	nodemk.On("GetProfile", "performance-TestNode").Return(profilemk)
 	nodemk.On("RemoveExclusivePool", workloadName).Return(errors.New("err"))
+	poolmk.On("GetPowerProfile").Return(profilemk)
+	//nodemk.On("GetSharedPool").Return(poolmk)
 
 	r.PowerLibrary = nodemk
 	_, err = r.Reconcile(context.TODO(), req)
@@ -130,10 +133,11 @@ func TestPowerWorkload(t *testing.T) {
 	assert.NoError(t, err, "Failed to create reconciler object")
 
 	nodemk = new(nodeMock)
+
+	nodemk.On("GetSharedPool").Return(poolmk)
 	nodemk.On("GetProfile", "shared").Return(profilemk)
 	nodemk.On("RemoveSharedPool").Return(nil)
 	nodemk.On("RemoveExclusivePool", "shared").Return(errors.New("err"))
-
 	r.PowerLibrary = nodemk
 	req.Name = "shared"
 

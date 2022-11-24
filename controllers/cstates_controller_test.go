@@ -39,7 +39,7 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: powerv1.CStatesSpec{
-			SharePoolCStates:      map[string]bool{"C1": true},
+			SharedPoolCStates:     power.CStates{"C1": true},
 			ExclusivePoolCStates:  map[string]map[string]bool{"performance": {"C2": false}},
 			IndividualCoreCStates: map[string]map[string]bool{"3": {"C3": true}},
 		},
@@ -86,9 +86,9 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 	powerLibMock.On("ApplyCStatesToSharedPool", mock.Anything).Return(nil)
 
 	// set values
-	powerLibMock.On("ApplyCStatesToCore", 3, map[string]bool{"C3": true}).Return(nil)
-	powerLibMock.On("ApplyCStateToPool", "performance", map[string]bool{"C2": false}).Return(nil)
-	powerLibMock.On("ApplyCStatesToSharedPool", map[string]bool{"C1": true}).Return(nil)
+	powerLibMock.On("ApplyCStatesToCore", 3, power.CStates{"C3": true}).Return(nil)
+	powerLibMock.On("ApplyCStateToPool", "performance", power.CStates{"C2": false}).Return(nil)
+	powerLibMock.On("ApplyCStatesToSharedPool", power.CStates{"C1": true}).Return(nil)
 
 	r := buildCStatesReconcilerObject(objs, powerLibMock)
 
@@ -127,4 +127,104 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 	r = buildCStatesReconcilerObject(objs, powerLibMock)
 	_, err = r.Reconcile(ctx, req)
 	assert.True(t, errors.IsBadRequest(err))
+}
+
+func FuzzCStatesReconciler(f *testing.F) {
+	powerLibMock := new(nodeMock)
+	// verifying cStates exists
+	powerLibMock.On("IsCStateValid", mock.Anything).Return(true)
+
+	// reset calls
+	powerLibMock.On("ApplyCStatesToCore", mock.Anything, mock.Anything).Return(nil)
+	powerLibMock.On("ApplyCStateToPool", mock.Anything, mock.Anything).Return(nil)
+	powerLibMock.On("ApplyCStatesToSharedPool", mock.Anything).Return(nil)
+
+	// set values
+	powerLibMock.On("ApplyCStatesToCore", mock.Anything, mock.Anything).Return(nil)
+	powerLibMock.On("ApplyCStateToPool", mock.Anything, mock.Anything).Return(nil)
+	powerLibMock.On("ApplyCStatesToSharedPool", mock.Anything).Return(nil)
+
+	f.Fuzz(func(t *testing.T, nodeName string, namespace string, extraNode bool, node2name string, runningOnTargetNode bool) {
+
+		r, req := setupFuzz(t, nodeName, namespace, extraNode, node2name, runningOnTargetNode, powerLibMock)
+		if r == nil {
+			// if r is nil setupFuzz must have panicked, so we ignore it
+			return
+		}
+		r.Reconcile(context.Background(), req)
+	})
+}
+
+func setupFuzz(t *testing.T, nodeName string, namespace string, extraNode bool, node2name string, runningOnTargetNode bool, powerLib power.Node) (*CStatesReconciler, reconcile.Request) {
+	defer func(t *testing.T) {
+		if r := recover(); r != nil {
+			// if setup fails we ignore it
+			t.Log("recon creation Panic")
+		}
+	}(t)
+
+	req := reconcile.Request{NamespacedName: client.ObjectKey{
+		Namespace: namespace,
+		Name:      nodeName,
+	}}
+
+	if len(nodeName) == 0 || len(node2name) == 0 {
+		return nil, req
+	}
+
+	t.Logf("nodename %v- len %d", nodeName, len(nodeName))
+	t.Logf("nodename2 %v- len %d", node2name, len(nodeName))
+	if runningOnTargetNode {
+		t.Setenv("NODE_NAME", nodeName)
+	} else {
+		t.Setenv("NODE_NAME", node2name)
+	}
+
+	cStatesObj := &powerv1.CStates{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      nodeName,
+			Namespace: namespace,
+		},
+		Spec: powerv1.CStatesSpec{
+			SharedPoolCStates:     map[string]bool{"C1": true},
+			ExclusivePoolCStates:  map[string]map[string]bool{"performance": {"C2": false}},
+			IndividualCoreCStates: map[string]map[string]bool{"3": {"C3": true}},
+		},
+	}
+	powerNodesObj := &powerv1.PowerNodeList{
+		Items: []powerv1.PowerNode{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName,
+				},
+			},
+		},
+	}
+
+	if extraNode {
+		powerNodesObj.Items = append(powerNodesObj.Items, powerv1.PowerNode{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: node2name,
+			},
+		})
+	}
+
+	powerProfilesObj := &powerv1.PowerProfileList{
+		Items: []powerv1.PowerProfile{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "shared",
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "performance",
+				},
+			},
+		},
+	}
+
+	objs := []runtime.Object{cStatesObj, powerProfilesObj, powerNodesObj}
+
+	return buildCStatesReconcilerObject(objs, powerLib), req
 }

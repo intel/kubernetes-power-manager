@@ -38,10 +38,15 @@ spec:
               epp:
                 description: The priority value associated with this Power Profile
                 type: string
+              governor:
+                default: powersave
+                description: Governor to be used
+                type: string
               max:
-                description: ProfileNodes []ProfileNode `json:"profileNodes,omitempty"`
+                description: Max frequency cores can run at
                 type: integer
               min:
+                description: Min frequency cores can run at
                 type: integer
               name:
                 description: The name of the PowerProfile

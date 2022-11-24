@@ -175,21 +175,20 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 
 		profileFromLibrary := r.PowerLibrary.GetProfile(profile.Spec.Name)
 		if profileFromLibrary == nil {
-			_, err = r.PowerLibrary.AddProfile(profile.Spec.Name, profile.Spec.Min, profile.Spec.Max, profile.Spec.Epp)
+			_, err = r.PowerLibrary.AddProfile(profile.Spec.Name, profile.Spec.Min, profile.Spec.Max, profile.Spec.Governor, profile.Spec.Epp)
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("error adding Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
 				return ctrl.Result{}, err
 			}
 		} else {
-			updatedSharedProfile := power.NewProfile(profile.Spec.Name, profile.Spec.Min, profile.Spec.Max, profile.Spec.Epp)
-			if updatedSharedProfile != nil {
+			if updatedSharedProfile, err := power.NewProfile(profile.Spec.Name, profile.Spec.Min, profile.Spec.Max, profile.Spec.Governor, profile.Spec.Epp); err != nil {
 				err = r.PowerLibrary.GetSharedPool().SetPowerProfile(updatedSharedProfile)
 				if err != nil {
 					logger.Error(err, fmt.Sprintf("error setting shared Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
 					return ctrl.Result{}, err
 				}
 			} else {
-				incorrectProfile := errors.NewServiceUnavailable("Incorrect values for new Shared Power Profile")
+				incorrectProfile := errors.NewServiceUnavailable(fmt.Sprintf("Incorrect values for new Shared Power Profile: %v", err))
 				logger.Error(incorrectProfile, fmt.Sprintf("error updating Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
 				return ctrl.Result{}, incorrectProfile
 			}
@@ -216,7 +215,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 
 		profileFromLibrary := r.PowerLibrary.GetProfile(profile.Spec.Name)
 		if profileFromLibrary == nil {
-			_, err = r.PowerLibrary.AddProfile(profile.Spec.Name, profileMinFreq, profileMaxFreq, profile.Spec.Epp)
+			_, err = r.PowerLibrary.AddProfile(profile.Spec.Name, profileMinFreq, profileMaxFreq, profile.Spec.Governor, profile.Spec.Epp)
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("error adding Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
 				return ctrl.Result{}, err
@@ -229,7 +228,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 				return ctrl.Result{}, err
 			}
 		} else {
-			err = r.PowerLibrary.UpdateProfile(profile.Spec.Name, profileMinFreq, profileMaxFreq, profile.Spec.Epp)
+			err = r.PowerLibrary.UpdateProfile(profile.Spec.Name, profileMinFreq, profileMaxFreq, profile.Spec.Governor, profile.Spec.Epp)
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("error updating Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
 				return ctrl.Result{}, err

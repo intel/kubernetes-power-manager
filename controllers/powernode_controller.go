@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -148,7 +149,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 
 func prettifyCoreList(cores []int) string {
 	prettified := ""
-
+	sort.Ints(cores)
 	for i := 0; i < len(cores); i++ {
 		start := i
 		end := i

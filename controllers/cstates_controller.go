@@ -78,7 +78,6 @@ func (r *CStatesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err != nil {
 		logger.Error(err, "CStates validation failed")
 	}
-
 	// prepare system by resetting configuration
 	err = r.restoreCStates(ctx)
 	if err != nil {
@@ -126,7 +125,7 @@ func (r *CStatesReconciler) checkIfNodeExists(ctx context.Context, cStatesCRD *p
 func (r *CStatesReconciler) verifyCSStatesExist(cStatesSpec *powerv1.CStatesSpec) error {
 	nodeName := os.Getenv("NODE_NAME")
 	results := new(multierror.Error)
-	for cStateName := range cStatesSpec.SharePoolCStates {
+	for cStateName := range cStatesSpec.SharedPoolCStates {
 		exists := r.PowerLibrary.IsCStateValid(cStateName)
 		if !exists {
 			results = multierror.Append(results, fmt.Errorf("C-State %s is invalid on node %s", cStateName, nodeName))
@@ -163,15 +162,13 @@ func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec) error
 		err = r.PowerLibrary.ApplyCStatesToCore(coreID, cStatesMap)
 		results = multierror.Append(results, err)
 	}
-
 	// exclusive pools
 	for poolName, cStatesMap := range cStatesSpec.ExclusivePoolCStates {
 		err := r.PowerLibrary.ApplyCStateToPool(poolName, cStatesMap)
 		results = multierror.Append(results, err)
 	}
-
-	// shared pool
-	err := r.PowerLibrary.ApplyCStatesToSharedPool(cStatesSpec.SharePoolCStates)
+	//shared pool
+	err := r.PowerLibrary.ApplyCStatesToSharedPool(cStatesSpec.SharedPoolCStates)
 	results = multierror.Append(results, err)
 
 	return results.ErrorOrNil()
@@ -180,7 +177,6 @@ func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec) error
 func (r *CStatesReconciler) restoreCStates(ctx context.Context) error {
 	var results *multierror.Error
 	results = multierror.Append(results, r.PowerLibrary.ApplyCStatesToSharedPool(nil))
-
 	profiles := &powerv1.PowerProfileList{}
 	err := r.Client.List(ctx, profiles)
 	if err != nil {
@@ -188,7 +184,7 @@ func (r *CStatesReconciler) restoreCStates(ctx context.Context) error {
 	}
 
 	for _, item := range profiles.Items {
-		if item.Spec.Name == "shared" {
+		if item.Spec.Epp == "power" {
 			continue
 		}
 		results = multierror.Append(results, r.PowerLibrary.ApplyCStateToPool(item.Spec.Name, nil))

@@ -20,41 +20,29 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-/*
-type ProfileNode struct {
-	NodeName string `json:"name,omitempty"`
-
-	Max int `json:"max,omitempty"`
-
-	Min int `json:"min,omitempty"`
-}
-*/
-
 // PowerProfileSpec defines the desired state of PowerProfile
 type PowerProfileSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// The name of the PowerProfile
 	Name string `json:"name"`
 
-	//ProfileNodes []ProfileNode `json:"profileNodes,omitempty"`
+	// Max frequency cores can run at
 	Max int `json:"max,omitempty"`
 
+	// Min frequency cores can run at
 	Min int `json:"min,omitempty"`
 
 	// The priority value associated with this Power Profile
 	Epp string `json:"epp"`
+
+	// Governor to be used
+	//+kubebuilder:default=powersave
+	Governor string `json:"governor,omitempty"`
 }
 
 // PowerProfileStatus defines the observed state of PowerProfile
 type PowerProfileStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// The ID given to the power profile
 	ID int `json:"id"`
 }

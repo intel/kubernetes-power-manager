@@ -1,0 +1,103 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: timeofdays.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: TimeOfDay
+    listKind: TimeOfDayList
+    plural: timeofdays
+    singular: timeofday
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: TimeOfDay is the Schema for the timeofdays API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TimeOfDaySpec defines the desired state of TimeOfDay
+            properties:
+              reservedCPUs:
+                items:
+                  type: integer
+                type: array
+              schedule:
+                description: Schedule for adjusting performance mode
+                items:
+                  properties:
+                    cState:
+                      description: CStatesSpec defines the desired state of CStates
+                      properties:
+                        exclusivePoolCStates:
+                          additionalProperties:
+                            additionalProperties:
+                              type: boolean
+                            type: object
+                          type: object
+                        individualCoreCStates:
+                          additionalProperties:
+                            additionalProperties:
+                              type: boolean
+                            type: object
+                          type: object
+                        sharedPoolCStates:
+                          additionalProperties:
+                            type: boolean
+                          type: object
+                      type: object
+                    pods:
+                      additionalProperties:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      type: object
+                    powerProfile:
+                      type: string
+                    time:
+                      type: string
+                  required:
+                  - time
+                  type: object
+                type: array
+              timeZone:
+                description: Time Zone to use for scheduling
+                type: string
+            required:
+            - schedule
+            type: object
+          status:
+            description: TimeOfDayStatus defines the observed state of TimeOfDay
+            properties:
+              lastSchedule:
+                description: The time of the last update
+                type: string
+              nextSchedule:
+                description: The time of the next update
+                type: string
+              powerProfile:
+                description: PowerProfile associated with Time of Day
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -23,43 +23,63 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// CStatesSpec defines the desired state of CStates
-type CStatesSpec struct {
+type ScheduleInfo struct {
+	Time string `json:"time"`
+
+	PowerProfile *string                       `json:"powerProfile,omitempty"`
+	Pods         *map[string]map[string]string `json:"pods,omitempty"`
+	CState       *CStatesSpec                  `json:"cState,omitempty"`
+}
+
+// TimeOfDaySpec defines the desired state of TimeOfDay
+type TimeOfDaySpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	SharedPoolCStates     map[string]bool            `json:"sharedPoolCStates,omitempty"`
-	ExclusivePoolCStates  map[string]map[string]bool `json:"exclusivePoolCStates,omitempty"`
-	IndividualCoreCStates map[string]map[string]bool `json:"individualCoreCStates,omitempty"`
+	// Time Zone to use for scheduling
+	TimeZone string `json:"timeZone,omitempty"`
+
+	// Schedule for adjusting performance mode
+	Schedule     []ScheduleInfo `json:"schedule"`
+	ReservedCPUs *[]int         `json:"reservedCPUs,omitempty"`
 }
 
-// CStatesStatus defines the observed state of CStates
-type CStatesStatus struct {
+// TimeOfDayStatus defines the observed state of TimeOfDay
+type TimeOfDayStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// The time of the last update
+	LastSchedule string `json:"lastSchedule,omitempty"`
+
+	// The time of the next update
+	NextSchedule string `json:"nextSchedule,omitempty"`
+
+	// PowerProfile associated with Time of Day
+	PowerProfile string `json:"powerProfile,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// CStates is the Schema for the cstates API
-type CStates struct {
+// TimeOfDay is the Schema for the timeofdays API
+type TimeOfDay struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   CStatesSpec   `json:"spec,omitempty"`
-	Status CStatesStatus `json:"status,omitempty"`
+	Spec   TimeOfDaySpec   `json:"spec,omitempty"`
+	Status TimeOfDayStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// CStatesList contains a list of CStates
-type CStatesList struct {
+// TimeOfDayList contains a list of TimeOfDay
+type TimeOfDayList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []CStates `json:"items"`
+	Items           []TimeOfDay `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&CStates{}, &CStatesList{})
+	SchemeBuilder.Register(&TimeOfDay{}, &TimeOfDayList{})
 }

@@ -65,10 +65,10 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 			// If the profile still exists in the Power Library, then only the Power Workloads was deleted
 			// and we need to remove it from the Power Library here. If the profile doesn't exist, then
 			// the Power Library will already have deleted it for us
-
 			profileFromLibrary := r.PowerLibrary.GetProfile(req.NamespacedName.Name)
 
 			if req.NamespacedName.Name == sharedPowerWorkloadName {
+				profileFromLibrary = r.PowerLibrary.GetSharedPool().GetPowerProfile()
 				sharedPowerWorkloadName = ""
 				if profileFromLibrary != nil {
 					err = r.PowerLibrary.RemoveSharedPool()
