@@ -79,19 +79,22 @@ Note: NFD is recommended, but not essential. Node labels can also be applied man
 The Kubernetes Power Manager has been tested in different environments.  
 The below table are results that have been tested and confirmed to function as desired:
 
-|   OS           |   Kernel                    |  Container runtime         | Kubernetes   |
-| :------------: |  :------------------------: |  :-----------------------: |  :--------:  |
-| CentOS 7       | 3.10.0-1160.71.1.el7.x86_64 | Containerd v1.6.6          | v1.24.3      |
-| CentOS 7       | 3.10.0-1160.71.1.el7.x86_64 | Containerd v1.6.6          | v1.24.2      |
-| CentOS 7       | 3.10.0-1160.71.1.el7.x86_64 | Containerd v1.6.6          | v1.23.5      |
-| CentOS 7       | 5.4.0-113.el7.elrepo.x86    | Containerd v1.6.6          | v1.24.3      |
-| Ubuntu 22.04.1 | 5.15.0-43-generic           | Containerd v1.6.6          | v1.24.2      |
-| Ubuntu 22.04.1 | 5.15.0-43-generic           | Containerd v1.5.11         | v1.24.2      |
-| Ubuntu 22.04.1 | 5.15.0-43-generic           | Containerd v1.6.6-k3s1     | v1.24.3+k3s1 |
-| Ubuntu 22.04.1 | 5.4.0-122-generic           | Docker 20.10.12            | v1.23.3      |
-| Rocky Linux 8.6| 4.18.0-372.9.1.el8.x86_64   | Containerd v1.6.7          | v1.24.3      |
-| Rocky Linux 8.6| 4.18.0-372.9.1.el8.x86_64   | Containerd v1.5.10         | v1.24.3      |
-| Rocky Linux 8.6| 4.18.0-372.9.1.el8.x86_64   | cri-o://1.24.2             | v1.24.3      |
+|   OS           |   Kernel                        |  Container runtime         | Kubernetes   |
+| :------------: |  :------------------------:     |  :-----------------------: |  :--------:  |
+| Rocky 8.6      | 6.0.9-1.el8.elrepo.x86_64       | Docker 20.10.18            | v1.25.0      |
+| Ubuntu 20.04   | 5.15.0-50-generic               | Containerd 1.6.9           | 1.25.4       |
+| Ubuntu 20.04   | 5.15.0-50-generic               | cri-o 1.23.4               | 1.25.4       |
+| Ubuntu 20.04   | 5.15.0-50-generic               | Docker 22.6.0              | 1.25.4       |
+| Ubuntu 20.04   | 5.15.0-50-generic               | Containerd 1.6.9           | 1.24.3       |
+| Ubuntu 20.04   | 5.15.0-50-generic               | Containerd 1.6.9           | 1.24.2       |
+| Ubuntu 20.04   | 5.15.0-50-generic               | Containerd 1.6.9           | 1.23.3       |
+| Ubuntu 20.04   | 5.15.0-50-generic               | Docker 20.10.12            | 1.23.3       |
+| Ubuntu 20.04   | 5.10.0-132-generic              | Docker 22.6.0              | 1.25.4       | 
+| Ubuntu 20.04   | 5.4.0-132-generic               | Containerd 1.6.9           | 1.25.4       |
+| Ubuntu 20.04   | 5.4.0-122-generic               | Containerd 1.6.9           | 1.24.4       |
+| CentOS 8       | 4.18.0-372.19.1.el8_6.x86_64    |Containerd 1.6.9            | 1.24.3       |
+| Rocky 8.6      | 4.18.0-372.19.1.el8_6.x86_64    | Docker  20.10.18           | 1.25.0       |
+
 
 
 ## Components
