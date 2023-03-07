@@ -38,7 +38,7 @@ type PowerNodeReconciler struct {
 	client.Client
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
-	PowerLibrary power.Node
+	PowerLibrary power.Host
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powernodes,verbs=get;list;watch;create;update;patch;delete
@@ -79,12 +79,16 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	for _, profile := range powerProfiles.Items {
-		profileFromLibrary := r.PowerLibrary.GetProfile(profile.Spec.Name)
+		pool := r.PowerLibrary.GetExclusivePool(profile.Spec.Name)
+		if pool == nil {
+			continue
+		}
+		profileFromLibrary := pool.GetPowerProfile()
 		if profileFromLibrary == nil {
 			continue
 		}
 
-		profileString := fmt.Sprintf("%s: %v || %v || %s", profileFromLibrary.GetName(), profileFromLibrary.GetMaxFreq(), profileFromLibrary.GetMinFreq(), profileFromLibrary.GetEpp())
+		profileString := fmt.Sprintf("%s: %v || %v || %s", profileFromLibrary.Name(), profileFromLibrary.MaxFreq(), profileFromLibrary.MinFreq(), profileFromLibrary.Epp())
 		powerProfileStrings = append(powerProfileStrings, profileString)
 	}
 
@@ -108,9 +112,9 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 			continue
 		}
 
-		cores := prettifyCoreList(poolFromLibrary.GetCoreIds())
+		cores := prettifyCoreList(poolFromLibrary.Cores().IDs())
 		profile := poolFromLibrary.GetPowerProfile()
-		workloadString := fmt.Sprintf("%s: %s || %s", poolFromLibrary.GetName(), profile.GetName(), cores)
+		workloadString := fmt.Sprintf("%s: %s || %s", poolFromLibrary.Name(), profile.Name(), cores)
 		powerWorkloadStrings = append(powerWorkloadStrings, workloadString)
 
 		for _, container := range workload.Spec.Node.Containers {
@@ -124,14 +128,14 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	powerNode.Spec.PowerContainers = powerContainers
 
 	sharedPool := r.PowerLibrary.GetSharedPool()
-	sharedCores := sharedPool.GetCoreIds()
+	sharedCores := sharedPool.Cores().IDs()
 	sharedProfile := sharedPool.GetPowerProfile()
-	reservedSystemCpus := r.PowerLibrary.GetReservedCoreIds()
+	reservedSystemCpus := r.PowerLibrary.GetReservedPool().Cores().IDs()
 
 	powerNode.Spec.PowerContainers = powerContainers
 	if len(sharedCores) > 0 {
 		cores := prettifyCoreList(sharedCores)
-		powerNode.Spec.SharedPool = fmt.Sprintf("%s || %v || %v || %s", sharedProfile.GetName(), sharedProfile.GetMaxFreq(), sharedProfile.GetMinFreq(), cores)
+		powerNode.Spec.SharedPool = fmt.Sprintf("%s || %v || %v || %s", sharedProfile.Name(), sharedProfile.MaxFreq(), sharedProfile.MinFreq(), cores)
 	}
 
 	if len(reservedSystemCpus) > 0 {
@@ -147,9 +151,9 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 }
 
-func prettifyCoreList(cores []int) string {
+func prettifyCoreList(cores []uint) string {
 	prettified := ""
-	sort.Ints(cores)
+	sort.Slice(cores, func(i, j int) bool { return cores[i] < cores[j] })
 	for i := 0; i < len(cores); i++ {
 		start := i
 		end := i

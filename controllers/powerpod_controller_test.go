@@ -81,7 +81,7 @@ func TestPodCreation(t *testing.T) {
 		podResources   []*podresourcesapi.PodResources
 		clientObjs     []runtime.Object
 		workloadName   string
-		expectedCpuIds []int
+		expectedCpuIds []uint
 	}{
 		{
 			testCase: "Test Case 1 - Single container",
@@ -124,7 +124,7 @@ func TestPodCreation(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{},
+							CpuIds:     []uint{},
 						},
 					},
 				},
@@ -168,7 +168,7 @@ func TestPodCreation(t *testing.T) {
 				},
 			},
 			workloadName:   "performance-TestNode",
-			expectedCpuIds: []int{1, 2, 3},
+			expectedCpuIds: []uint{1, 2, 3},
 		},
 		{
 			testCase: "Test Case 2 - Two containers",
@@ -215,7 +215,7 @@ func TestPodCreation(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{},
+							CpuIds:     []uint{},
 						},
 					},
 				},
@@ -278,7 +278,7 @@ func TestPodCreation(t *testing.T) {
 				},
 			},
 			workloadName:   "performance-TestNode",
-			expectedCpuIds: []int{1, 2, 3, 4, 5, 6},
+			expectedCpuIds: []uint{1, 2, 3, 4, 5, 6},
 		},
 	}
 
@@ -317,7 +317,9 @@ func TestPodCreation(t *testing.T) {
 		}
 
 		sortedCpuIds := workload.Spec.Node.CpuIds
-		sort.Ints(sortedCpuIds)
+		sort.Slice(workload.Spec.Node.CpuIds, func(i, j int) bool {
+			return workload.Spec.Node.CpuIds[i] < workload.Spec.Node.CpuIds[j]
+		})
 		if !reflect.DeepEqual(tc.expectedCpuIds, sortedCpuIds) {
 			t.Errorf("%s Failed - expected Cpu Ids to be %v, got %v", tc.testCase, tc.expectedCpuIds, sortedCpuIds)
 		}
@@ -374,7 +376,7 @@ func TestPodControllerErrors(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{},
+							CpuIds:     []uint{},
 						},
 					},
 				},
@@ -462,7 +464,7 @@ func TestPodControllerErrors(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{},
+							CpuIds:     []uint{},
 						},
 					},
 				},
@@ -549,7 +551,7 @@ func TestPodControllerErrors(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{},
+							CpuIds:     []uint{},
 						},
 					},
 				},
@@ -563,7 +565,7 @@ func TestPodControllerErrors(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{},
+							CpuIds:     []uint{},
 						},
 					},
 				},
@@ -671,7 +673,7 @@ func TestPodControllerErrors(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{},
+							CpuIds:     []uint{},
 						},
 					},
 				},
@@ -759,7 +761,7 @@ func TestPodControllerErrors(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{},
+							CpuIds:     []uint{},
 						},
 					},
 				},
@@ -899,7 +901,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{},
+							CpuIds:     []uint{},
 						},
 					},
 				},
@@ -987,7 +989,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{},
+							CpuIds:     []uint{},
 						},
 					},
 				},
@@ -1075,7 +1077,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{},
+							CpuIds:     []uint{},
 						},
 					},
 				},
@@ -1216,7 +1218,7 @@ func TestPodDeletion(t *testing.T) {
 						Node: powerv1.WorkloadNode{
 							Name:       "TestNode",
 							Containers: []powerv1.Container{},
-							CpuIds:     []int{1, 2, 3},
+							CpuIds:     []uint{1, 2, 3},
 						},
 					},
 				},
@@ -1241,7 +1243,7 @@ func TestPodDeletion(t *testing.T) {
 						Name:          "test-container-1",
 						Id:            "abcdefg",
 						Pod:           "test-pod-1",
-						ExclusiveCPUs: []int{1, 2, 3},
+						ExclusiveCPUs: []uint{1, 2, 3},
 						PowerProfile:  "performance",
 						Workload:      "performance-TestNode",
 					},

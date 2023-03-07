@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	sysRuntime "runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -40,7 +39,7 @@ type CStatesReconciler struct {
 	client.Client
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
-	PowerLibrary power.Node
+	PowerLibrary power.Host
 }
 
 //+kubebuilder:rbac:groups=power.intel.com,resources=cstates,verbs=get;list;watch;create;update;patch;delete
@@ -125,26 +124,20 @@ func (r *CStatesReconciler) checkIfNodeExists(ctx context.Context, cStatesCRD *p
 func (r *CStatesReconciler) verifyCSStatesExist(cStatesSpec *powerv1.CStatesSpec) error {
 	nodeName := os.Getenv("NODE_NAME")
 	results := new(multierror.Error)
-	for cStateName := range cStatesSpec.SharedPoolCStates {
-		exists := r.PowerLibrary.IsCStateValid(cStateName)
-		if !exists {
-			results = multierror.Append(results, fmt.Errorf("C-State %s is invalid on node %s", cStateName, nodeName))
-		}
+	err := r.PowerLibrary.ValidateCStates(cStatesSpec.SharedPoolCStates)
+	if err != nil {
+		results = multierror.Append(results, fmt.Errorf("C-States reconcile on node %s: %w", nodeName, err))
 	}
 	for _, poolCStateList := range cStatesSpec.ExclusivePoolCStates {
-		for cStateName := range poolCStateList {
-			exists := r.PowerLibrary.IsCStateValid(cStateName)
-			if !exists {
-				results = multierror.Append(results, fmt.Errorf("C-State %s is invalid on node %s", cStateName, nodeName))
-			}
+		err := r.PowerLibrary.ValidateCStates(poolCStateList)
+		if err != nil {
+			results = multierror.Append(results, fmt.Errorf("C-States reconcile on node %s: %w", nodeName, err))
 		}
 	}
 	for _, coreCStates := range cStatesSpec.IndividualCoreCStates {
-		for cStateName := range coreCStates {
-			exists := r.PowerLibrary.IsCStateValid(cStateName)
-			if !exists {
-				results = multierror.Append(results, fmt.Errorf("C-State %s is invalid on node %s", cStateName, nodeName))
-			}
+		err := r.PowerLibrary.ValidateCStates(coreCStates)
+		if err != nil {
+			results = multierror.Append(results, fmt.Errorf("C-States reconcile on node %s: %w", nodeName, err))
 		}
 	}
 	return results.ErrorOrNil()
@@ -159,16 +152,23 @@ func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec) error
 			results = multierror.Append(results, fmt.Errorf("%s must be an integer core ID", core))
 			continue
 		}
-		err = r.PowerLibrary.ApplyCStatesToCore(coreID, cStatesMap)
-		results = multierror.Append(results, err)
+		coreObj := r.PowerLibrary.GetAllCores().ByID(uint(coreID))
+		if coreObj == nil {
+			return fmt.Errorf("invalid core id ID: %d", coreID)
+		}
+		results = multierror.Append(results, coreObj.SetCStates(cStatesMap))
 	}
 	// exclusive pools
 	for poolName, cStatesMap := range cStatesSpec.ExclusivePoolCStates {
-		err := r.PowerLibrary.ApplyCStateToPool(poolName, cStatesMap)
+		pool := r.PowerLibrary.GetExclusivePool(poolName)
+		if pool == nil {
+			return fmt.Errorf("pool with name %s doesn not exist", poolName)
+		}
+		err := pool.SetCStates(cStatesMap)
 		results = multierror.Append(results, err)
 	}
 	//shared pool
-	err := r.PowerLibrary.ApplyCStatesToSharedPool(cStatesSpec.SharedPoolCStates)
+	err := r.PowerLibrary.GetSharedPool().SetCStates(cStatesSpec.SharedPoolCStates)
 	results = multierror.Append(results, err)
 
 	return results.ErrorOrNil()
@@ -176,23 +176,14 @@ func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec) error
 
 func (r *CStatesReconciler) restoreCStates(ctx context.Context) error {
 	var results *multierror.Error
-	results = multierror.Append(results, r.PowerLibrary.ApplyCStatesToSharedPool(nil))
-	profiles := &powerv1.PowerProfileList{}
-	err := r.Client.List(ctx, profiles)
-	if err != nil {
-		return err
+	results = multierror.Append(results, r.PowerLibrary.GetSharedPool().SetCStates(nil))
+
+	for _, pool := range *r.PowerLibrary.GetAllExclusivePools() {
+		results = multierror.Append(results, pool.SetCStates(nil))
 	}
 
-	for _, item := range profiles.Items {
-		if item.Spec.Epp == "power" {
-			continue
-		}
-		results = multierror.Append(results, r.PowerLibrary.ApplyCStateToPool(item.Spec.Name, nil))
+	for _, core := range *r.PowerLibrary.GetAllCores() {
+		results = multierror.Append(results, core.SetCStates(nil))
 	}
-
-	for i := 0; i < sysRuntime.NumCPU(); i++ {
-		results = multierror.Append(results, r.PowerLibrary.ApplyCStatesToCore(i, nil))
-	}
-
 	return results.ErrorOrNil()
 }

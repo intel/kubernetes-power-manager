@@ -38,7 +38,7 @@ type TimeOfDayCronJobReconciler struct {
 	client.Client
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
-	PowerLibrary power.Node
+	PowerLibrary power.Host
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=timeofdaycronjobs,verbs=get;list;watch;create;update;patch;delete

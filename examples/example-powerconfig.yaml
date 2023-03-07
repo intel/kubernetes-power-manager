@@ -9,7 +9,6 @@ spec:
     feature.node.kubernetes.io/power-node: "true"
   powerProfiles:
   # Add wanted PowerProfiles here; valid entries are as follows:
-  # performance
-  # balance-performance
-  # balance-power
+  - balance-performance
+  - balance-power
   - "performance"

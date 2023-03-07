@@ -20,7 +20,6 @@ import (
 	"flag"
 	"os"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -72,31 +71,20 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-
+	power.SetLogger(ctrl.Log.WithName("powerLibrary"))
 	powerLibrary, err := power.CreateInstance(nodeName)
-	for _, feature := range powerLibrary.GetFeaturesInfo() {
-		setupLog.Info(
-			"feature status",
-			"feature", feature.Name,
-			"driver", feature.Driver,
-			"available", power.IsFeatureSupported(feature.Feature))
+	if powerLibrary == nil {
+		setupLog.Error(err, "unable to create Power Library instance")
+		os.Exit(1)
 	}
 
-	if err != nil {
-		if !power.IsFeatureSupported(power.PStatesFeature) {
-			pStatesNotSupported := errors.NewServiceUnavailable("P-States not supported")
-			setupLog.Error(pStatesNotSupported, "error setting up P-States in Power Library")
-		}
-
-		if !power.IsFeatureSupported(power.CStatesFeature) {
-			cStateNotSupported := errors.NewServiceUnavailable("C-States not supported")
-			setupLog.Error(cStateNotSupported, "error setting up C-States in Power Library")
-		}
-
-		if powerLibrary == nil {
-			setupLog.Error(err, "unable to create Power Library instance")
-			os.Exit(1)
-		}
+	for id, feature := range powerLibrary.GetFeaturesInfo() {
+		setupLog.Info(
+			"feature status",
+			"feature", feature.Name(),
+			"driver", feature.Driver(),
+			"error", feature.FeatureError(),
+			"available", power.IsFeatureSupported(id))
 	}
 
 	powerNodeState, err := podstate.NewState()

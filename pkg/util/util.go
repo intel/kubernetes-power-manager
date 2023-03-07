@@ -79,7 +79,7 @@ func parseEndpoint(endpoint string) (string, string, error) {
 	}
 }
 
-func CPUInCPUList(cpu int, cpuList []int) bool {
+func CPUInCPUList(cpu uint, cpuList []uint) bool {
 	for _, cpuListID := range cpuList {
 		if cpuListID == cpu {
 			return true

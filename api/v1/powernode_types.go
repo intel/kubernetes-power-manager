@@ -66,7 +66,7 @@ type PowerNodeStatus struct {
 
 type PowerNodeCPUState struct {
 	// The CPUs that are currently part of the Shared pool on a Node
-	SharedPool []int `json:"sharedPool,omitempty"`
+	SharedPool []uint `json:"sharedPool,omitempty"`
 
 	// Pods that are requesting CPUs in the Guaranteed QoS class
 	GuaranteedPods []GuaranteedPod `json:"guaranteedPods,omitempty"`
@@ -97,7 +97,7 @@ type Container struct {
 	Pod string `json:"pod,omitempty"`
 
 	// The exclusive CPUs given to this Container
-	ExclusiveCPUs []int `json:"exclusiveCpus,omitempty"`
+	ExclusiveCPUs []uint `json:"exclusiveCpus,omitempty"`
 
 	// The PowerProfile that the Container is utilizing
 	PowerProfile string `json:"powerProfile,omitempty"`
@@ -111,7 +111,7 @@ type WorkloadInfo struct {
 	Name string `json:"name,omitempty"`
 
 	// The CPUs that are utilizing the PowerWorkload
-	CpuIds []int `json:"cores,omitempty"`
+	CpuIds []uint `json:"cores,omitempty"`
 }
 
 type SharedPoolInfo struct {
@@ -119,7 +119,7 @@ type SharedPoolInfo struct {
 	Profile string `json:"name,omitempty"`
 
 	// The cores that are a part of this Shared Pool
-	CpuIds []int `json:"sharedPoolCpuIds,omitempty"`
+	CpuIds []uint `json:"sharedPoolCpuIds,omitempty"`
 }
 
 // +kubebuilder:object:root=true

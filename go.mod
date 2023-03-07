@@ -4,8 +4,9 @@ go 1.19
 
 require (
 	github.com/go-logr/logr v1.2.3
-	github.com/intel/power-optimization-library v1.1.1
-	github.com/stretchr/testify v1.8.0
+	github.com/hashicorp/go-multierror v1.1.1
+	github.com/intel/power-optimization-library v1.1.0
+	github.com/stretchr/testify v1.8.1
 	google.golang.org/grpc v1.50.1
 	k8s.io/api v0.25.4
 	k8s.io/apimachinery v0.25.4
@@ -37,7 +38,6 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
-	github.com/hashicorp/go-multierror v1.1.1
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -53,7 +53,7 @@ require (
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/objx v0.4.0 // indirect
+	github.com/stretchr/objx v0.5.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect

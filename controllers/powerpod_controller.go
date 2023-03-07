@@ -19,17 +19,16 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"os"
-	"reflect"
-	"sort"
-	"strconv"
-	"strings"
-
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"os"
+	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sort"
+	"strconv"
+	"strings"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -100,7 +99,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 			return ctrl.Result{}, err
 		}
 
-		workloadToCPUsRemoved := make(map[string][]int)
+		workloadToCPUsRemoved := make(map[string][]uint)
 
 		for _, container := range powerPodState.Containers {
 			workload := container.Workload
@@ -195,7 +194,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 		// the entry for the node
 
 		workload.Spec.Node.CpuIds = appendIfUnique(workload.Spec.Node.CpuIds, cores)
-		sort.Ints(workload.Spec.Node.CpuIds)
+		sort.Slice(workload.Spec.Node.CpuIds, func(i, j int) bool { return workload.Spec.Node.CpuIds[i] < workload.Spec.Node.CpuIds[j] })
 
 		containerList := make([]powerv1.Container, 0)
 		for i, container := range powerContainers {
@@ -238,17 +237,17 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []corev1.Container, profileCRs []powerv1.PowerProfile, pod *corev1.Pod) (map[string][]int, []powerv1.Container, error) {
+func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []corev1.Container, profileCRs []powerv1.PowerProfile, pod *corev1.Pod) (map[string][]uint, []powerv1.Container, error) {
 
 	_ = context.Background()
 
-	profiles := make(map[string][]int)
+	profiles := make(map[string][]uint)
 	powerContainers := make([]powerv1.Container, 0)
 
 	for _, container := range containers {
 		profile, err := getContainerProfileFromRequests(container)
 		if err != nil {
-			return map[string][]int{}, []powerv1.Container{}, err
+			return map[string][]uint{}, []powerv1.Container{}, err
 		}
 
 		// If there was no Profile requested in this container we can move onto the next one
@@ -258,13 +257,13 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 
 		if !profileExists(profile, profileCRs) {
 			powerProfileNotFoundError := errors.NewServiceUnavailable(fmt.Sprintf("Power Profile '%s' not found", profile))
-			return map[string][]int{}, []powerv1.Container{}, powerProfileNotFoundError
+			return map[string][]uint{}, []powerv1.Container{}, powerProfileNotFoundError
 		}
 
 		containerID := getContainerID(pod, container.Name)
 		coreIDs, err := r.PodResourcesClient.GetContainerCPUs(pod.GetName(), container.Name)
 		if err != nil {
-			return map[string][]int{}, []powerv1.Container{}, err
+			return map[string][]uint{}, []powerv1.Container{}, err
 		}
 		cleanCoreList := getCleanCoreList(coreIDs)
 
@@ -286,7 +285,7 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 		// For now we can only have one Power Profile per Pod
 
 		moreThanOneProfileError := errors.NewServiceUnavailable("Cannot have more than one Power Profile per Pod")
-		return map[string][]int{}, []powerv1.Container{}, moreThanOneProfileError
+		return map[string][]uint{}, []powerv1.Container{}, moreThanOneProfileError
 	}
 
 	return profiles, powerContainers, nil
@@ -302,8 +301,8 @@ func profileExists(profile string, powerProfiles []powerv1.PowerProfile) bool {
 	return false
 }
 
-func getNewWorkloadCPUList(cpuList []int, nodeCpuIds []int) []int {
-	updatedWorkloadCPUList := make([]int, 0)
+func getNewWorkloadCPUList(cpuList []uint, nodeCpuIds []uint) []uint {
+	updatedWorkloadCPUList := make([]uint, 0)
 
 	for _, cpu := range nodeCpuIds {
 		if !util.CPUInCPUList(cpu, cpuList) {
@@ -314,7 +313,7 @@ func getNewWorkloadCPUList(cpuList []int, nodeCpuIds []int) []int {
 	return updatedWorkloadCPUList
 }
 
-func appendIfUnique(cpuList []int, cpus []int) []int {
+func appendIfUnique(cpuList []uint, cpus []uint) []uint {
 	for _, cpu := range cpus {
 		if !util.CPUInCPUList(cpu, cpuList) {
 			cpuList = append(cpuList, cpu)
@@ -409,31 +408,31 @@ func getContainerID(pod *corev1.Pod, containerName string) string {
 	return ""
 }
 
-func getCleanCoreList(coreIDs string) []int {
-	cleanCores := make([]int, 0)
+func getCleanCoreList(coreIDs string) []uint {
+	cleanCores := make([]uint, 0)
 	commaSeparated := strings.Split(coreIDs, ",")
 	for _, splitCore := range commaSeparated {
 		hyphenSeparated := strings.Split(splitCore, "-")
 		if len(hyphenSeparated) == 1 {
-			intCore, err := strconv.Atoi(hyphenSeparated[0])
+			intCore, err := strconv.ParseUint(hyphenSeparated[0], 10, 32)
 			if err != nil {
 				fmt.Printf("error getting core list: %v", err)
-				return []int{}
+				return []uint{}
 			}
-			cleanCores = append(cleanCores, intCore)
+			cleanCores = append(cleanCores, uint(intCore))
 		} else {
 			startCore, err := strconv.Atoi(hyphenSeparated[0])
 			if err != nil {
 				fmt.Printf("error getting core list: %v", err)
-				return []int{}
+				return []uint{}
 			}
 			endCore, err := strconv.Atoi(hyphenSeparated[len(hyphenSeparated)-1])
 			if err != nil {
 				fmt.Printf("error getting core list: %v", err)
-				return []int{}
+				return []uint{}
 			}
 			for i := startCore; i <= endCore; i++ {
-				cleanCores = append(cleanCores, i)
+				cleanCores = append(cleanCores, uint(i))
 			}
 		}
 	}

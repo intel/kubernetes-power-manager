@@ -78,7 +78,7 @@ func TestPowerNodeNotCorrectNode(t *testing.T) {
 			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
 		}
 
-		nodemk := new(nodeMock)
+		nodemk := new(hostMock)
 		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{

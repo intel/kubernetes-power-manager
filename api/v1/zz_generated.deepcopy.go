@@ -161,7 +161,7 @@ func (in *Container) DeepCopyInto(out *Container) {
 	*out = *in
 	if in.ExclusiveCPUs != nil {
 		in, out := &in.ExclusiveCPUs, &out.ExclusiveCPUs
-		*out = make([]int, len(*in))
+		*out = make([]uint, len(*in))
 		copy(*out, *in)
 	}
 }
@@ -336,7 +336,7 @@ func (in *PowerNodeCPUState) DeepCopyInto(out *PowerNodeCPUState) {
 	*out = *in
 	if in.SharedPool != nil {
 		in, out := &in.SharedPool, &out.SharedPool
-		*out = make([]int, len(*in))
+		*out = make([]uint, len(*in))
 		copy(*out, *in)
 	}
 	if in.GuaranteedPods != nil {
@@ -680,7 +680,7 @@ func (in *PowerWorkloadSpec) DeepCopyInto(out *PowerWorkloadSpec) {
 	*out = *in
 	if in.ReservedCPUs != nil {
 		in, out := &in.ReservedCPUs, &out.ReservedCPUs
-		*out = make([]int, len(*in))
+		*out = make([]uint, len(*in))
 		copy(*out, *in)
 	}
 	if in.PowerNodeSelector != nil {
@@ -769,7 +769,7 @@ func (in *SharedPoolInfo) DeepCopyInto(out *SharedPoolInfo) {
 	*out = *in
 	if in.CpuIds != nil {
 		in, out := &in.CpuIds, &out.CpuIds
-		*out = make([]int, len(*in))
+		*out = make([]uint, len(*in))
 		copy(*out, *in)
 	}
 }
@@ -906,10 +906,10 @@ func (in *TimeOfDayCronJobSpec) DeepCopyInto(out *TimeOfDayCronJobSpec) {
 	}
 	if in.ReservedCPUs != nil {
 		in, out := &in.ReservedCPUs, &out.ReservedCPUs
-		*out = new([]int)
+		*out = new([]uint)
 		if **in != nil {
 			in, out := *in, *out
-			*out = make([]int, len(*in))
+			*out = make([]uint, len(*in))
 			copy(*out, *in)
 		}
 	}
@@ -1002,10 +1002,10 @@ func (in *TimeOfDaySpec) DeepCopyInto(out *TimeOfDaySpec) {
 	}
 	if in.ReservedCPUs != nil {
 		in, out := &in.ReservedCPUs, &out.ReservedCPUs
-		*out = new([]int)
+		*out = new([]uint)
 		if **in != nil {
 			in, out := *in, *out
-			*out = make([]int, len(*in))
+			*out = make([]uint, len(*in))
 			copy(*out, *in)
 		}
 	}
@@ -1041,7 +1041,7 @@ func (in *WorkloadInfo) DeepCopyInto(out *WorkloadInfo) {
 	*out = *in
 	if in.CpuIds != nil {
 		in, out := &in.CpuIds, &out.CpuIds
-		*out = make([]int, len(*in))
+		*out = make([]uint, len(*in))
 		copy(*out, *in)
 	}
 }
@@ -1068,7 +1068,7 @@ func (in *WorkloadNode) DeepCopyInto(out *WorkloadNode) {
 	}
 	if in.CpuIds != nil {
 		in, out := &in.CpuIds, &out.CpuIds
-		*out = make([]int, len(*in))
+		*out = make([]uint, len(*in))
 		copy(*out, *in)
 	}
 }

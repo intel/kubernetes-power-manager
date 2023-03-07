@@ -16,7 +16,7 @@ spec:
       serviceAccountName: intel-power-node-agent
       containers:
         - image: intel/power-node-agent:v2.1.0
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
           name: power-node-agent

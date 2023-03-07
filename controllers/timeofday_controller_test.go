@@ -55,7 +55,7 @@ func TestTimeOfDay(t *testing.T) {
 		},
 		Spec: powerv1.TimeOfDaySpec{
 			TimeZone:     "Eire",
-			ReservedCPUs: &[]int{0, 1},
+			ReservedCPUs: &[]uint{0, 1},
 			Schedule: []powerv1.ScheduleInfo{
 				{
 					Time: "09:00",
@@ -87,7 +87,7 @@ func TestTimeOfDay(t *testing.T) {
 			Namespace: "intel-power",
 		},
 	}
-	nodemk := new(nodeMock)
+	nodemk := new(hostMock)
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
 	nodemk.AssertExpectations(t)
@@ -110,7 +110,7 @@ func TestTimeOfDay(t *testing.T) {
 		},
 		Spec: powerv1.TimeOfDaySpec{
 			TimeZone:     "Eire",
-			ReservedCPUs: &[]int{0, 1},
+			ReservedCPUs: &[]uint{0, 1},
 			Schedule: []powerv1.ScheduleInfo{
 				{
 					Time: "25:61",
@@ -154,7 +154,7 @@ func FuzzTimeOfDayController(f *testing.F) {
 			},
 			Spec: powerv1.TimeOfDaySpec{
 				TimeZone:     timeZone,
-				ReservedCPUs: &[]int{0, 1},
+				ReservedCPUs: &[]uint{0, 1},
 				Schedule: []powerv1.ScheduleInfo{
 					{
 						Time: time1,

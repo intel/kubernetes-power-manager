@@ -1,213 +1,159 @@
 package controllers
 
 import (
-	"github.com/stretchr/testify/mock"
-	"io"
-
 	"github.com/intel/power-optimization-library/pkg/power"
+	"github.com/stretchr/testify/mock"
 )
 
-type ioReader interface {
-	io.Reader
-}
-
-type nodeMock struct {
+type hostMock struct {
 	mock.Mock
 }
 
-func (m *nodeMock) AvailableCStates() ([]string, error) {
-	args := m.Called()
-	return args.Get(0).([]string), args.Error(1)
+func (m *hostMock) ValidateCStates(states power.CStates) error {
+	return m.Called(states).Error(0)
 }
 
-func (m *nodeMock) ApplyCStatesToSharedPool(cStates power.CStates) error {
-	return m.Called(cStates).Error(0)
+func (m *hostMock) AvailableCStates() []string {
+	return m.Called().Get(0).([]string)
 }
 
-func (m *nodeMock) ApplyCStateToPool(poolName string, cStates power.CStates) error {
-	return m.Called(poolName, cStates).Error(0)
+func (m *hostMock) GetAllExclusivePools() *power.PoolList {
+	return m.Called().Get(0).(*power.PoolList)
 }
 
-func (m *nodeMock) ApplyCStatesToCore(coreID int, cStates power.CStates) error {
-	args := m.Called(coreID, cStates)
-	return args.Error(0)
-}
-
-func (m *nodeMock) IsCStateValid(cStates ...string) bool {
-	args := m.Called(cStates)
-	return args.Bool(0)
-}
-
-func (m *nodeMock) SetNodeName(name string) {
+func (m *hostMock) SetName(name string) {
 	m.Called(name)
-	return
 }
 
-func (m *nodeMock) GetName() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *nodeMock) GetReservedCoreIds() []int {
-	args := m.Called()
-	return args.Get(0).([]int)
-}
-
-func (m *nodeMock) AddProfile(name string, minFreq int, maxFreq int, governor string, epp string) (power.Profile, error) {
-	args := m.Called(name, minFreq, maxFreq, governor, epp)
-	return args.Get(0).(power.Profile), args.Error(1)
-}
-
-func (m *nodeMock) UpdateProfile(name string, minFreq int, maxFreq int, governor string, epp string) error {
-	args := m.Called(name, minFreq, maxFreq, governor, epp)
-	return args.Error(0)
-}
-
-func (m *nodeMock) DeleteProfile(name string) error {
-	args := m.Called(name)
-	return args.Error(0)
-}
-
-func (m *nodeMock) AddCoresToExclusivePool(name string, cores []int) error {
-	args := m.Called(name, cores)
-	return args.Error(0)
-}
-
-func (m *nodeMock) AddExclusivePool(name string, profile power.Profile) (power.Pool, error) {
-	args := m.Called(name, profile)
-	return args.Get(0).(power.Pool), args.Error(1)
-}
-
-func (m *nodeMock) RemoveExclusivePool(name string) error {
-	args := m.Called(name)
-	return args.Error(0)
-}
-
-func (m *nodeMock) AddSharedPool(coreIds []int, profile power.Profile) error {
-	args := m.Called(coreIds, profile)
-	return args.Error(0)
-}
-
-func (m *nodeMock) RemoveCoresFromExclusivePool(poolName string, cores []int) error {
-	args := m.Called(poolName, cores)
-	return args.Error(0)
-}
-
-func (m *nodeMock) RemoveSharedPool() error {
-	args := m.Called()
-	return args.Error(0)
-}
-
-func (m *nodeMock) GetProfile(name string) power.Profile {
-	args := m.Called(name)
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(power.Profile)
-}
-
-func (m *nodeMock) GetExclusivePool(name string) power.Pool {
-	args := m.Called(name)
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(power.Pool)
-}
-
-func (m *nodeMock) GetSharedPool() power.Pool {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(power.Pool)
-}
-
-func (m *nodeMock) GetFeaturesInfo() power.FeatureSet {
-	return m.Called().Get(0).(power.FeatureSet)
-}
-
-type mockProfile struct {
-	mock.Mock
-}
-
-func (m *mockProfile) GetName() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *mockProfile) GetEpp() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *mockProfile) GetMaxFreq() int {
-	args := m.Called()
-	return args.Int(0)
-}
-
-func (m *mockProfile) GetMinFreq() int {
-	args := m.Called()
-	return args.Int(0)
-}
-
-func (m *mockProfile) GetGovernor() string {
+func (m *hostMock) GetName() string {
 	return m.Called().String(0)
 }
 
-type mockPool struct {
-	power.Pool
+func (m *hostMock) GetFeaturesInfo() power.FeatureSet {
+	ret := m.Called().Get(0)
+	if ret == nil {
+		return nil
+	} else {
+		return ret.(power.FeatureSet)
+	}
+}
+
+func (m *hostMock) GetReservedPool() power.Pool {
+	ret := m.Called().Get(0)
+	if ret == nil {
+		return nil
+	} else {
+		return ret.(power.Pool)
+	}
+}
+
+func (m *hostMock) GetSharedPool() power.Pool {
+	ret := m.Called().Get(0)
+	if ret == nil {
+		return nil
+	} else {
+		return ret.(power.Pool)
+	}
+}
+func (m *hostMock) AddExclusivePool(poolName string) (power.Pool, error) {
+	args := m.Called(poolName)
+	retPool := args.Get(0)
+	if retPool == nil {
+		return nil, args.Error(1)
+	} else {
+		return retPool.(power.Pool), args.Error(1)
+	}
+}
+
+func (m *hostMock) GetExclusivePool(poolName string) power.Pool {
+	ret := m.Called(poolName).Get(0)
+	if ret == nil {
+		return nil
+	} else {
+		return ret.(power.Pool)
+	}
+}
+
+func (m *hostMock) GetAllCores() *power.CoreList {
+	ret := m.Called().Get(0)
+	if ret == nil {
+		return nil
+	} else {
+		return ret.(*power.CoreList)
+	}
+}
+
+type poolMock struct {
 	mock.Mock
+	power.Pool
 }
 
-func (m *mockPool) GetName() string {
-	args := m.Called()
-	return args.String(0)
+func (m *poolMock) SetCStates(states power.CStates) error {
+	return m.Called(states).Error(0)
 }
 
-func (m *mockPool) addCore(core power.Core) error {
-	args := m.Called(core)
-	return args.Error(0)
+func (m *poolMock) Clear() error {
+	return m.Called().Error(0)
 }
 
-func (m *mockPool) removeCore(core power.Core) error {
-	args := m.Called(core)
-	return args.Error(0)
+func (m *poolMock) Name() string {
+	return m.Called().String(0)
 }
 
-func (m *mockPool) removeCoreByID(coreID int) (power.Core, error) {
-	args := m.Called(coreID)
-	return args.Get(0).(power.Core), args.Error(1)
+func (m *poolMock) Cores() *power.CoreList {
+	args := m.Called().Get(0)
+	if args == nil {
+		return nil
+	}
+	return args.(*power.CoreList)
 }
 
-func (m *mockPool) SetPowerProfile(profile power.Profile) error {
+func (m *poolMock) SetCores(cores power.CoreList) error {
+	return m.Called(cores).Error(0)
+}
+
+func (m *poolMock) SetCoreIDs(coreIDs []uint) error {
+	return m.Called(coreIDs).Error(0)
+}
+
+func (m *poolMock) Remove() error {
+	return m.Called().Error(0)
+}
+
+func (m *poolMock) MoveCoresIDs(coreIDs []uint) error {
+	return m.Called(coreIDs).Error(0)
+}
+
+func (m *poolMock) MoveCores(cores power.CoreList) error {
+	return m.Called(cores).Error(0)
+}
+
+func (m *poolMock) SetPowerProfile(profile power.Profile) error {
 	args := m.Called(profile)
 	return args.Error(0)
 }
 
-func (m *mockPool) GetPowerProfile() power.Profile {
-	args := m.Called()
-	if args.Get(0) == nil {
+func (m *poolMock) GetPowerProfile() power.Profile {
+	args := m.Called().Get(0)
+	if args == nil {
 		return nil
 	}
-	return args.Get(0).(power.Profile)
+	return args.(power.Profile)
 }
 
-func (m *mockPool) GetCores() []power.Core {
+type coreMock struct {
+	mock.Mock
+	power.Core
+}
+
+func (m *coreMock) SetCStates(cStates power.CStates) error {
+	return m.Called(cStates).Error(0)
+}
+
+func (m *coreMock) GetID() uint {
 	args := m.Called()
-	return args.Get(0).([]power.Core)
+	return args.Get(0).(uint)
 }
-
-func (m *mockPool) GetCoreIds() []int {
-	args := m.Called()
-	return args.Get(0).([]int)
-}
-
-func (m *mockPool) SetCStates(states power.CStates) error {
-	args := m.Called(states)
-	return args.Error(0)
-}
-
-func (m *mockPool) getCStates() power.CStates {
-	args := m.Called()
-	return args.Get(0).(power.CStates)
+func (m *coreMock) SetPool(pool power.Pool) error {
+	return m.Called(pool).Error(0)
 }

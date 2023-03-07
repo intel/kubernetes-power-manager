@@ -70,7 +70,7 @@ func TestTODCronProfile(t *testing.T) {
 				Node: powerv1.WorkloadNode{
 					Name:       "TestNode",
 					Containers: []powerv1.Container{},
-					CpuIds:     []int{},
+					CpuIds:     []uint{},
 				},
 			},
 		},
@@ -95,7 +95,7 @@ func TestTODCronProfile(t *testing.T) {
 				Node: powerv1.WorkloadNode{
 					Name:       "TestNode",
 					Containers: []powerv1.Container{},
-					CpuIds:     []int{},
+					CpuIds:     []uint{},
 				},
 				PowerProfile: "shared-TestNode",
 			},
@@ -120,7 +120,7 @@ func TestTODCronProfile(t *testing.T) {
 				Node: powerv1.WorkloadNode{
 					Name:       "TestNode",
 					Containers: []powerv1.Container{},
-					CpuIds:     []int{},
+					CpuIds:     []uint{},
 				},
 			},
 		},
@@ -150,7 +150,7 @@ func TestTODCronProfile(t *testing.T) {
 			Namespace: "intel-power",
 		},
 	}
-	nodemk := new(nodeMock)
+	nodemk := new(hostMock)
 	r, err := createTODCronReconcilerObject(clientObjs)
 	assert.NoError(t, err)
 	//ensure workload has correct initial profile
@@ -214,7 +214,7 @@ func TestTODCronPods(t *testing.T) {
 				Node: powerv1.WorkloadNode{
 					Name:       "TestNode",
 					Containers: []powerv1.Container{},
-					CpuIds:     []int{},
+					CpuIds:     []uint{},
 				},
 			},
 		},
@@ -239,7 +239,7 @@ func TestTODCronPods(t *testing.T) {
 				Node: powerv1.WorkloadNode{
 					Name:       "TestNode",
 					Containers: []powerv1.Container{},
-					CpuIds:     []int{},
+					CpuIds:     []uint{},
 				},
 				PowerProfile: "shared-TestNode",
 			},
@@ -266,10 +266,10 @@ func TestTODCronPods(t *testing.T) {
 					Containers: []powerv1.Container{
 						{
 							Pod:           "test-pod-1",
-							ExclusiveCPUs: []int{3, 4},
+							ExclusiveCPUs: []uint{3, 4},
 						},
 					},
-					CpuIds: []int{3, 4},
+					CpuIds: []uint{3, 4},
 				},
 				PowerProfile: "performance",
 			},
@@ -344,7 +344,7 @@ func TestTODCronPods(t *testing.T) {
 			Namespace: IntelPowerNamespace,
 		},
 	}
-	nodemk := new(nodeMock)
+	nodemk := new(hostMock)
 	r, err := createTODCronReconcilerObject(clientObjs)
 	assert.NoError(t, err)
 	//ensure pod is in correct workload
@@ -431,7 +431,7 @@ func TestTODCstates(t *testing.T) {
 			Namespace: IntelPowerNamespace,
 		},
 	}
-	nodemk := new(nodeMock)
+	nodemk := new(hostMock)
 	r, err := createTODCronReconcilerObject(clientObjs)
 	//ensure no initial cstate object exists
 	cstate := powerv1.CStates{}

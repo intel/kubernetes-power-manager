@@ -75,7 +75,7 @@ type PowerProfileReconciler struct {
 	client.Client
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
-	PowerLibrary power.Node
+	PowerLibrary power.Host
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerprofiles,verbs=get;list;watch;create;update;patch;delete
@@ -97,11 +97,14 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			// First we need to remove the profile from the Power library, this will in turn remove the pool,
 			// which will also move the cores back to the Shared/Default pool and reconfigure them. We then
 			// need to remove the Power Workload from the cluster, which in this case will do nothing as
-			// everything has already been removed. Finally we remove the Extended Resources from the Node
-
-			err = r.PowerLibrary.DeleteProfile(profile.Spec.Name)
+			// everything has already been removed. Finally, we remove the Extended Resources from the Node
+			pool := r.PowerLibrary.GetExclusivePool(req.Name)
+			if pool == nil {
+				logger.Info("Attempted to remove non existing pool", "pool", req.Name)
+			}
+			err = pool.Remove()
 			if err != nil {
-				logger.Error(err, "error deleting Power Profile from state")
+				logger.Error(err, "error deleting Power Profile From Library")
 				return ctrl.Result{}, err
 			}
 
@@ -173,28 +176,10 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			return ctrl.Result{}, nil
 		}
 
-		profileFromLibrary := r.PowerLibrary.GetProfile(profile.Spec.Name)
-		if profileFromLibrary == nil {
-			_, err = r.PowerLibrary.AddProfile(profile.Spec.Name, profile.Spec.Min, profile.Spec.Max, profile.Spec.Governor, profile.Spec.Epp)
-			if err != nil {
-				logger.Error(err, fmt.Sprintf("error adding Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
-				return ctrl.Result{}, err
-			}
-		} else {
-			if updatedSharedProfile, err := power.NewProfile(profile.Spec.Name, profile.Spec.Min, profile.Spec.Max, profile.Spec.Governor, profile.Spec.Epp); err != nil {
-				err = r.PowerLibrary.GetSharedPool().SetPowerProfile(updatedSharedProfile)
-				if err != nil {
-					logger.Error(err, fmt.Sprintf("error setting shared Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
-					return ctrl.Result{}, err
-				}
-			} else {
-				incorrectProfile := errors.NewServiceUnavailable(fmt.Sprintf("Incorrect values for new Shared Power Profile: %v", err))
-				logger.Error(incorrectProfile, fmt.Sprintf("error updating Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
-				return ctrl.Result{}, incorrectProfile
-			}
-		}
+		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, profile.Spec.Min, profile.Spec.Max, profile.Spec.Governor, profile.Spec.Epp)
+		err = r.PowerLibrary.GetSharedPool().SetPowerProfile(powerProfile)
 
-		logger.Info(fmt.Sprintf("Shared Power Profile successfully created: Name - %s Max - %d Min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp))
+		logger.Info(fmt.Sprintf("Shared Power Profile successfully created: name - %s max - %d Min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp))
 		return ctrl.Result{}, nil
 	} else {
 		var profileMaxFreq int
@@ -208,16 +193,22 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		}
 
 		if profileMaxFreq == 0 || profileMinFreq == 0 {
-			cannotBeZeroError := errors.NewServiceUnavailable("Max or Min frequency cannot be zero")
+			cannotBeZeroError := errors.NewServiceUnavailable("max or Min frequency cannot be zero")
 			logger.Error(cannotBeZeroError, "error creating Profile '%s'", profile.Spec.Name)
 			return ctrl.Result{}, nil
 		}
 
-		profileFromLibrary := r.PowerLibrary.GetProfile(profile.Spec.Name)
+		profileFromLibrary := r.PowerLibrary.GetExclusivePool(profile.Spec.Name)
+		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, profileMinFreq, profileMaxFreq, profile.Spec.Governor, profile.Spec.Epp)
 		if profileFromLibrary == nil {
-			_, err = r.PowerLibrary.AddProfile(profile.Spec.Name, profileMinFreq, profileMaxFreq, profile.Spec.Governor, profile.Spec.Epp)
+			pool, err := r.PowerLibrary.AddExclusivePool(profile.Spec.Name)
 			if err != nil {
-				logger.Error(err, fmt.Sprintf("error adding Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
+				logger.Error(err, fmt.Sprintf("failed to create power profile"))
+				return ctrl.Result{}, err
+			}
+			err = pool.SetPowerProfile(powerProfile)
+			if err != nil {
+				logger.Error(err, fmt.Sprintf("error adding Profile '%s' to Power Library for Host '%s'", profile.Spec.Name, nodeName))
 				return ctrl.Result{}, err
 			}
 
@@ -228,7 +219,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 				return ctrl.Result{}, err
 			}
 		} else {
-			err = r.PowerLibrary.UpdateProfile(profile.Spec.Name, profileMinFreq, profileMaxFreq, profile.Spec.Governor, profile.Spec.Epp)
+			err = r.PowerLibrary.GetExclusivePool(profile.Spec.Name).SetPowerProfile(powerProfile)
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("error updating Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
 				return ctrl.Result{}, err
