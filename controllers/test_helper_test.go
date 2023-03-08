@@ -9,6 +9,10 @@ type hostMock struct {
 	mock.Mock
 }
 
+func (m *hostMock) Topology() power.Topology {
+	return m.Called().Get(0).(power.Topology)
+}
+
 func (m *hostMock) ValidateCStates(states power.CStates) error {
 	return m.Called(states).Error(0)
 }
@@ -74,12 +78,12 @@ func (m *hostMock) GetExclusivePool(poolName string) power.Pool {
 	}
 }
 
-func (m *hostMock) GetAllCores() *power.CoreList {
+func (m *hostMock) GetAllCpus() *power.CpuList {
 	ret := m.Called().Get(0)
 	if ret == nil {
 		return nil
 	} else {
-		return ret.(*power.CoreList)
+		return ret.(*power.CpuList)
 	}
 }
 
@@ -100,31 +104,31 @@ func (m *poolMock) Name() string {
 	return m.Called().String(0)
 }
 
-func (m *poolMock) Cores() *power.CoreList {
+func (m *poolMock) Cpus() *power.CpuList {
 	args := m.Called().Get(0)
 	if args == nil {
 		return nil
 	}
-	return args.(*power.CoreList)
+	return args.(*power.CpuList)
 }
 
-func (m *poolMock) SetCores(cores power.CoreList) error {
+func (m *poolMock) SetCpus(cores power.CpuList) error {
 	return m.Called(cores).Error(0)
 }
 
-func (m *poolMock) SetCoreIDs(coreIDs []uint) error {
-	return m.Called(coreIDs).Error(0)
+func (m *poolMock) SetCpuIDs(cpuIDs []uint) error {
+	return m.Called(cpuIDs).Error(0)
 }
 
 func (m *poolMock) Remove() error {
 	return m.Called().Error(0)
 }
 
-func (m *poolMock) MoveCoresIDs(coreIDs []uint) error {
+func (m *poolMock) MoveCpuIDs(coreIDs []uint) error {
 	return m.Called(coreIDs).Error(0)
 }
 
-func (m *poolMock) MoveCores(cores power.CoreList) error {
+func (m *poolMock) MoveCpus(cores power.CpuList) error {
 	return m.Called(cores).Error(0)
 }
 
@@ -143,7 +147,7 @@ func (m *poolMock) GetPowerProfile() power.Profile {
 
 type coreMock struct {
 	mock.Mock
-	power.Core
+	power.Cpu
 }
 
 func (m *coreMock) SetCStates(cStates power.CStates) error {

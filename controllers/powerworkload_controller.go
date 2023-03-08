@@ -120,7 +120,7 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 
 		// add cores to shared pool by selecting which cores should be reserved
 		// remaining cores will be moved to the shared pool
-		err = r.PowerLibrary.GetReservedPool().SetCoreIDs(workload.Spec.ReservedCPUs)
+		err = r.PowerLibrary.GetReservedPool().SetCpuIDs(workload.Spec.ReservedCPUs)
 		if err != nil {
 			logger.Error(err, "error configuring Shared Pool in Power Library")
 			return ctrl.Result{}, err
@@ -139,22 +139,22 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 			return ctrl.Result{}, nil
 		}
 
-		cores := poolFromLibrary.Cores().IDs()
+		cores := poolFromLibrary.Cpus().IDs()
 		coresToRemoveFromLibrary := detectCoresRemoved(cores, workload.Spec.Node.CpuIds)
 		coresToBeAddedToLibrary := detectCoresAdded(cores, workload.Spec.Node.CpuIds)
 
 		if len(coresToRemoveFromLibrary) > 0 {
-			err = r.PowerLibrary.GetSharedPool().MoveCoresIDs(coresToRemoveFromLibrary)
+			err = r.PowerLibrary.GetSharedPool().MoveCpuIDs(coresToRemoveFromLibrary)
 			if err != nil {
-				logger.Error(err, "error updating Power Library Core list")
+				logger.Error(err, "error updating Power Library Cpu list")
 				return ctrl.Result{}, err
 			}
 		}
 
 		if len(coresToBeAddedToLibrary) > 0 {
-			err = r.PowerLibrary.GetExclusivePool(workload.Spec.PowerProfile).MoveCoresIDs(coresToBeAddedToLibrary)
+			err = r.PowerLibrary.GetExclusivePool(workload.Spec.PowerProfile).MoveCpuIDs(coresToBeAddedToLibrary)
 			if err != nil {
-				logger.Error(err, "error updating Power Library Core list")
+				logger.Error(err, "error updating Power Library Cpu list")
 				return ctrl.Result{}, err
 			}
 		}

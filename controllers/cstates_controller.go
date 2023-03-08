@@ -152,7 +152,7 @@ func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec) error
 			results = multierror.Append(results, fmt.Errorf("%s must be an integer core ID", core))
 			continue
 		}
-		coreObj := r.PowerLibrary.GetAllCores().ByID(uint(coreID))
+		coreObj := r.PowerLibrary.GetAllCpus().ByID(uint(coreID))
 		if coreObj == nil {
 			return fmt.Errorf("invalid core id ID: %d", coreID)
 		}
@@ -182,7 +182,7 @@ func (r *CStatesReconciler) restoreCStates(ctx context.Context) error {
 		results = multierror.Append(results, pool.SetCStates(nil))
 	}
 
-	for _, core := range *r.PowerLibrary.GetAllCores() {
+	for _, core := range *r.PowerLibrary.GetAllCpus() {
 		results = multierror.Append(results, core.SetCStates(nil))
 	}
 	return results.ErrorOrNil()

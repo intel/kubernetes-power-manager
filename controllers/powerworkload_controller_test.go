@@ -170,7 +170,7 @@ func TestPowerWorkload(t *testing.T) {
 	nodemk = new(hostMock)
 	poolmk = new(poolMock)
 	nodemk.On("GetReservedPool").Return(poolmk)
-	poolmk.On("SetCoreIDs", mock.Anything).Return(fmt.Errorf("scuffed"))
+	poolmk.On("SetCpuIDs", mock.Anything).Return(fmt.Errorf("scuffed"))
 	r.PowerLibrary = nodemk
 
 	sharedPowerWorkloadName = ""
@@ -189,7 +189,7 @@ func TestPowerWorkload(t *testing.T) {
 	r.PowerLibrary = nodemk
 
 	nodemk.On("GetReservedPool").Return(poolmk)
-	poolmk.On("SetCoreIDs", mock.Anything).Return(nil)
+	poolmk.On("SetCpuIDs", mock.Anything).Return(nil)
 
 	sharedPowerWorkloadName = ""
 	req.Name = workloadName

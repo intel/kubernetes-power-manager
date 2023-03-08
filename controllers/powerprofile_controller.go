@@ -176,7 +176,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			return ctrl.Result{}, nil
 		}
 
-		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, profile.Spec.Min, profile.Spec.Max, profile.Spec.Governor, profile.Spec.Epp)
+		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, uint(profile.Spec.Min), uint(profile.Spec.Max), profile.Spec.Governor, profile.Spec.Epp)
 		err = r.PowerLibrary.GetSharedPool().SetPowerProfile(powerProfile)
 
 		logger.Info(fmt.Sprintf("Shared Power Profile successfully created: name - %s max - %d Min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp))
@@ -199,7 +199,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		}
 
 		profileFromLibrary := r.PowerLibrary.GetExclusivePool(profile.Spec.Name)
-		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, profileMinFreq, profileMaxFreq, profile.Spec.Governor, profile.Spec.Epp)
+		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, uint(profileMinFreq), uint(profileMaxFreq), profile.Spec.Governor, profile.Spec.Epp)
 		if profileFromLibrary == nil {
 			pool, err := r.PowerLibrary.AddExclusivePool(profile.Spec.Name)
 			if err != nil {

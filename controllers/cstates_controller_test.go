@@ -84,7 +84,7 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 	powerLibMock.On("GetExclusivePool", "performance").Return(exclusivePool)
 	mockedCore := new(coreMock)
 	mockedCore.On("GetID").Return(uint(3))
-	powerLibMock.On("GetAllCores").Return(&power.CoreList{mockedCore})
+	powerLibMock.On("GetAllCpus").Return(&power.CpuList{mockedCore})
 
 	// validate
 	powerLibMock.On("ValidateCStates", power.CStates(cStatesObj.Spec.SharedPoolCStates)).Return(nil)

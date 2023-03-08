@@ -112,7 +112,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 			continue
 		}
 
-		cores := prettifyCoreList(poolFromLibrary.Cores().IDs())
+		cores := prettifyCoreList(poolFromLibrary.Cpus().IDs())
 		profile := poolFromLibrary.GetPowerProfile()
 		workloadString := fmt.Sprintf("%s: %s || %s", poolFromLibrary.Name(), profile.Name(), cores)
 		powerWorkloadStrings = append(powerWorkloadStrings, workloadString)
@@ -128,9 +128,9 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	powerNode.Spec.PowerContainers = powerContainers
 
 	sharedPool := r.PowerLibrary.GetSharedPool()
-	sharedCores := sharedPool.Cores().IDs()
+	sharedCores := sharedPool.Cpus().IDs()
 	sharedProfile := sharedPool.GetPowerProfile()
-	reservedSystemCpus := r.PowerLibrary.GetReservedPool().Cores().IDs()
+	reservedSystemCpus := r.PowerLibrary.GetReservedPool().Cpus().IDs()
 
 	powerNode.Spec.PowerContainers = powerContainers
 	if len(sharedCores) > 0 {
