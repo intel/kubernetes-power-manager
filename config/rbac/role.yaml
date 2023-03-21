@@ -8,6 +8,26 @@ rules:
 - apiGroups:
   - power.intel.com
   resources:
+  - cstates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - power.intel.com
+  resources:
+  - cstates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - power.intel.com
+  resources:
   - powerconfigs
   verbs:
   - create
@@ -121,6 +141,32 @@ rules:
   - power.intel.com
   resources:
   - timeofdays/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - power.intel.com
+  resources:
+  - uncores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - power.intel.com
+  resources:
+  - uncores/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - power.intel.com
+  resources:
+  - uncores/status
   verbs:
   - get
   - patch
