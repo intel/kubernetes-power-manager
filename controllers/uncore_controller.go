@@ -55,6 +55,10 @@ type UncoreReconciler struct {
 func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	nodeName := os.Getenv("NODE_NAME")
+	// uncore is not for this node
+	if req.Name != nodeName {
+		return ctrl.Result{}, nil
+	}
 	logger := r.Log.WithValues("uncore", req.NamespacedName)
 	logger.Info("Reconciling uncore")
 	uncore := &powerv1.Uncore{}
@@ -86,10 +90,6 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			logger.Error(err, "could not retrieve uncore specification")
 			return ctrl.Result{Requeue: false}, err
 		}
-	}
-	// uncore is not for this node
-	if req.Name != nodeName {
-		return ctrl.Result{}, nil
 	}
 	// setting system wide uncore
 	if uncore.Spec.SysMax != nil && uncore.Spec.SysMin != nil {
