@@ -39,6 +39,8 @@ func createTODCronReconcilerObject(objs []runtime.Object) (*TimeOfDayCronJobReco
 func TestTODCronProfile(t *testing.T) {
 	zone := "Eire"
 	profile := "performance"
+	loc,err:=time.LoadLocation(zone)
+	assert.NoError(t, err)
 	clientObjs := []runtime.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
@@ -130,8 +132,8 @@ func TestTODCronProfile(t *testing.T) {
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.TimeOfDayCronJobSpec{
-				Hour:     time.Now().Hour(),
-				Minute:   time.Now().Add(1 * time.Minute).Minute(),
+				Hour:     time.Now().In(loc).Hour(),
+				Minute:   time.Now().In(loc).Add(1 * time.Minute).Minute(),
 				TimeZone: &zone,
 				Profile:  &profile,
 			},
@@ -179,6 +181,8 @@ func TestTODCronPods(t *testing.T) {
 	TestNode := "TestNode"
 	t.Setenv("NODE_NAME", TestNode)
 	zone := "Eire"
+	loc,err:=time.LoadLocation(zone)
+	assert.NoError(t, err)
 	podMap := make(map[string]map[string]string)
 	profMap := make(map[string]string)
 	profMap["performance"] = "balance-performance"
@@ -318,8 +322,8 @@ func TestTODCronPods(t *testing.T) {
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.TimeOfDayCronJobSpec{
-				Hour:     time.Now().Hour(),
-				Minute:   time.Now().Add(1 * time.Minute).Minute(),
+				Hour:     time.Now().In(loc).Hour(),
+				Minute:   time.Now().In(loc).Add(1 * time.Minute).Minute(),
 				TimeZone: &zone,
 				Pods:     &podMap,
 			},
@@ -382,6 +386,8 @@ func TestTODCstates(t *testing.T) {
 	TestNode := "TestNode"
 	t.Setenv("NODE_NAME", TestNode)
 	zone := "Eire"
+	loc,err:=time.LoadLocation(zone)
+	assert.NoError(t, err)
 	cMapShared := make(map[string]bool)
 	cMapShared["C1"] = false
 	cMapShared["C6"] = false
@@ -411,8 +417,8 @@ func TestTODCstates(t *testing.T) {
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.TimeOfDayCronJobSpec{
-				Hour:     time.Now().Hour(),
-				Minute:   time.Now().Add(1 * time.Minute).Minute(),
+				Hour:     time.Now().In(loc).Hour(),
+				Minute:   time.Now().In(loc).Add(1 * time.Minute).Minute(),
 				TimeZone: &zone,
 				CState:   &cSpec,
 			},
