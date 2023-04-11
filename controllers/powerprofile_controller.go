@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	rt "runtime"
 	"strconv"
@@ -178,7 +177,10 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 
 		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, uint(profile.Spec.Min), uint(profile.Spec.Max), profile.Spec.Governor, profile.Spec.Epp)
 		err = r.PowerLibrary.GetSharedPool().SetPowerProfile(powerProfile)
-
+		if err != nil{
+			logger.Error(err, "could not set power profile for shared pool")
+			return ctrl.Result{}, nil
+		}
 		logger.Info(fmt.Sprintf("Shared Power Profile successfully created: name - %s max - %d Min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp))
 		return ctrl.Result{}, nil
 	} else {
@@ -203,7 +205,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		if profileFromLibrary == nil {
 			pool, err := r.PowerLibrary.AddExclusivePool(profile.Spec.Name)
 			if err != nil {
-				logger.Error(err, fmt.Sprintf("failed to create power profile"))
+				logger.Error(err, "failed to create power profile")
 				return ctrl.Result{}, err
 			}
 			err = pool.SetPowerProfile(powerProfile)
@@ -321,7 +323,7 @@ func (r *PowerProfileReconciler) removeExtendedResources(nodeName string, profil
 }
 
 func getMaxMinFrequencyValues() (int, int, error) {
-	absoluteMaximumFrequencyByte, err := ioutil.ReadFile(MaxFrequencyFile)
+	absoluteMaximumFrequencyByte, err := os.ReadFile(MaxFrequencyFile)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -331,7 +333,7 @@ func getMaxMinFrequencyValues() (int, int, error) {
 		return 0, 0, err
 	}
 
-	absoluteMinimumFrequencyByte, err := ioutil.ReadFile(MinFrequencyFile)
+	absoluteMinimumFrequencyByte, err := os.ReadFile(MinFrequencyFile)
 	if err != nil {
 		return 0, 0, err
 	}

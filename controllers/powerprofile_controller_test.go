@@ -183,7 +183,7 @@ func TestPowerProfileCreationNonPowerProfileNotInLibrary(t *testing.T) {
 		}, workload)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Object", tc.testCase))
+			t.Fatalf("%s - error retrieving Power Workload Object", tc.testCase)
 		}
 
 		node := &corev1.Node{}
@@ -192,7 +192,7 @@ func TestPowerProfileCreationNonPowerProfileNotInLibrary(t *testing.T) {
 		}, node)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Node object", tc.testCase))
+			t.Fatalf("%s - error retrieving Node object", tc.testCase)
 		}
 
 		resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
@@ -304,7 +304,7 @@ func TestPowerProfileCreationNonPowerProfileInLibrary(t *testing.T) {
 		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+			t.Fatalf("%s - error creating reconciler object", tc.testCase)
 		}
 
 		nodemk := new(hostMock)
@@ -333,7 +333,7 @@ func TestPowerProfileCreationNonPowerProfileInLibrary(t *testing.T) {
 		}, workload)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Object", tc.testCase))
+			t.Fatalf("%s - error retrieving Power Workload Object", tc.testCase)
 		}
 	}
 }
@@ -409,7 +409,7 @@ func TestPowerProfileCreationMaxMinValuesZero(t *testing.T) {
 		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+			t.Fatalf("%s - error creating reconciler object", tc.testCase)
 		}
 
 		nodemk := new(hostMock)
@@ -425,14 +425,14 @@ func TestPowerProfileCreationMaxMinValuesZero(t *testing.T) {
 		_, err = r.Reconcile(context.TODO(), req)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
+			t.Fatalf("%s - error reconciling object", tc.testCase)
 		}
 
 		workloads := &powerv1.PowerWorkloadList{}
 		err = r.Client.List(context.TODO(), workloads)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Objects", tc.testCase))
+			t.Fatalf("%s - error retrieving Power Workload Objects", tc.testCase)
 		}
 
 		if len(workloads.Items) > 0 {
@@ -474,7 +474,7 @@ func TestPowerProfileCreationIncorrectEppValue(t *testing.T) {
 		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+			t.Fatalf("%s - error creating reconciler object", tc.testCase)
 		}
 
 		nodemk := new(hostMock)
@@ -490,7 +490,7 @@ func TestPowerProfileCreationIncorrectEppValue(t *testing.T) {
 		_, err = r.Reconcile(context.TODO(), req)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
+			t.Fatalf("%s - error reconciling object", tc.testCase)
 		}
 
 		profile := &powerv1.PowerProfile{}
@@ -506,7 +506,7 @@ func TestPowerProfileCreationIncorrectEppValue(t *testing.T) {
 		err = r.Client.List(context.TODO(), workloads)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Objects", tc.testCase))
+			t.Fatalf("%s - error retrieving Power Workload Objects", tc.testCase)
 		}
 
 		if len(workloads.Items) > 0 {
@@ -548,7 +548,7 @@ func TestSharedPowerProfileCreationProfileDoesNotExistInLibrary(t *testing.T) {
 		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+			t.Fatalf("%s - error creating reconciler object", tc.testCase)
 		}
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
@@ -560,14 +560,14 @@ func TestSharedPowerProfileCreationProfileDoesNotExistInLibrary(t *testing.T) {
 		_, err = r.Reconcile(context.TODO(), req)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
+			t.Fatalf("%s - error reconciling object", tc.testCase)
 		}
 
 		workloads := &powerv1.PowerWorkloadList{}
 		err = r.Client.List(context.TODO(), workloads)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Objects", tc.testCase))
+			t.Fatalf("%s - error retrieving Power Workload Objects", tc.testCase)
 		}
 
 		if len(workloads.Items) > 0 {
@@ -656,7 +656,7 @@ func TestPowerProfileDeletion(t *testing.T) {
 		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+			t.Fatalf("%s - error creating reconciler object", tc.testCase)
 		}
 
 		pool := new(poolMock)
@@ -675,7 +675,7 @@ func TestPowerProfileDeletion(t *testing.T) {
 		_, err = r.Reconcile(context.TODO(), req)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error reconciling object", tc.testCase))
+			t.Fatalf("%s - error reconciling object", tc.testCase)
 		}
 
 		workload := &powerv1.PowerWorkload{}
@@ -693,7 +693,7 @@ func TestPowerProfileDeletion(t *testing.T) {
 		}, node)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Node object", tc.testCase))
+			t.Fatalf("%s - error retrieving Node object", tc.testCase)
 		}
 
 		resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
@@ -747,7 +747,7 @@ func TestMaxValueLowerThanMinValue(t *testing.T) {
 		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+			t.Fatalf("%s - error creating reconciler object", tc.testCase)
 		}
 
 		nodemk := new(hostMock)
@@ -811,7 +811,7 @@ func TestSharedFrequencyValuesLessThanAbsoluteValue(t *testing.T) {
 		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+			t.Fatalf("%s - error creating reconciler object", tc.testCase)
 		}
 
 		nodemk := new(hostMock)
@@ -875,7 +875,7 @@ func TestMaxValueZeroMinValueGreaterThanZero(t *testing.T) {
 		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+			t.Fatalf("%s - error creating reconciler object", tc.testCase)
 		}
 
 		nodemk := new(hostMock)
@@ -927,7 +927,7 @@ func TestProfileReturnsErrors(t *testing.T) {
 		r, err := createProfileReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+			t.Fatalf("%s - error creating reconciler object", tc.testCase)
 		}
 
 		nodemk := new(hostMock)

@@ -3,12 +3,14 @@ package podresourcesclient
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/intel/kubernetes-power-manager/pkg/cpuset"
 	"github.com/intel/kubernetes-power-manager/pkg/util"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/apimachinery/pkg/api/errors"
 	podresourcesapi "k8s.io/kubelet/pkg/apis/podresources/v1"
-	"time"
 )
 
 var maxMessage = 1024 * 1024 * 4 // size in bytes => 4MB
@@ -40,7 +42,7 @@ func getV1Client(socket string, connectionTimeout time.Duration, maxMsgSize int)
 	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, addr, grpc.WithInsecure(), grpc.WithContextDialer(dialer), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize)))
+	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize)))
 	if err != nil {
 		return nil, errors.NewServiceUnavailable(fmt.Sprintf("error dialing socket %s: %v", socket, err))
 	}

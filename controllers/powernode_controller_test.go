@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -29,7 +28,7 @@ func createPowerNodeReconcilerObject(objs []runtime.Object) (*PowerNodeReconcile
 	}
 
 	// Create a fake client to mock API calls.
-	cl := fake.NewFakeClient(objs...)
+	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).Build()
 
 	// Create a ReconcileNode object with the scheme and fake client.
 	r := &PowerNodeReconciler{cl, ctrl.Log.WithName("testing"), s, nil}
@@ -75,7 +74,7 @@ func TestPowerNodeNotCorrectNode(t *testing.T) {
 		r, err := createPowerNodeReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error creating reconciler object", tc.testCase))
+			t.Fatalf("%s - error creating reconciler object", tc.testCase)
 		}
 
 		nodemk := new(hostMock)

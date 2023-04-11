@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"sort"
 	"testing"
@@ -60,7 +59,7 @@ func createPodReconcilerObject(objs []runtime.Object, podResourcesClient *podres
 	}
 
 	// Create a fake client to mock API calls.
-	cl := fake.NewFakeClient(objs...)
+	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).Build()
 
 	state, err := podstate.NewState()
 	if err != nil {
@@ -313,7 +312,7 @@ func TestPodCreation(t *testing.T) {
 		}, workload)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Object", tc.testCase))
+			t.Fatalf("%s - error retrieving Power Workload Object", tc.testCase)
 		}
 
 		sortedCpuIds := workload.Spec.Node.CpuIds
@@ -841,7 +840,7 @@ func TestPodControllerErrors(t *testing.T) {
 			}, workload)
 			if err != nil {
 				t.Error(err)
-				t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Object", tc.testCase))
+				t.Fatalf("%s - error retrieving Power Workload Object", tc.testCase)
 			}
 
 			if len(workload.Spec.Node.CpuIds) > 0 {
@@ -1157,7 +1156,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 			}, workload)
 			if err != nil {
 				t.Error(err)
-				t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Object", tc.testCase))
+				t.Fatalf("%s - error retrieving Power Workload Object", tc.testCase)
 			}
 
 			if len(workload.Spec.Node.CpuIds) > 0 {
@@ -1227,7 +1226,7 @@ func TestPodDeletion(t *testing.T) {
 						Name:              "test-pod-1",
 						Namespace:         "default",
 						UID:               "abcdefg",
-						DeletionTimestamp: &metav1.Time{time.Date(9999, time.Month(1), 21, 1, 10, 30, 0, time.UTC)},
+						DeletionTimestamp: &metav1.Time{Time: time.Date( 9999, time.Month(1), 21, 1, 10, 30, 0, time.UTC)},
 					},
 					Spec: corev1.PodSpec{
 						NodeName: "TestNode",
@@ -1290,7 +1289,7 @@ func TestPodDeletion(t *testing.T) {
 		}, workload)
 		if err != nil {
 			t.Error(err)
-			t.Fatal(fmt.Sprintf("%s - error retrieving Power Workload Object", tc.testCase))
+			t.Fatalf("%s - error retrieving Power Workload Object", tc.testCase)
 		}
 
 		if len(workload.Spec.Node.CpuIds) > 0 {

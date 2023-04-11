@@ -30,7 +30,7 @@ func createUncoreReconcilerObject(objs []runtime.Object) (*UncoreReconciler, err
 	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).WithScheme(s).Build()
 
 	// Create a ReconcileNode object with the scheme and fake client.
-	r := &UncoreReconciler{cl, ctrl.Log.WithName("testing"), s,nil}
+	r := &UncoreReconciler{cl, ctrl.Log.WithName("testing"), scheme.Scheme,nil}
 
 	return r, nil
 }
@@ -248,7 +248,10 @@ func FuzzUncoreReconciler(f *testing.F) {
 			// if r is nil setupFuzz must have panicked, so we ignore it
 			return
 		}
-		r.Reconcile(context.Background(), req)
+		_, err := r.Reconcile(context.Background(), req)
+		if err != nil{
+			t.Errorf("error reconciling: %s",err)
+		}
 	})
 }
 
@@ -307,6 +310,7 @@ func setupUncoreFuzz(t *testing.T, nodeName string, namespace string, extraNode 
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nodeName,
 				},
+				
 			},
 		},
 	}

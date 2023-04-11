@@ -27,9 +27,8 @@ func createConfigReconcilerObject(objs []runtime.Object) (*PowerConfigReconciler
 	if err := powerv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
-
 	// Create a fake client to mock API calls.
-	cl := fake.NewFakeClient(objs...)
+	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).Build()
 
 	state := state.NewPowerNodeData()
 

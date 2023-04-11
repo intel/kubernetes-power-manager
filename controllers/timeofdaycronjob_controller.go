@@ -107,7 +107,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 	} else {
 		//cronjob ready for application
 		if wait.Round(1*time.Minute).Minutes() == 0 {
-			logger.Info(fmt.Sprintf("cronjob ready to be applied"))
+			logger.Info("cronjob ready to be applied")
 			if cronJob.Spec.Profile != nil {
 				// check if shared workload exists
 				// if not create one
@@ -166,7 +166,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 					}
 
 				}
-				logger.Info(fmt.Sprintf("new shared pool applied"))
+				logger.Info("new shared pool applied")
 			}
 			if cronJob.Spec.CState != nil {
 				cstate := &powerv1.CStates{}
@@ -207,12 +207,12 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 						return ctrl.Result{}, err
 					}
 				}
-				logger.Info(fmt.Sprintf("cstate successfully applied"))
+				logger.Info("cstate successfully applied")
 
 			}
 			//logic for tuning individual pods
 			if cronJob.Spec.Pods != nil {
-				logger.Info(fmt.Sprintf("changing profile for exclusive pods"))
+				logger.Info("changing profile for exclusive pods")
 				workloadFrom := powerv1.PowerWorkload{}
 				workloadTo := powerv1.PowerWorkload{}
 				//looping over each pod to tune

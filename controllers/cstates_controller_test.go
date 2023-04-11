@@ -19,8 +19,10 @@ import (
 
 func buildCStatesReconcilerObject(objs []runtime.Object, powerLibMock power.Host) *CStatesReconciler {
 	schm := runtime.NewScheme()
-	powerv1.AddToScheme(schm)
-
+	err := powerv1.AddToScheme(schm)
+	if err !=nil{
+		return nil
+	}
 	client := fake.NewClientBuilder().WithRuntimeObjects(objs...).WithScheme(schm).Build()
 	reconciler := &CStatesReconciler{
 		Client:       client,
@@ -102,7 +104,7 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 	mockedCore.On("SetCStates", power.CStates(cStatesObj.Spec.IndividualCoreCStates["3"])).Return(error(nil))
 
 	r := buildCStatesReconcilerObject(objs, powerLibMock)
-
+	assert.NotNil(t,r)
 	ctx := context.Background()
 	req := reconcile.Request{NamespacedName: client.ObjectKey{
 		Namespace: "default",
@@ -136,6 +138,8 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 	objs = []runtime.Object{powerNodesObj, cStatesObj, powerProfilesObj}
 
 	r = buildCStatesReconcilerObject(objs, powerLibMock)
+	assert.NotNil(t,r)
+
 	_, err = r.Reconcile(ctx, req)
 	assert.True(t, errors.IsBadRequest(err))
 }
@@ -162,7 +166,10 @@ func FuzzCStatesReconciler(f *testing.F) {
 			// if r is nil setupFuzz must have panicked, so we ignore it
 			return
 		}
-		r.Reconcile(context.Background(), req)
+		_,err := r.Reconcile(context.Background(), req)
+		if err != nil{
+			t.Errorf("error reconciling: %s",err)
+		}
 	})
 }
 

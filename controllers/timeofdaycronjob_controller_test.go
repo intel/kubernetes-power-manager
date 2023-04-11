@@ -157,7 +157,8 @@ func TestTODCronProfile(t *testing.T) {
 	assert.NoError(t, err)
 	//ensure workload has correct initial profile
 	workload := powerv1.PowerWorkload{}
-	r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
+	err = r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
+	assert.NoError(t,err)
 	assert.True(t, workload.Spec.AllCores)
 	assert.Equal(t, workload.Spec.PowerProfile, "shared-TestNode")
 	//initiate cronjob
@@ -167,11 +168,12 @@ func TestTODCronProfile(t *testing.T) {
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
-	r.Reconcile(context.TODO(), req)
+	_,err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
 	//ensure workload profile has been changed
 	workload = powerv1.PowerWorkload{}
-	r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
+	err = r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
+	assert.NoError(t,err)
 	assert.True(t, workload.Spec.AllCores)
 	assert.Equal(t, workload.Spec.PowerProfile, profile)
 
@@ -353,7 +355,8 @@ func TestTODCronPods(t *testing.T) {
 	assert.NoError(t, err)
 	//ensure pod is in correct workload
 	workload := powerv1.PowerWorkload{}
-	r.Client.Get(context.TODO(), performanceReq.NamespacedName, &workload)
+	err = r.Client.Get(context.TODO(), performanceReq.NamespacedName, &workload)
+	assert.NoError(t,err)
 	assert.True(t, findPodInWorkload(workload, "test-pod-1"))
 	//reconcile job and wait for schedule time
 	res, err := r.Reconcile(context.TODO(), req)
@@ -362,13 +365,16 @@ func TestTODCronPods(t *testing.T) {
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
 	//ensure initial workload no longer has pod
-	r.Reconcile(context.TODO(), req)
+	_,err = r.Reconcile(context.TODO(), req)
+	assert.NoError(t,err)
 	workload = powerv1.PowerWorkload{}
-	r.Client.Get(context.TODO(), performanceReq.NamespacedName, &workload)
+	err = r.Client.Get(context.TODO(), performanceReq.NamespacedName, &workload)
+	assert.NoError(t,err)
 	assert.False(t, findPodInWorkload(workload, "test-pod-1"))
 	//ensure new workload has pod
 	workload = powerv1.PowerWorkload{}
-	r.Client.Get(context.TODO(), balancePerformanceReq.NamespacedName, &workload)
+	err = r.Client.Get(context.TODO(), balancePerformanceReq.NamespacedName, &workload)
+	assert.NoError(t,err)
 	assert.True(t, findPodInWorkload(workload, "test-pod-1"))
 
 }
@@ -439,21 +445,24 @@ func TestTODCstates(t *testing.T) {
 	}
 	nodemk := new(hostMock)
 	r, err := createTODCronReconcilerObject(clientObjs)
+	assert.NoError(t,err)
 	//ensure no initial cstate object exists
 	cstate := powerv1.CStates{}
-	r.Client.Get(context.TODO(), cstateReq.NamespacedName, &cstate)
+	err = r.Client.Get(context.TODO(), cstateReq.NamespacedName, &cstate)
 	assert.Empty(t, cstate.Name)
-	assert.NoError(t, err)
+	assert.Error(t, err)
 	//reconcile job and wait for schedule time
 	res, err := r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
-	r.Reconcile(context.TODO(), req)
+	_,err = r.Reconcile(context.TODO(), req)
+	assert.NoError(t, err)
 	// ensure cstate was created and has correct values
 	cstate = powerv1.CStates{}
-	r.Client.Get(context.TODO(), cstateReq.NamespacedName, &cstate)
+	err = r.Client.Get(context.TODO(), cstateReq.NamespacedName, &cstate)
+	assert.NoError(t,err)
 	assert.False(t, cstate.Spec.SharedPoolCStates["C1"])
 	assert.False(t, cstate.Spec.SharedPoolCStates["C6"])
 	assert.False(t, cstate.Spec.SharedPoolCStates["C6"])

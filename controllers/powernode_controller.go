@@ -140,7 +140,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 
 	if len(reservedSystemCpus) > 0 {
 		cores := prettifyCoreList(reservedSystemCpus)
-		powerNode.Spec.UneffectedCores = fmt.Sprintf("%s", cores)
+		powerNode.Spec.UneffectedCores = cores
 	}
 
 	err = r.Client.Update(context.TODO(), powerNode)
