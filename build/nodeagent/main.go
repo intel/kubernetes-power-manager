@@ -18,12 +18,12 @@ package main
 
 import (
 	"flag"
-	"os"
-
+	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -57,7 +57,9 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true), func(o *zap.Options) {
+		o.TimeEncoder = zapcore.ISO8601TimeEncoder
+	}))
 	nodeName := os.Getenv("NODE_NAME")
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -163,9 +165,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.UncoreReconciler{
-		Client: mgr.GetClient(),
+		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("Uncore"),
-		Scheme: mgr.GetScheme(),
+		Scheme:       mgr.GetScheme(),
 		PowerLibrary: powerLibrary,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Uncore")

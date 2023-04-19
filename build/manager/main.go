@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"go.uber.org/zap/zapcore"
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -55,7 +56,9 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true), func(opts *zap.Options) {
+		opts.TimeEncoder = zapcore.ISO8601TimeEncoder
+	}))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,

@@ -174,10 +174,13 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			logger.Error(frequencyTooLowError, "error creating Shared Power Profile")
 			return ctrl.Result{}, nil
 		}
-
-		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, uint(profile.Spec.Min), uint(profile.Spec.Max), profile.Spec.Governor, profile.Spec.Epp)
+		actualEpp := profile.Spec.Epp
+		if isEppSupported() {
+			actualEpp = ""
+		}
+		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, uint(profile.Spec.Min), uint(profile.Spec.Max), profile.Spec.Governor, actualEpp)
 		err = r.PowerLibrary.GetSharedPool().SetPowerProfile(powerProfile)
-		if err != nil{
+		if err != nil {
 			logger.Error(err, "could not set power profile for shared pool")
 			return ctrl.Result{}, nil
 		}
@@ -201,7 +204,11 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		}
 
 		profileFromLibrary := r.PowerLibrary.GetExclusivePool(profile.Spec.Name)
-		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, uint(profileMinFreq), uint(profileMaxFreq), profile.Spec.Governor, profile.Spec.Epp)
+		actualEpp := profile.Spec.Epp
+		if isEppSupported() {
+			actualEpp = ""
+		}
+		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, uint(profileMinFreq), uint(profileMaxFreq), profile.Spec.Governor, actualEpp)
 		if profileFromLibrary == nil {
 			pool, err := r.PowerLibrary.AddExclusivePool(profile.Spec.Name)
 			if err != nil {
@@ -354,4 +361,9 @@ func (r *PowerProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&powerv1.PowerProfile{}).
 		Complete(r)
+}
+
+func isEppSupported() bool {
+	_, err := os.Stat("/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference")
+	return !os.IsNotExist(err)
 }
