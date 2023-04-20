@@ -31,10 +31,10 @@ spec:
         resources:
           limits:
             cpu: 100m
-            memory: 30Mi
+            memory: 64Mi
           requests:
             cpu: 100m
-            memory: 20Mi
+            memory: 64Mi
         volumeMounts:
         - mountPath: /sys/fs
           name: cgroup
