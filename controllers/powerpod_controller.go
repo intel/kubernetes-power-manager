@@ -60,7 +60,6 @@ type PowerPodReconciler struct {
 func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerpod", req.NamespacedName)
-
 	pod := &corev1.Pod{}
 	err := r.Get(context.TODO(), req.NamespacedName, pod)
 	if err != nil {

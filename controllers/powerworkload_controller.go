@@ -55,7 +55,10 @@ var sharedPowerWorkloadName = ""
 func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
-
+	if req.Namespace == IntelPowerNamespace {
+		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{}, nil
+	}
 	nodeName := os.Getenv("NODE_NAME")
 
 	workload := &powerv1.PowerWorkload{}

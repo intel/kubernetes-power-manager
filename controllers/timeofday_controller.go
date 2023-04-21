@@ -61,6 +61,10 @@ type TimeOfDayReconciler struct {
 func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("timeofday", req.NamespacedName)
+	if req.Namespace == IntelPowerNamespace {
+		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{}, nil
+	}
 	//logger.Info("Reconciling TimeOfDay")
 	timeRegex := regexp.MustCompile("([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]")
 

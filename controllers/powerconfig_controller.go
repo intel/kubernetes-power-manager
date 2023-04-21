@@ -63,6 +63,11 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 	_ = context.Background()
 	logger := r.Log.WithValues("powerconfig", req.NamespacedName)
 
+	if req.Namespace == IntelPowerNamespace {
+		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{}, nil
+	}
+
 	configs := &powerv1.PowerConfigList{}
 	err := r.Client.List(context.TODO(), configs)
 	if err != nil {
