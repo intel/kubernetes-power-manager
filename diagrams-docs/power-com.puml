@@ -1,0 +1,59 @@
+@startuml
+
+<style>
+node {
+  BackGroundColor effbda
+  LineThickness 2
+  LineColor black
+  FontSize 20
+}
+
+rectangle {
+  BackGroundColor #d1ffff
+  LineThickness 2
+  LineColor black
+  FontSize 25
+  FontStyle italic
+}
+
+agent {
+  BackGroundColor #d1ffff
+  LineThickness 1
+  LineColor black
+}
+</style>
+
+
+
+title <b>Kubernetes Power Manager components Diagram
+skinparam roundCorner 15
+node "Power Node Agent" {
+
+rectangle "<b>C-State \n<b>Controller"
+rectangle "<b>Power Node \n<b>Controller"
+rectangle "<b>Power Pod \n<b>Controller" 
+rectangle "<b>Power Profile \n<b>Controller" 
+rectangle "<b>Power Workload \n<b>Controller" 
+rectangle "<b>Time Of Day \n<b>Controller"
+rectangle "<b>Time of Day \n<b>CronJob Controller"
+
+}
+
+node "Power Optimization Library" {
+
+rectangle "<b>C-State"
+rectangle "<b>P-States"
+rectangle "<b>Core"  
+rectangle "<b>Host" 
+rectangle "<b>Power" 
+rectangle "<b>Pool"
+rectangle "<b>Power Profiles"
+}
+
+node "Power Operator" {
+
+rectangle "<b>Power Config\n<b>Controller"
+
+}
+@enduml
+
