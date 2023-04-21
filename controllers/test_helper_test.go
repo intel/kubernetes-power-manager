@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	
 	"github.com/intel/power-optimization-library/pkg/power"
 	"github.com/stretchr/testify/mock"
 )
@@ -239,9 +238,10 @@ type mockCpuPackage struct {
 	mock.Mock
 	power.Package
 }
-type mockPackageList struct{
+type mockPackageList struct {
 	mock.Mock
 }
+
 func (m *mockCpuPackage) MakeList() []power.Package {
 	return []power.Package{m}
 }
@@ -316,6 +316,7 @@ type mockCpuDie struct {
 	mock.Mock
 	power.Die
 }
+
 func (m *mockCpuDie) MakeList() []power.Die {
 	return []power.Die{m}
 }

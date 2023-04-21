@@ -55,11 +55,19 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+
+	logOpts := zap.Options{}
+	logOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true), func(o *zap.Options) {
-		o.TimeEncoder = zapcore.ISO8601TimeEncoder
-	}))
+	ctrl.SetLogger(zap.New(
+		zap.UseDevMode(true),
+		func(o *zap.Options) {
+			o.TimeEncoder = zapcore.ISO8601TimeEncoder
+		},
+		zap.UseFlagOptions(&logOpts),
+	),
+	)
 	nodeName := os.Getenv("NODE_NAME")
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{

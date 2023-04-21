@@ -47,6 +47,8 @@ type PowerNodeReconciler struct {
 func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 
+	logger := r.Log.WithValues("powernode", req.NamespacedName)
+	logger.V(5).Info("Checking if PowerNode and Node Name match")
 	nodeName := os.Getenv("NODE_NAME")
 	if nodeName != req.NamespacedName.Name {
 		// PowerNode is not on this Node
@@ -59,9 +61,11 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	powerContainers := make([]powerv1.Container, 0)
 
 	powerNode := &powerv1.PowerNode{}
+	logger.V(5).Info("Retrieving Power Node instance")
 	err := r.Client.Get(context.TODO(), req.NamespacedName, powerNode)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			logger.V(5).Info("Power Node not found, requeueing")
 			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 		}
 
@@ -69,6 +73,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	powerProfiles := &powerv1.PowerProfileList{}
+	logger.V(5).Info("Retrieving PowerProfileList")
 	err = r.Client.List(context.TODO(), powerProfiles)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -79,6 +84,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	for _, profile := range powerProfiles.Items {
+		logger.V(5).Info("Retrieving Profile information from the Power Librarys")
 		pool := r.PowerLibrary.GetExclusivePool(profile.Spec.Name)
 		if pool == nil {
 			continue
@@ -93,6 +99,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	powerWorkloads := &powerv1.PowerWorkloadList{}
+	logger.V(5).Info("Retrieving PowerWorkloadList")
 	err = r.Client.List(context.TODO(), powerWorkloads)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -103,35 +110,42 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	for _, workload := range powerWorkloads.Items {
+		logger.V(5).Info("Checking if workload is shared or on the wrong node")
 		if workload.Spec.AllCores || workload.Spec.Node.Name != nodeName {
 			continue
 		}
 
 		poolFromLibrary := r.PowerLibrary.GetExclusivePool(workload.Spec.Name)
+		logger.V(5).Info("Retrieving workload information from Power Library")
 		if poolFromLibrary == nil {
 			continue
 		}
 
+		logger.V(5).Info("Retrieving Power Profile information for workload")
 		cores := prettifyCoreList(poolFromLibrary.Cpus().IDs())
 		profile := poolFromLibrary.GetPowerProfile()
 		workloadString := fmt.Sprintf("%s: %s || %s", poolFromLibrary.Name(), profile.Name(), cores)
 		powerWorkloadStrings = append(powerWorkloadStrings, workloadString)
 
 		for _, container := range workload.Spec.Node.Containers {
+			logger.V(5).Info("Configuring the Power Container information")
 			container.Workload = workload.Name
 			powerContainers = append(powerContainers, container)
 		}
 	}
 
+	logger.V(5).Info("Setting the PowerNode Spec - PowerProfiles, PowerWorkloads, PowerContainers")
 	powerNode.Spec.PowerProfiles = powerProfileStrings
 	powerNode.Spec.PowerWorkloads = powerWorkloadStrings
 	powerNode.Spec.PowerContainers = powerContainers
 
+	logger.V(5).Info("Setting the Shared pool, Shared Cores, Shared profiles and reserved system CPUs")
 	sharedPool := r.PowerLibrary.GetSharedPool()
 	sharedCores := sharedPool.Cpus().IDs()
 	sharedProfile := sharedPool.GetPowerProfile()
 	reservedSystemCpus := r.PowerLibrary.GetReservedPool().Cpus().IDs()
 
+	logger.V(5).Info("Configurating the cores to the SharedPool")
 	powerNode.Spec.PowerContainers = powerContainers
 	if len(sharedCores) > 0 {
 		cores := prettifyCoreList(sharedCores)
@@ -139,6 +153,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	if len(reservedSystemCpus) > 0 {
+		logger.V(5).Info("Configurating the cores to the ReservedPool")
 		cores := prettifyCoreList(reservedSystemCpus)
 		powerNode.Spec.UneffectedCores = cores
 	}

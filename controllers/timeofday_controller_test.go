@@ -93,17 +93,17 @@ func TestTimeOfDay(t *testing.T) {
 	nodemk.AssertExpectations(t)
 	jobs := &powerv1.TimeOfDayCronJobList{}
 	err = r.Client.List(context.TODO(), jobs)
-	assert.NoError(t,err)
+	assert.NoError(t, err)
 	assert.Len(t, jobs.Items, 3)
 
 	// timeofday deletion
 	jobs = &powerv1.TimeOfDayCronJobList{}
 	err = r.Client.Delete(context.TODO(), todObj)
-	assert.NoError(t,err)
+	assert.NoError(t, err)
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
 	err = r.Client.List(context.TODO(), jobs)
-	assert.NoError(t,err)
+	assert.NoError(t, err)
 	assert.Len(t, jobs.Items, 0)
 	// incorrect format error
 	todObj = &powerv1.TimeOfDay{
@@ -183,7 +183,7 @@ func FuzzTimeOfDayController(f *testing.F) {
 		if err != nil {
 			t.Error(err)
 		}
-		_,err = r.Reconcile(context.TODO(), req)
+		_, err = r.Reconcile(context.TODO(), req)
 		if err != nil {
 			t.Error(err)
 		}

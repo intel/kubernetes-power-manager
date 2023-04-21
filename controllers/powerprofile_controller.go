@@ -95,6 +95,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 
 	profile := &powerv1.PowerProfile{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, profile)
+	logger.V(5).Info("Retrieving Power Profile instances")
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// First we need to remove the profile from the Power library, this will in turn remove the pool,
@@ -131,7 +132,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			}
 
 			// Remove the Extended Resources for this PowerProfile from the Node
-			err = r.removeExtendedResources(nodeName, req.NamespacedName.Name)
+			err = r.removeExtendedResources(nodeName, req.NamespacedName.Name, &logger)
 			if err != nil {
 				logger.Error(err, "error removing Extended Resources from node")
 				return ctrl.Result{}, err
@@ -145,6 +146,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 	}
 
 	// Make sure the EPP value is one of the four correct ones or empty in the case of a user-created profile
+	logger.V(5).Info("Confirming EPP value is one of the correct values")
 	if _, exists := profilePercentages[profile.Spec.Epp]; !exists {
 		incorrectEppErr := errors.NewServiceUnavailable(fmt.Sprintf("EPP value not allowed: %v - deleting PowerProfile CRD", profile.Spec.Epp))
 		logger.Error(incorrectEppErr, "error reconciling PowerProfile")
@@ -158,6 +160,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
+	logger.V(5).Info("Making sure max value is higher than the min value")
 	if profile.Spec.Max < profile.Spec.Min {
 		maxLowerThanMaxError := errors.NewServiceUnavailable("Max frequency value cannot be lower than Minimum frequency value")
 		logger.Error(maxLowerThanMaxError, fmt.Sprintf("error creating Profile '%s'", profile.Spec.Name))
@@ -165,6 +168,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 	}
 
 	absoluteMaximumFrequency, absoluteMinimumFrequency, err := getMaxMinFrequencyValues()
+	logger.V(5).Info("Retrieving the Maximum possible Frequency and Minimum possible Frequency from the system")
 	if err != nil {
 		logger.Error(err, "error retrieving frequency values from Node")
 		return ctrl.Result{}, nil
@@ -188,7 +192,8 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			logger.Error(err, "could not set power profile for shared pool")
 			return ctrl.Result{}, nil
 		}
-		logger.Info(fmt.Sprintf("Shared Power Profile successfully created: name - %s max - %d Min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp))
+
+		logger.V(5).Info("Shared Power Profile successfully created: Name - %s Max - %d Min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp)
 		return ctrl.Result{}, nil
 	} else {
 		var profileMaxFreq int
@@ -200,7 +205,6 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			profileMaxFreq = profile.Spec.Max
 			profileMinFreq = profile.Spec.Min
 		}
-
 		if profileMaxFreq == 0 || profileMinFreq == 0 {
 			cannotBeZeroError := errors.NewServiceUnavailable("max or Min frequency cannot be zero")
 			logger.Error(cannotBeZeroError, "error creating Profile '%s'", profile.Spec.Name)
@@ -226,23 +230,25 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			}
 
 			// Create the Extended Resources for the profile
-			err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp)
+			err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp, &logger)
 			if err != nil {
 				logger.Error(err, "error creating extended resources for base profile")
 				return ctrl.Result{}, err
 			}
 		} else {
 			err = r.PowerLibrary.GetExclusivePool(profile.Spec.Name).SetPowerProfile(powerProfile)
+			logger.V(5).Info("Updating Power Profile '%s' to the Power Library for Node '%s'", profile.Spec.Name, nodeName)
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("error updating Profile '%s' to Power Library for Node '%s'", profile.Spec.Name, nodeName))
 				return ctrl.Result{}, err
 			}
 		}
 
-		logger.Info(fmt.Sprintf("Power Profile successfully created: Name - %s Max - %d Min - %d EPP - %s", profile.Spec.Name, profileMaxFreq, profileMinFreq, profile.Spec.Epp))
+		logger.V(5).Info("Power Profile successfully created: Name - %s Max - %d Min - %d EPP - %s", profile.Spec.Name, profileMaxFreq, profileMinFreq, profile.Spec.Epp)
 	}
 
 	workloadName := fmt.Sprintf("%s-%s", profile.Spec.Name, nodeName)
+	logger.V(5).Info("Configuring workload name: %s", workloadName)
 	workload := &powerv1.PowerWorkload{}
 	err = r.Client.Get(context.TODO(), client.ObjectKey{
 		Name:      workloadName,
@@ -272,7 +278,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 				return ctrl.Result{}, err
 			}
 
-			logger.Info(fmt.Sprintf("Power Workload successfully created: Name - %s Profile - %s", workloadName, profile.Spec.Name))
+			logger.V(5).Info("Power Workload successfully created", "name", workloadName, "profile", profile.Spec.Name)
 			return ctrl.Result{}, nil
 		}
 
@@ -283,7 +289,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
-func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profileName string, eppValue string) error {
+func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profileName string, eppValue string, logger *logr.Logger) error {
 	node := &corev1.Node{}
 	err := r.Client.Get(context.TODO(), client.ObjectKey{
 		Name: nodeName,
@@ -293,6 +299,7 @@ func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profil
 	}
 
 	numCPUsOnNode := float64(rt.NumCPU())
+	logger.V(5).Info("Configuring based on the percentage associated to the specific power profile")
 	numExtendedResources := int64(numCPUsOnNode * profilePercentages[eppValue]["resource"])
 	profilesAvailable := resource.NewQuantity(numExtendedResources, resource.DecimalSI)
 	extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
@@ -306,7 +313,7 @@ func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profil
 	return nil
 }
 
-func (r *PowerProfileReconciler) removeExtendedResources(nodeName string, profileName string) error {
+func (r *PowerProfileReconciler) removeExtendedResources(nodeName string, profileName string, logger *logr.Logger) error {
 	node := &corev1.Node{}
 	err := r.Client.Get(context.TODO(), client.ObjectKey{
 		Name: nodeName,
@@ -315,6 +322,7 @@ func (r *PowerProfileReconciler) removeExtendedResources(nodeName string, profil
 		return err
 	}
 
+	logger.V(5).Info("Removing Extended Resources")
 	newNodeCapacityList := make(map[corev1.ResourceName]resource.Quantity)
 	extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
 	for resourceFromNode, numberOfResources := range node.Status.Capacity {

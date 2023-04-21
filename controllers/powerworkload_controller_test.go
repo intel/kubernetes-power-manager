@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -203,7 +204,7 @@ func Test_detectCoresRemoved(t *testing.T) {
 	updated := []uint{1, 2, 4, 5}
 
 	expectedResult := []uint{3}
-	result := detectCoresRemoved(orig, updated)
+	result := detectCoresRemoved(orig, updated, &logr.Logger{})
 	assert.ElementsMatch(t, result, expectedResult)
 }
 
@@ -212,6 +213,6 @@ func Test_detectCoresAdded(t *testing.T) {
 	updated := []uint{1, 2, 4, 5}
 
 	expectedResult := []uint{5}
-	result := detectCoresAdded(orig, updated)
+	result := detectCoresAdded(orig, updated, &logr.Logger{})
 	assert.ElementsMatch(t, result, expectedResult)
 }

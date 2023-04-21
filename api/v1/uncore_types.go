@@ -28,19 +28,18 @@ type UncoreSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	
-	SysMax *uint `json:"sysMax,omitempty"`
-	SysMin *uint `json:"sysMin,omitempty"`
+	SysMax       *uint          `json:"sysMax,omitempty"`
+	SysMin       *uint          `json:"sysMin,omitempty"`
 	DieSelectors *[]DieSelector `json:"dieSelector,omitempty"`
-
 }
 
-type DieSelector struct{
+type DieSelector struct {
 	Package *uint `json:"package"`
-	Die *uint `json:"die,omitempty"`
-	Min *uint `json:"min"`
-	Max *uint `json:"max"`
+	Die     *uint `json:"die,omitempty"`
+	Min     *uint `json:"min"`
+	Max     *uint `json:"max"`
 }
+
 // UncoreStatus defines the observed state of Uncore
 type UncoreStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster

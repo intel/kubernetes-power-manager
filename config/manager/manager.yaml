@@ -21,6 +21,8 @@ spec:
         - /manager
         args:
         - --enable-leader-election
+        - --zap-log-level
+        - "3"
         imagePullPolicy: IfNotPresent
         image: intel/power-operator:v2.1.0
         securityContext:

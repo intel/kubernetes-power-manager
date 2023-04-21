@@ -1226,7 +1226,7 @@ func TestPodDeletion(t *testing.T) {
 						Name:              "test-pod-1",
 						Namespace:         "default",
 						UID:               "abcdefg",
-						DeletionTimestamp: &metav1.Time{Time: time.Date( 9999, time.Month(1), 21, 1, 10, 30, 0, time.UTC)},
+						DeletionTimestamp: &metav1.Time{Time: time.Date(9999, time.Month(1), 21, 1, 10, 30, 0, time.UTC)},
 					},
 					Spec: corev1.PodSpec{
 						NodeName: "TestNode",

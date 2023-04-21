@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
 func createUncoreReconcilerObject(objs []runtime.Object) (*UncoreReconciler, error) {
 	// Register operator types with the runtime scheme.
 	s := scheme.Scheme
@@ -30,25 +31,25 @@ func createUncoreReconcilerObject(objs []runtime.Object) (*UncoreReconciler, err
 	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).WithScheme(s).Build()
 
 	// Create a ReconcileNode object with the scheme and fake client.
-	r := &UncoreReconciler{cl, ctrl.Log.WithName("testing"), scheme.Scheme,nil}
+	r := &UncoreReconciler{cl, ctrl.Log.WithName("testing"), scheme.Scheme, nil}
 
 	return r, nil
 }
 
-func TestDieSelectMinError(t *testing.T){
-	max:=uint(2400000)
-	pkg:=uint(0)
-	die:=uint(0)
-	uncoreName:=""
+func TestDieSelectMinError(t *testing.T) {
+	max := uint(2400000)
+	pkg := uint(0)
+	die := uint(0)
+	uncoreName := ""
 	clientObjs := []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: uncoreName,
+				Name:      uncoreName,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
 				DieSelectors: &[]powerv1.DieSelector{
-					{Package: &pkg,Die: &die,Max: &max},
+					{Package: &pkg, Die: &die, Max: &max},
 				},
 			},
 		},
@@ -56,22 +57,22 @@ func TestDieSelectMinError(t *testing.T){
 
 	hostmk := new(hostMock)
 	r, err := createUncoreReconcilerObject(clientObjs)
-	r.PowerLibrary=hostmk
+	r.PowerLibrary = hostmk
 	assert.NoError(t, err)
-	mocktop:=new(mockCpuTopology)
-	mockpkg:=new(mockCpuPackage)
-	mockdie:=new(mockCpuDie)
-	pkglst:=mockpkg.MakeList()
-	dielst:=mockdie.MakeList()
-	mocktop.On("SetUncore",mock.Anything).Return(nil)
+	mocktop := new(mockCpuTopology)
+	mockpkg := new(mockCpuPackage)
+	mockdie := new(mockCpuDie)
+	pkglst := mockpkg.MakeList()
+	dielst := mockdie.MakeList()
+	mocktop.On("SetUncore", mock.Anything).Return(nil)
 	hostmk.On("Topology").Return(mocktop)
 	mocktop.On("Packages").Return(&pkglst)
-	mocktop.On("Package",mock.Anything).Return(mockpkg)
-	mockpkg.On("SetUncore",mock.Anything).Return(nil)
+	mocktop.On("Package", mock.Anything).Return(mockpkg)
+	mockpkg.On("SetUncore", mock.Anything).Return(nil)
 
 	mockpkg.On("Dies").Return(&dielst)
-	mockpkg.On("Die",mock.Anything).Return(mockdie)
-	mockdie.On("SetUncore",mock.Anything).Return(nil)
+	mockpkg.On("Die", mock.Anything).Return(mockdie)
+	mockdie.On("SetUncore", mock.Anything).Return(nil)
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
 			Name:      uncoreName,
@@ -84,42 +85,42 @@ func TestDieSelectMinError(t *testing.T){
 	hostmk.AssertExpectations(t)
 }
 
-func TestDieSelectMaxError(t *testing.T){
-	min:=uint(1200000)
-	pkg:=uint(0)
-	die:=uint(0)
-	uncoreName:=""
+func TestDieSelectMaxError(t *testing.T) {
+	min := uint(1200000)
+	pkg := uint(0)
+	die := uint(0)
+	uncoreName := ""
 	clientObjs := []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: uncoreName,
+				Name:      uncoreName,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
 				DieSelectors: &[]powerv1.DieSelector{
-					{Package: &pkg,Die: &die,Min: &min},
+					{Package: &pkg, Die: &die, Min: &min},
 				},
 			},
 		},
 	}
 
 	hostmk := new(hostMock)
-	mocktop:=new(mockCpuTopology)
-	mockpkg:=new(mockCpuPackage)
-	mockdie:=new(mockCpuDie)
-	pkglst:=mockpkg.MakeList()
-	dielst:=mockdie.MakeList()
-	mocktop.On("SetUncore",mock.Anything).Return(nil)
+	mocktop := new(mockCpuTopology)
+	mockpkg := new(mockCpuPackage)
+	mockdie := new(mockCpuDie)
+	pkglst := mockpkg.MakeList()
+	dielst := mockdie.MakeList()
+	mocktop.On("SetUncore", mock.Anything).Return(nil)
 	hostmk.On("Topology").Return(mocktop)
 	mocktop.On("Packages").Return(&pkglst)
-	mocktop.On("Package",mock.Anything).Return(mockpkg)
-	mockpkg.On("SetUncore",mock.Anything).Return(nil)
+	mocktop.On("Package", mock.Anything).Return(mockpkg)
+	mockpkg.On("SetUncore", mock.Anything).Return(nil)
 
 	mockpkg.On("Dies").Return(&dielst)
-	mockpkg.On("Die",mock.Anything).Return(mockdie)
-	mockdie.On("SetUncore",mock.Anything).Return(nil)
+	mockpkg.On("Die", mock.Anything).Return(mockdie)
+	mockdie.On("SetUncore", mock.Anything).Return(nil)
 	r, err := createUncoreReconcilerObject(clientObjs)
-	r.PowerLibrary=hostmk
+	r.PowerLibrary = hostmk
 	assert.NoError(t, err)
 	// hostmk.On("Topology").Return(power.Topology)
 	req := reconcile.Request{
@@ -133,42 +134,42 @@ func TestDieSelectMaxError(t *testing.T){
 	assert.Error(t, err)
 	hostmk.AssertExpectations(t)
 }
-func TestDieSelectPackageError(t *testing.T){
-	max:=uint(2400000)
-	min:=uint(1200000)
-	die:=uint(0)
-	uncoreName:=""
+func TestDieSelectPackageError(t *testing.T) {
+	max := uint(2400000)
+	min := uint(1200000)
+	die := uint(0)
+	uncoreName := ""
 	clientObjs := []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: uncoreName,
+				Name:      uncoreName,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
 				DieSelectors: &[]powerv1.DieSelector{
-					{Die: &die,Max: &max,Min: &min},
+					{Die: &die, Max: &max, Min: &min},
 				},
 			},
 		},
 	}
 
 	hostmk := new(hostMock)
-	mocktop:=new(mockCpuTopology)
-	mockpkg:=new(mockCpuPackage)
-	mockdie:=new(mockCpuDie)
-	pkglst:=mockpkg.MakeList()
-	dielst:=mockdie.MakeList()
-	mocktop.On("SetUncore",mock.Anything).Return(nil)
+	mocktop := new(mockCpuTopology)
+	mockpkg := new(mockCpuPackage)
+	mockdie := new(mockCpuDie)
+	pkglst := mockpkg.MakeList()
+	dielst := mockdie.MakeList()
+	mocktop.On("SetUncore", mock.Anything).Return(nil)
 	hostmk.On("Topology").Return(mocktop)
 	mocktop.On("Packages").Return(&pkglst)
-	mocktop.On("Package",mock.Anything).Return(mockpkg)
-	mockpkg.On("SetUncore",mock.Anything).Return(nil)
+	mocktop.On("Package", mock.Anything).Return(mockpkg)
+	mockpkg.On("SetUncore", mock.Anything).Return(nil)
 
 	mockpkg.On("Dies").Return(&dielst)
-	mockpkg.On("Die",mock.Anything).Return(mockdie)
-	mockdie.On("SetUncore",mock.Anything).Return(nil)
+	mockpkg.On("Die", mock.Anything).Return(mockdie)
+	mockdie.On("SetUncore", mock.Anything).Return(nil)
 	r, err := createUncoreReconcilerObject(clientObjs)
-	r.PowerLibrary=hostmk
+	r.PowerLibrary = hostmk
 	assert.NoError(t, err)
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
@@ -181,36 +182,35 @@ func TestDieSelectPackageError(t *testing.T){
 	assert.Error(t, err)
 	hostmk.AssertExpectations(t)
 }
-func TestNoSelectorsOrSystemValues(t *testing.T){
-	uncoreName:=""
+func TestNoSelectorsOrSystemValues(t *testing.T) {
+	uncoreName := ""
 	clientObjs := []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: uncoreName,
+				Name:      uncoreName,
 				Namespace: "intel-power",
 			},
-			Spec: powerv1.UncoreSpec{
-			},
+			Spec: powerv1.UncoreSpec{},
 		},
 	}
 
 	hostmk := new(hostMock)
-	mocktop:=new(mockCpuTopology)
-	mockpkg:=new(mockCpuPackage)
-	mockdie:=new(mockCpuDie)
-	pkglst:=mockpkg.MakeList()
-	dielst:=mockdie.MakeList()
-	mocktop.On("SetUncore",mock.Anything).Return(nil)
+	mocktop := new(mockCpuTopology)
+	mockpkg := new(mockCpuPackage)
+	mockdie := new(mockCpuDie)
+	pkglst := mockpkg.MakeList()
+	dielst := mockdie.MakeList()
+	mocktop.On("SetUncore", mock.Anything).Return(nil)
 	hostmk.On("Topology").Return(mocktop)
 	mocktop.On("Packages").Return(&pkglst)
-	mocktop.On("Package",mock.Anything).Return(mockpkg)
-	mockpkg.On("SetUncore",mock.Anything).Return(nil)
+	mocktop.On("Package", mock.Anything).Return(mockpkg)
+	mockpkg.On("SetUncore", mock.Anything).Return(nil)
 
 	mockpkg.On("Dies").Return(&dielst)
-	mockpkg.On("Die",mock.Anything).Return(mockdie)
-	mockdie.On("SetUncore",mock.Anything).Return(nil)
+	mockpkg.On("Die", mock.Anything).Return(mockdie)
+	mockdie.On("SetUncore", mock.Anything).Return(nil)
 	r, err := createUncoreReconcilerObject(clientObjs)
-	r.PowerLibrary=hostmk
+	r.PowerLibrary = hostmk
 	assert.NoError(t, err)
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
@@ -226,20 +226,20 @@ func TestNoSelectorsOrSystemValues(t *testing.T){
 
 func FuzzUncoreReconciler(f *testing.F) {
 	hostmk := new(hostMock)
-	mocktop:=new(mockCpuTopology)
-	mockpkg:=new(mockCpuPackage)
-	mockdie:=new(mockCpuDie)
-	pkglst:=mockpkg.MakeList()
-	dielst:=mockdie.MakeList()
-	mocktop.On("SetUncore",mock.Anything).Return(nil)
+	mocktop := new(mockCpuTopology)
+	mockpkg := new(mockCpuPackage)
+	mockdie := new(mockCpuDie)
+	pkglst := mockpkg.MakeList()
+	dielst := mockdie.MakeList()
+	mocktop.On("SetUncore", mock.Anything).Return(nil)
 	hostmk.On("Topology").Return(mocktop)
 	mocktop.On("Packages").Return(&pkglst)
-	mocktop.On("Package",mock.Anything).Return(mockpkg)
-	mockpkg.On("SetUncore",mock.Anything).Return(nil)
+	mocktop.On("Package", mock.Anything).Return(mockpkg)
+	mockpkg.On("SetUncore", mock.Anything).Return(nil)
 
 	mockpkg.On("Dies").Return(&dielst)
-	mockpkg.On("Die",mock.Anything).Return(mockdie)
-	mockdie.On("SetUncore",mock.Anything).Return(nil)
+	mockpkg.On("Die", mock.Anything).Return(mockdie)
+	mockdie.On("SetUncore", mock.Anything).Return(nil)
 
 	f.Fuzz(func(t *testing.T, nodeName string, namespace string, extraNode bool, node2Name string, runningOnTargetNode bool) {
 
@@ -249,18 +249,18 @@ func FuzzUncoreReconciler(f *testing.F) {
 			return
 		}
 		_, err := r.Reconcile(context.Background(), req)
-		if err != nil{
-			t.Errorf("error reconciling: %s",err)
+		if err != nil {
+			t.Errorf("error reconciling: %s", err)
 		}
 	})
 }
 
 func setupUncoreFuzz(t *testing.T, nodeName string, namespace string, extraNode bool, node2Name string, runningOnTargetNode bool, powerLib power.Host) (*UncoreReconciler, reconcile.Request) {
-	max:=uint(2400000)
-	min:=uint(1200000)
-	die_and_package:=uint(0)
-	diemin:=min-10000
-	diemax:=max-10000
+	max := uint(2400000)
+	min := uint(1200000)
+	die_and_package := uint(0)
+	diemin := min - 10000
+	diemax := max - 10000
 	defer func(t *testing.T) {
 		if r := recover(); r != nil {
 			// if setup fails we ignore it
@@ -282,10 +282,10 @@ func setupUncoreFuzz(t *testing.T, nodeName string, namespace string, extraNode 
 	if len(nodeName) == 0 || len(node2Name) == 0 {
 		return nil, req
 	}
-	t.Logf("%t=%s- len: %d %t",runningOnTargetNode,node2Name,len(node2Name),node2Name=="\000")
+	t.Logf("%t=%s- len: %d %t", runningOnTargetNode, node2Name, len(node2Name), node2Name == "\000")
 	t.Logf("nodename %v- len %d", nodeName, len(nodeName))
 	t.Logf("nodename2 %v- len %d", []byte(node2Name), len(node2Name))
-	
+
 	if runningOnTargetNode {
 		t.Setenv("NODE_NAME", nodeName)
 	} else {
@@ -293,14 +293,14 @@ func setupUncoreFuzz(t *testing.T, nodeName string, namespace string, extraNode 
 	}
 	UncoreObj := &powerv1.Uncore{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: nodeName,
+			Name:      nodeName,
 			Namespace: namespace,
 		},
 		Spec: powerv1.UncoreSpec{
 			SysMax: &max,
 			SysMin: &min,
-			DieSelectors:&[]powerv1.DieSelector{
-				{Package: &die_and_package,Die: &die_and_package,Max: &diemax,Min: &diemin},
+			DieSelectors: &[]powerv1.DieSelector{
+				{Package: &die_and_package, Die: &die_and_package, Max: &diemax, Min: &diemin},
 			},
 		},
 	}
@@ -310,7 +310,6 @@ func setupUncoreFuzz(t *testing.T, nodeName string, namespace string, extraNode 
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nodeName,
 				},
-				
 			},
 		},
 	}
@@ -339,7 +338,7 @@ func setupUncoreFuzz(t *testing.T, nodeName string, namespace string, extraNode 
 	}
 
 	objs := []runtime.Object{UncoreObj, powerProfilesObj, powerNodesObj}
-	rec,_:=createUncoreReconcilerObject(objs)
-	rec.PowerLibrary=powerLib
+	rec, _ := createUncoreReconcilerObject(objs)
+	rec.PowerLibrary = powerLib
 	return rec, req
 }
