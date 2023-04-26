@@ -283,7 +283,7 @@ func TestTODCronPods(t *testing.T) {
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod-1",
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 				UID:       "abcdefg",
 			},
 			Spec: corev1.PodSpec{

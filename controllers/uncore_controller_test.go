@@ -37,6 +37,7 @@ func createUncoreReconcilerObject(objs []runtime.Object) (*UncoreReconciler, err
 }
 
 func TestDieSelectMinError(t *testing.T) {
+	t.Setenv("NODE_NAME", "")
 	max := uint(2400000)
 	pkg := uint(0)
 	die := uint(0)
@@ -86,6 +87,7 @@ func TestDieSelectMinError(t *testing.T) {
 }
 
 func TestDieSelectMaxError(t *testing.T) {
+	t.Setenv("NODE_NAME", "")
 	min := uint(1200000)
 	pkg := uint(0)
 	die := uint(0)
@@ -135,6 +137,7 @@ func TestDieSelectMaxError(t *testing.T) {
 	hostmk.AssertExpectations(t)
 }
 func TestDieSelectPackageError(t *testing.T) {
+	t.Setenv("NODE_NAME", "")
 	max := uint(2400000)
 	min := uint(1200000)
 	die := uint(0)
@@ -183,6 +186,7 @@ func TestDieSelectPackageError(t *testing.T) {
 	hostmk.AssertExpectations(t)
 }
 func TestNoSelectorsOrSystemValues(t *testing.T) {
+	t.Setenv("NODE_NAME", "")
 	uncoreName := ""
 	clientObjs := []runtime.Object{
 		&powerv1.Uncore{

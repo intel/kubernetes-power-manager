@@ -51,7 +51,7 @@ func TestTimeOfDay(t *testing.T) {
 	todObj := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "timeofday-test",
-			Namespace: "intel-power",
+			Namespace: IntelPowerNamespace,
 		},
 		Spec: powerv1.TimeOfDaySpec{
 			TimeZone:     "Eire",
@@ -84,7 +84,7 @@ func TestTimeOfDay(t *testing.T) {
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
 			Name:      "timeofday-test",
-			Namespace: "intel-power",
+			Namespace: IntelPowerNamespace,
 		},
 	}
 	nodemk := new(hostMock)

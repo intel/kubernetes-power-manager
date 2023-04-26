@@ -17,33 +17,33 @@ spec:
     spec:
       serviceAccountName: intel-power-operator
       containers:
-      - command:
-        - /manager
-        args:
-        - --enable-leader-election
-        - --zap-log-level
-        - "3"
-        imagePullPolicy: IfNotPresent
-        image: intel/power-operator:v2.1.0
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: ["ALL"]
-        name: manager
-        resources:
-          limits:
-            cpu: 100m
-            memory: 64Mi
-          requests:
-            cpu: 100m
-            memory: 64Mi
-        volumeMounts:
-        - mountPath: /sys/fs
-          name: cgroup
-          mountPropagation: HostToContainer
-          readOnly: true
+        - command:
+            - /manager
+          args:
+            - --enable-leader-election
+            - --zap-log-level
+            - "3"
+          imagePullPolicy: IfNotPresent
+          image: intel/power-operator:v2.1.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ "ALL" ]
+          name: manager
+          resources:
+            limits:
+              cpu: 100m
+              memory: 64Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - mountPath: /sys/fs
+              name: cgroup
+              mountPropagation: HostToContainer
+              readOnly: true
       terminationGracePeriodSeconds: 10
       volumes:
-      - name: cgroup
-        hostPath:
-          path: /sys/fs
+        - name: cgroup
+          hostPath:
+            path: /sys/fs

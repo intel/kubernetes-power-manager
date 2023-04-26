@@ -47,7 +47,6 @@ spec:
                     package:
                       type: integer
                   required:
-                  - die
                   - max
                   - min
                   - package

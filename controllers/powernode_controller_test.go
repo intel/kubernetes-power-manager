@@ -51,7 +51,7 @@ func TestPowerNodeNotCorrectNode(t *testing.T) {
 				&powerv1.PowerNode{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "DifferentNode",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerNodeSpec{},
 				},
@@ -83,7 +83,7 @@ func TestPowerNodeNotCorrectNode(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.powerNodeName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 

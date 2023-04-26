@@ -38,7 +38,7 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 	cStatesObj := &powerv1.CStates{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "node1",
-			Namespace: "default",
+			Namespace: IntelPowerNamespace,
 		},
 		Spec: powerv1.CStatesSpec{
 			SharedPoolCStates:     power.CStates{"C1": true},
@@ -80,10 +80,9 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 
 	powerLibMock := new(hostMock)
 	sharedPoolMock := new(poolMock)
-	sharedPoolMock.On("Name").Return("shared")
 	powerLibMock.On("GetSharedPool").Return(sharedPoolMock)
 	exclusivePool := new(poolMock)
-	//exclusivePool.On("Name").Return("exclusive")
+	exclusivePool.On("Name").Return("exclusive")
 	powerLibMock.On("GetAllExclusivePools").Return(&power.PoolList{exclusivePool})
 	powerLibMock.On("GetExclusivePool", "performance").Return(exclusivePool)
 	mockedCore := new(coreMock)
@@ -109,7 +108,7 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 	assert.NotNil(t, r)
 	ctx := context.Background()
 	req := reconcile.Request{NamespacedName: client.ObjectKey{
-		Namespace: "default",
+		Namespace: IntelPowerNamespace,
 		Name:      "node1",
 	}}
 	t.Setenv("NODE_NAME", "node1")

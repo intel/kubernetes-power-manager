@@ -1,6 +1,5 @@
 # Kubernetes Power Manager
 
-
 ## What is the Kubernetes Power Manager?
 
 Utilizing a container orchestration engine like Kubernetes, CPU resources are allocated from a pool of platforms

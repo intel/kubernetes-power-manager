@@ -47,7 +47,7 @@ func TestPowerWorkload(t *testing.T) {
 	pwrWorkloadObj := &powerv1.PowerWorkload{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workloadName,
-			Namespace: "default",
+			Namespace: IntelPowerNamespace,
 		},
 		Spec: powerv1.PowerWorkloadSpec{
 			Name:              "",
@@ -98,7 +98,7 @@ func TestPowerWorkload(t *testing.T) {
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
 			Name:      workloadName,
-			Namespace: "default",
+			Namespace: IntelPowerNamespace,
 		},
 	}
 

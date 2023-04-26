@@ -66,7 +66,7 @@ func TestPowerProfileCreationNonPowerProfileNotInLibrary(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "performance",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "performance",
@@ -95,7 +95,7 @@ func TestPowerProfileCreationNonPowerProfileNotInLibrary(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "performance",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "performance",
@@ -124,7 +124,7 @@ func TestPowerProfileCreationNonPowerProfileNotInLibrary(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "user-created",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "user-created",
@@ -166,7 +166,7 @@ func TestPowerProfileCreationNonPowerProfileNotInLibrary(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.profileName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -179,7 +179,7 @@ func TestPowerProfileCreationNonPowerProfileNotInLibrary(t *testing.T) {
 		workload := &powerv1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      fmt.Sprintf("%s-%s", tc.profileName, tc.nodeName),
-			Namespace: "default",
+			Namespace: IntelPowerNamespace,
 		}, workload)
 		if err != nil {
 			t.Error(err)
@@ -217,7 +217,7 @@ func TestPowerProfileCreationNonPowerProfileInLibrary(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "performance",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "performance",
@@ -246,7 +246,7 @@ func TestPowerProfileCreationNonPowerProfileInLibrary(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "performance",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "performance",
@@ -275,7 +275,7 @@ func TestPowerProfileCreationNonPowerProfileInLibrary(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "user-created",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "user-created",
@@ -316,7 +316,7 @@ func TestPowerProfileCreationNonPowerProfileInLibrary(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.profileName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -329,7 +329,7 @@ func TestPowerProfileCreationNonPowerProfileInLibrary(t *testing.T) {
 		workload := &powerv1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      fmt.Sprintf("%s-%s", tc.profileName, tc.nodeName),
-			Namespace: "default",
+			Namespace: IntelPowerNamespace,
 		}, workload)
 		if err != nil {
 			t.Error(err)
@@ -353,7 +353,7 @@ func TestPowerProfileCreationMaxMinValuesZero(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "user-created",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "user-created",
@@ -372,7 +372,7 @@ func TestPowerProfileCreationMaxMinValuesZero(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "user-created",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "user-created",
@@ -391,7 +391,7 @@ func TestPowerProfileCreationMaxMinValuesZero(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "user-created",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "user-created",
@@ -418,7 +418,7 @@ func TestPowerProfileCreationMaxMinValuesZero(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.profileName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -456,7 +456,7 @@ func TestPowerProfileCreationIncorrectEppValue(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "user-created",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "user-created",
@@ -483,7 +483,7 @@ func TestPowerProfileCreationIncorrectEppValue(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.profileName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -496,7 +496,7 @@ func TestPowerProfileCreationIncorrectEppValue(t *testing.T) {
 		profile := &powerv1.PowerProfile{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      tc.profileName,
-			Namespace: "default",
+			Namespace: IntelPowerNamespace,
 		}, profile)
 		if err == nil {
 			t.Errorf("%s Failed - Expected Power Profile %s to not exist", tc.testCase, tc.profileName)
@@ -530,7 +530,7 @@ func TestSharedPowerProfileCreationProfileDoesNotExistInLibrary(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "shared",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "shared",
@@ -553,7 +553,7 @@ func TestSharedPowerProfileCreationProfileDoesNotExistInLibrary(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.profileName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -591,7 +591,7 @@ func TestPowerProfileDeletion(t *testing.T) {
 				&powerv1.PowerWorkload{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "performance-TestNode",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerWorkloadSpec{},
 				},
@@ -616,7 +616,7 @@ func TestPowerProfileDeletion(t *testing.T) {
 				&powerv1.PowerWorkload{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "user-created-TestNode",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerWorkloadSpec{},
 				},
@@ -668,7 +668,7 @@ func TestPowerProfileDeletion(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.profileName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -681,7 +681,7 @@ func TestPowerProfileDeletion(t *testing.T) {
 		workload := &powerv1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      fmt.Sprintf("%s-%s", tc.profileName, tc.nodeName),
-			Namespace: "default",
+			Namespace: IntelPowerNamespace,
 		}, workload)
 		if err == nil {
 			t.Errorf("%s Failed - Expected Power Workload Object '%s-%s' to have been deleted", tc.testCase, tc.profileName, tc.nodeName)
@@ -718,7 +718,7 @@ func TestMaxValueLowerThanMinValue(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "user-created",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "user-created",
@@ -756,7 +756,7 @@ func TestMaxValueLowerThanMinValue(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.profileName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -782,7 +782,7 @@ func TestSharedFrequencyValuesLessThanAbsoluteValue(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "shared",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "shared",
@@ -820,7 +820,7 @@ func TestSharedFrequencyValuesLessThanAbsoluteValue(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.profileName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -846,7 +846,7 @@ func TestMaxValueZeroMinValueGreaterThanZero(t *testing.T) {
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "user-created",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name: "user-created",
@@ -884,7 +884,7 @@ func TestMaxValueZeroMinValueGreaterThanZero(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.profileName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -939,7 +939,7 @@ func TestProfileReturnsErrors(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.profileName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 

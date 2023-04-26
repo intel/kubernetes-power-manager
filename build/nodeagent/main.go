@@ -50,11 +50,7 @@ func init() {
 
 func main() {
 	var metricsAddr string
-	var enableLeaderElection bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":10001", "The address the metric endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
 
 	logOpts := zap.Options{}
 	logOpts.BindFlags(flag.CommandLine)
@@ -74,8 +70,6 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		Port:               9443,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "6846766c.intel.com",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

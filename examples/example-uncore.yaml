@@ -6,7 +6,7 @@ metadata:
 spec:
   sysMax: 2300000
   sysMin: 1300000
-  dieSelector: 
+  dieSelector:
     - package: 0
       die: 0
       min: 1500000

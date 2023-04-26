@@ -11,17 +11,17 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: uncore-viewer-role
 rules:
-- apiGroups:
-  - power.intel.com
-  resources:
-  - uncores
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - power.intel.com
-  resources:
-  - uncores/status
-  verbs:
-  - get
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - uncores
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - uncores/status
+    verbs:
+      - get

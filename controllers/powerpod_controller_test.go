@@ -89,7 +89,7 @@ func TestPodCreation(t *testing.T) {
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
-					Namespace: "default",
+					Namespace: IntelPowerNamespace,
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -130,7 +130,7 @@ func TestPodCreation(t *testing.T) {
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 						UID:       "abcdefg",
 					},
 					Spec: corev1.PodSpec{
@@ -176,7 +176,7 @@ func TestPodCreation(t *testing.T) {
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-2",
-					Namespace: "default",
+					Namespace: IntelPowerNamespace,
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -221,7 +221,7 @@ func TestPodCreation(t *testing.T) {
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-2",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 						UID:       "abcdefg",
 					},
 					Spec: corev1.PodSpec{
@@ -295,7 +295,7 @@ func TestPodCreation(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.podName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -341,7 +341,7 @@ func TestPodControllerErrors(t *testing.T) {
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
-					Namespace: "default",
+					Namespace: IntelPowerNamespace,
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -382,7 +382,7 @@ func TestPodControllerErrors(t *testing.T) {
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 						UID:       "abcdefg",
 					},
 					Spec: corev1.PodSpec{
@@ -429,7 +429,7 @@ func TestPodControllerErrors(t *testing.T) {
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
-					Namespace: "default",
+					Namespace: IntelPowerNamespace,
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -470,7 +470,7 @@ func TestPodControllerErrors(t *testing.T) {
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: corev1.PodSpec{
 						NodeName: "TestNode",
@@ -516,7 +516,7 @@ func TestPodControllerErrors(t *testing.T) {
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
-					Namespace: "default",
+					Namespace: IntelPowerNamespace,
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -571,7 +571,7 @@ func TestPodControllerErrors(t *testing.T) {
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 						UID:       "abcdefg",
 					},
 					Spec: corev1.PodSpec{
@@ -638,7 +638,7 @@ func TestPodControllerErrors(t *testing.T) {
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
-					Namespace: "default",
+					Namespace: IntelPowerNamespace,
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -679,7 +679,7 @@ func TestPodControllerErrors(t *testing.T) {
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 						UID:       "abcdefg",
 					},
 					Spec: corev1.PodSpec{
@@ -726,7 +726,7 @@ func TestPodControllerErrors(t *testing.T) {
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
-					Namespace: "default",
+					Namespace: IntelPowerNamespace,
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -767,7 +767,7 @@ func TestPodControllerErrors(t *testing.T) {
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 						UID:       "abcdefg",
 					},
 					Spec: corev1.PodSpec{
@@ -823,7 +823,7 @@ func TestPodControllerErrors(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.podName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -866,7 +866,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
-					Namespace: "default",
+					Namespace: IntelPowerNamespace,
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -907,7 +907,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 						UID:       "abcdefg",
 					},
 					Spec: corev1.PodSpec{
@@ -954,7 +954,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
-					Namespace: "default",
+					Namespace: IntelPowerNamespace,
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -1042,7 +1042,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
-					Namespace: "default",
+					Namespace: IntelPowerNamespace,
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -1083,7 +1083,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 						UID:       "abcdefg",
 					},
 					Spec: corev1.PodSpec{
@@ -1138,7 +1138,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.podName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -1183,7 +1183,7 @@ func TestPodDeletion(t *testing.T) {
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
-					Namespace: "default",
+					Namespace: IntelPowerNamespace,
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -1224,7 +1224,7 @@ func TestPodDeletion(t *testing.T) {
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:              "test-pod-1",
-						Namespace:         "default",
+						Namespace:         IntelPowerNamespace,
 						UID:               "abcdefg",
 						DeletionTimestamp: &metav1.Time{Time: time.Date(9999, time.Month(1), 21, 1, 10, 30, 0, time.UTC)},
 					},
@@ -1272,7 +1272,7 @@ func TestPodDeletion(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.podName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 

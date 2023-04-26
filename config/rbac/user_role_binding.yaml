@@ -3,10 +3,10 @@ kind: ClusterRoleBinding
 metadata:
   name: pm_user
 subjects:
-- kind: User
-  name: default
-  namespace: intel-power
-  apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: default
+    namespace: intel-power
+    apiGroup: rbac.authorization.k8s.io
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

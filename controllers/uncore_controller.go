@@ -60,6 +60,10 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 	logger := r.Log.WithValues("uncore", req.NamespacedName)
+	if req.Namespace != IntelPowerNamespace {
+		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{}, nil
+	}
 	logger.Info("Reconciling uncore")
 	uncore := &powerv1.Uncore{}
 	// resets all values to allow for CRD updates

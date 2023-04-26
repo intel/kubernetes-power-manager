@@ -11,21 +11,21 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: uncore-editor-role
 rules:
-- apiGroups:
-  - power.intel.com
-  resources:
-  - uncores
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - power.intel.com
-  resources:
-  - uncores/status
-  verbs:
-  - get
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - uncores
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - uncores/status
+    verbs:
+      - get
