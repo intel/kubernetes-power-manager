@@ -184,8 +184,8 @@ github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ
 github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/imdario/mergo v0.3.13 h1:lFzP57bqS/wsqKssCGmtLAb8A0wKjLGrve2q3PPVcBk=
 github.com/imdario/mergo v0.3.13/go.mod h1:4lJ1jqUDcsbIECGy0RUJAXNIhg+6ocWgb1ALK2O4oXg=
-github.com/intel/power-optimization-library v1.1.0 h1:VhtbZtm8busXLJpeYYsH+JzNgukiFtOpmENaVQH/o5Q=
-github.com/intel/power-optimization-library v1.1.0/go.mod h1:yBKXpKPeqllH2HrH5GwJtiaOXSu1qAIxQQB3IVHjjJA=
+github.com/intel/power-optimization-library v1.2.0 h1:VDINABS0fBbu5hj2P74z/eCJr/w4tLND2Nw+Ua8CCaM=
+github.com/intel/power-optimization-library v1.2.0/go.mod h1:AkDspxSEh+1sIzFO6QrXNlQcifh3RiFRi5vNdikWQS4=
 github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=
 github.com/josharian/intern v1.0.0/go.mod h1:5DoeVV0s6jJacbCEi61lwdGj/aVlrQvzHFFd8Hwg//Y=
