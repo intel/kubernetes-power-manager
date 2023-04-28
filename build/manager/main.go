@@ -73,7 +73,7 @@ func main() {
 		MetricsBindAddress: metricsAddr,
 		Port:               9443,
 		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "6846766c.intel.com",
+		LeaderElectionID:   "power-operator-6846766c",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
