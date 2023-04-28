@@ -50,23 +50,6 @@ participant proxy as "<b>Kube-Proxy" #LightGreen
 
 title : Interactions between the Control Plane (master node) and the Worker Node
 
-== Kubernetes Initialization ==
-autonumber
-
-Georgina->>apiSrv: kubectl create -f pod.yaml
-apiSrv-->>etcd: save new state
-cntrlMgr->>apiSrv: check for changes
-sched->>apiSrv: watch for unassigned pods(s)
-apiSrv->>sched: notify about pod w nodename=" "
-sched->>apiSrv: assign pod to node
-apiSrv-->>etcd: save new state
-kubelet->>apiSrv: look for newly assigned pod(s)
-apiSrv->>kubelet: bind pod to node
-kubelet->>agent: start container
-kubelet->>apiSrv: update pod status
-apiSrv-->>etcd: save new state
-
-autonumber stop
 
 
 == Power Manager Initialization ==
@@ -117,36 +100,6 @@ autonumber stop
 
 == Power Manager additional functionality ==
 
-== Uncore ==
-autonumber
-
-Georgina -> kubelet: Confirm Kernel verson
-note right #DarkGray: <color #black>kernel 5.6+ required for uncore</color>
-
-
-kubelet -> library: Set Freq in Die and Pkg 
-note right #Orange: <color #black>examples/example-uncore</color>
-
-kubelet -> agent: Deploy Controller Manager
-note right #Orange: <color #black>apply config/manager/manager.yaml</color>
-
-powerOperator -> library: Deploy the config
-note right #Orange: <color #black>examples/example-powerconfig.yaml</color>
-
-agent -> library: Set Shared Profile 
-note right #Orange: <color #black>examples/example-shared-profile.yaml</color>
-
-agent -> library: Deploy th Workload
-note right #Orange: <color #black>examples/example-shared-workload.yaml</color>
-
-agent -> library: Deploy Pod 
-note right #Orange: <color #black>examples/example-pod.yaml</color>
-
-agent -> library: Set Time of Day functionality 
-note right #Orange: <color #black>examples/example-timeofday</color>
-
-autonumber stop
-
 == P-State ==
 autonumber
 
@@ -166,45 +119,6 @@ agent -> library: Deploy Pod
 note right #Orange: <color #black>examples/example-pod.yaml</color>
 
 autonumber stop
-
-== C-State ==
-kubelet -> agent: Deploy Controller Manager
-note right #Orange: <color #black>apply config/manager/manager.yaml</color>
-
-powerOperator -> library: Deploy the config
-note right #Orange: <color #black>examples/example-powerconfig.yaml</color>
-
-agent -> library: Set Shared Profile 
-note right #Orange: <color #black>examples/example-shared-profile.yaml</color>
-
-agent -> library: Deploy th Workload
-note right #Orange: <color #black>examples/example-shared-workload.yaml</color>
-
-agent -> library: Deploy Pod 
-note right #Orange: <color #black>examples/example-pod.yaml</color>
-
-agent -> library: Set C-State functionality 
-note right #Orange: <color #black>examples/example-cstates</color>
-
-== Time of Day ==
-
-kubelet -> agent: Deploy Controller Manager
-note right #Orange: <color #black>apply config/manager/manager.yaml</color>
-
-powerOperator -> library: Deploy the config
-note right #Orange: <color #black>examples/example-powerconfig.yaml</color>
-
-agent -> library: Set Shared Profile 
-note right #Orange: <color #black>examples/example-shared-profile.yaml</color>
-
-agent -> library: Deploy th Workload
-note right #Orange: <color #black>examples/example-shared-workload.yaml</color>
-
-agent -> library: Deploy Pod 
-note right #Orange: <color #black>examples/example-pod.yaml</color>
-
-agent -> library: Set Time of Day functionality 
-note right #Orange: <color #black>examples/example-timeofday</color>
 
 
 @enduml
