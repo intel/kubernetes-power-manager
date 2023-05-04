@@ -145,3 +145,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - power.intel.com
+  resources:
+  - uncores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - power.intel.com
+  resources:
+  - uncores/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - power.intel.com
+  resources:
+  - uncores/status
+  verbs:
+  - get
+  - patch
+  - update

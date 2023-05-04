@@ -2,14 +2,15 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/power.intel.com_powernodes.yaml
-- bases/power.intel.com_powerprofiles.yaml
-- bases/power.intel.com_powerworkloads.yaml
-- bases/power.intel.com_powerpods.yaml
-- bases/power.intel.com_powerconfigs.yaml
-- bases/power.intel.com_cstates.yaml
-- bases/power.intel.com_timeofdays.yaml
-- bases/power.intel.com_timeofdaycronjobs.yaml
+  - bases/power.intel.com_powernodes.yaml
+  - bases/power.intel.com_powerprofiles.yaml
+  - bases/power.intel.com_powerworkloads.yaml
+  - bases/power.intel.com_powerpods.yaml
+  - bases/power.intel.com_powerconfigs.yaml
+  - bases/power.intel.com_cstates.yaml
+  - bases/power.intel.com_timeofdays.yaml
+  - bases/power.intel.com_timeofdaycronjobs.yaml
+  - bases/power.intel.com_uncores.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
@@ -26,6 +27,7 @@ patchesStrategicMerge:
 #- patches/webhook_in_cstates.yaml
 #- patches/webhook_in_timeofdays.yaml
 #- patches/webhook_in_timeofdaycronjobs.yaml
+#- patches/webhook_in_uncores.yaml
 # +kubebuilder:scaffold:crdkustomizewebhookpatch
 
 # [CERTMANAGER] To enable webhook, uncomment all the sections with [CERTMANAGER] prefix.
@@ -41,8 +43,9 @@ patchesStrategicMerge:
 #- patches/cainjection_in_cstates.yaml
 #- patches/cainjection_in_timeofdays.yaml
 #- patches/cainjection_in_timeofdaycronjobs.yaml
+#- patches/cainjection_in_uncores.yaml
 # +kubebuilder:scaffold:crdkustomizecainjectionpatch
 
 # the following config is for teaching kustomize how to do kustomization for CRDs.
 configurations:
-- kustomizeconfig.yaml
+  - kustomizeconfig.yaml

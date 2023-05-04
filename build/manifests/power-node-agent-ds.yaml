@@ -15,11 +15,12 @@ spec:
     spec:
       serviceAccountName: intel-power-node-agent
       containers:
-        - image: intel/power-node-agent:v2.1.0
-          imagePullPolicy: Always
+        - image: intel/power-node-agent:v2.2.0
+          imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
           name: power-node-agent
+          args: [ "--zap-log-level","3" ]
           env:
             - name: NODE_NAME
               valueFrom:
@@ -28,10 +29,10 @@ spec:
           resources:
             limits:
               cpu: 100m
-              memory: 30Mi
+              memory: 64Mi
             requests:
               cpu: 100m
-              memory: 30Mi
+              memory: 64Mi
           volumeMounts:
             - mountPath: /sys/devices/system/cpu
               name: cpusetup

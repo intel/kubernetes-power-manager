@@ -39,6 +39,8 @@ func createTODCronReconcilerObject(objs []runtime.Object) (*TimeOfDayCronJobReco
 func TestTODCronProfile(t *testing.T) {
 	zone := "Eire"
 	profile := "performance"
+	loc, err := time.LoadLocation(zone)
+	assert.NoError(t, err)
 	clientObjs := []runtime.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
@@ -70,7 +72,7 @@ func TestTODCronProfile(t *testing.T) {
 				Node: powerv1.WorkloadNode{
 					Name:       "TestNode",
 					Containers: []powerv1.Container{},
-					CpuIds:     []int{},
+					CpuIds:     []uint{},
 				},
 			},
 		},
@@ -95,7 +97,7 @@ func TestTODCronProfile(t *testing.T) {
 				Node: powerv1.WorkloadNode{
 					Name:       "TestNode",
 					Containers: []powerv1.Container{},
-					CpuIds:     []int{},
+					CpuIds:     []uint{},
 				},
 				PowerProfile: "shared-TestNode",
 			},
@@ -120,7 +122,7 @@ func TestTODCronProfile(t *testing.T) {
 				Node: powerv1.WorkloadNode{
 					Name:       "TestNode",
 					Containers: []powerv1.Container{},
-					CpuIds:     []int{},
+					CpuIds:     []uint{},
 				},
 			},
 		},
@@ -130,8 +132,8 @@ func TestTODCronProfile(t *testing.T) {
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.TimeOfDayCronJobSpec{
-				Hour:     time.Now().Hour(),
-				Minute:   time.Now().Add(1 * time.Minute).Minute(),
+				Hour:     time.Now().In(loc).Hour(),
+				Minute:   time.Now().In(loc).Add(1 * time.Minute).Minute(),
 				TimeZone: &zone,
 				Profile:  &profile,
 			},
@@ -150,12 +152,13 @@ func TestTODCronProfile(t *testing.T) {
 			Namespace: "intel-power",
 		},
 	}
-	nodemk := new(nodeMock)
+	nodemk := new(hostMock)
 	r, err := createTODCronReconcilerObject(clientObjs)
 	assert.NoError(t, err)
 	//ensure workload has correct initial profile
 	workload := powerv1.PowerWorkload{}
-	r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
+	err = r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
+	assert.NoError(t, err)
 	assert.True(t, workload.Spec.AllCores)
 	assert.Equal(t, workload.Spec.PowerProfile, "shared-TestNode")
 	//initiate cronjob
@@ -165,11 +168,12 @@ func TestTODCronProfile(t *testing.T) {
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
-	r.Reconcile(context.TODO(), req)
+	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
 	//ensure workload profile has been changed
 	workload = powerv1.PowerWorkload{}
-	r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
+	err = r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
+	assert.NoError(t, err)
 	assert.True(t, workload.Spec.AllCores)
 	assert.Equal(t, workload.Spec.PowerProfile, profile)
 
@@ -179,6 +183,8 @@ func TestTODCronPods(t *testing.T) {
 	TestNode := "TestNode"
 	t.Setenv("NODE_NAME", TestNode)
 	zone := "Eire"
+	loc, err := time.LoadLocation(zone)
+	assert.NoError(t, err)
 	podMap := make(map[string]map[string]string)
 	profMap := make(map[string]string)
 	profMap["performance"] = "balance-performance"
@@ -214,7 +220,7 @@ func TestTODCronPods(t *testing.T) {
 				Node: powerv1.WorkloadNode{
 					Name:       "TestNode",
 					Containers: []powerv1.Container{},
-					CpuIds:     []int{},
+					CpuIds:     []uint{},
 				},
 			},
 		},
@@ -239,7 +245,7 @@ func TestTODCronPods(t *testing.T) {
 				Node: powerv1.WorkloadNode{
 					Name:       "TestNode",
 					Containers: []powerv1.Container{},
-					CpuIds:     []int{},
+					CpuIds:     []uint{},
 				},
 				PowerProfile: "shared-TestNode",
 			},
@@ -266,10 +272,10 @@ func TestTODCronPods(t *testing.T) {
 					Containers: []powerv1.Container{
 						{
 							Pod:           "test-pod-1",
-							ExclusiveCPUs: []int{3, 4},
+							ExclusiveCPUs: []uint{3, 4},
 						},
 					},
-					CpuIds: []int{3, 4},
+					CpuIds: []uint{3, 4},
 				},
 				PowerProfile: "performance",
 			},
@@ -277,7 +283,7 @@ func TestTODCronPods(t *testing.T) {
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod-1",
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 				UID:       "abcdefg",
 			},
 			Spec: corev1.PodSpec{
@@ -318,8 +324,8 @@ func TestTODCronPods(t *testing.T) {
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.TimeOfDayCronJobSpec{
-				Hour:     time.Now().Hour(),
-				Minute:   time.Now().Add(1 * time.Minute).Minute(),
+				Hour:     time.Now().In(loc).Hour(),
+				Minute:   time.Now().In(loc).Add(1 * time.Minute).Minute(),
 				TimeZone: &zone,
 				Pods:     &podMap,
 			},
@@ -344,12 +350,13 @@ func TestTODCronPods(t *testing.T) {
 			Namespace: IntelPowerNamespace,
 		},
 	}
-	nodemk := new(nodeMock)
+	nodemk := new(hostMock)
 	r, err := createTODCronReconcilerObject(clientObjs)
 	assert.NoError(t, err)
 	//ensure pod is in correct workload
 	workload := powerv1.PowerWorkload{}
-	r.Client.Get(context.TODO(), performanceReq.NamespacedName, &workload)
+	err = r.Client.Get(context.TODO(), performanceReq.NamespacedName, &workload)
+	assert.NoError(t, err)
 	assert.True(t, findPodInWorkload(workload, "test-pod-1"))
 	//reconcile job and wait for schedule time
 	res, err := r.Reconcile(context.TODO(), req)
@@ -358,13 +365,16 @@ func TestTODCronPods(t *testing.T) {
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
 	//ensure initial workload no longer has pod
-	r.Reconcile(context.TODO(), req)
+	_, err = r.Reconcile(context.TODO(), req)
+	assert.NoError(t, err)
 	workload = powerv1.PowerWorkload{}
-	r.Client.Get(context.TODO(), performanceReq.NamespacedName, &workload)
+	err = r.Client.Get(context.TODO(), performanceReq.NamespacedName, &workload)
+	assert.NoError(t, err)
 	assert.False(t, findPodInWorkload(workload, "test-pod-1"))
 	//ensure new workload has pod
 	workload = powerv1.PowerWorkload{}
-	r.Client.Get(context.TODO(), balancePerformanceReq.NamespacedName, &workload)
+	err = r.Client.Get(context.TODO(), balancePerformanceReq.NamespacedName, &workload)
+	assert.NoError(t, err)
 	assert.True(t, findPodInWorkload(workload, "test-pod-1"))
 
 }
@@ -382,6 +392,8 @@ func TestTODCstates(t *testing.T) {
 	TestNode := "TestNode"
 	t.Setenv("NODE_NAME", TestNode)
 	zone := "Eire"
+	loc, err := time.LoadLocation(zone)
+	assert.NoError(t, err)
 	cMapShared := make(map[string]bool)
 	cMapShared["C1"] = false
 	cMapShared["C6"] = false
@@ -411,8 +423,8 @@ func TestTODCstates(t *testing.T) {
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.TimeOfDayCronJobSpec{
-				Hour:     time.Now().Hour(),
-				Minute:   time.Now().Add(1 * time.Minute).Minute(),
+				Hour:     time.Now().In(loc).Hour(),
+				Minute:   time.Now().In(loc).Add(1 * time.Minute).Minute(),
 				TimeZone: &zone,
 				CState:   &cSpec,
 			},
@@ -431,23 +443,26 @@ func TestTODCstates(t *testing.T) {
 			Namespace: IntelPowerNamespace,
 		},
 	}
-	nodemk := new(nodeMock)
+	nodemk := new(hostMock)
 	r, err := createTODCronReconcilerObject(clientObjs)
+	assert.NoError(t, err)
 	//ensure no initial cstate object exists
 	cstate := powerv1.CStates{}
-	r.Client.Get(context.TODO(), cstateReq.NamespacedName, &cstate)
+	err = r.Client.Get(context.TODO(), cstateReq.NamespacedName, &cstate)
 	assert.Empty(t, cstate.Name)
-	assert.NoError(t, err)
+	assert.Error(t, err)
 	//reconcile job and wait for schedule time
 	res, err := r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
-	r.Reconcile(context.TODO(), req)
+	_, err = r.Reconcile(context.TODO(), req)
+	assert.NoError(t, err)
 	// ensure cstate was created and has correct values
 	cstate = powerv1.CStates{}
-	r.Client.Get(context.TODO(), cstateReq.NamespacedName, &cstate)
+	err = r.Client.Get(context.TODO(), cstateReq.NamespacedName, &cstate)
+	assert.NoError(t, err)
 	assert.False(t, cstate.Spec.SharedPoolCStates["C1"])
 	assert.False(t, cstate.Spec.SharedPoolCStates["C6"])
 	assert.False(t, cstate.Spec.SharedPoolCStates["C6"])

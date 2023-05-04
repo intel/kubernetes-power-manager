@@ -8,8 +8,7 @@ spec:
     # Add labels here for the Nodes you want the PowerNodeAgent to be applied to
     feature.node.kubernetes.io/power-node: "true"
   powerProfiles:
-  # Add wanted PowerProfiles here; valid entries are as follows:
-  # performance
-  # balance-performance
-  # balance-power
-  - "performance"
+    # Add wanted PowerProfiles here; valid entries are as follows:
+    - balance-performance
+    - balance-power
+    - "performance"

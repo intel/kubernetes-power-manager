@@ -4,17 +4,17 @@ kind: ClusterRole
 metadata:
   name: cstates-viewer-role
 rules:
-- apiGroups:
-  - power.intel.com
-  resources:
-  - cstates
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - power.intel.com
-  resources:
-  - cstates/status
-  verbs:
-  - get
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - cstates
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - cstates/status
+    verbs:
+      - get

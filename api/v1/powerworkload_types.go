@@ -28,7 +28,7 @@ type WorkloadNode struct {
 
 	Containers []Container `json:"containers,omitempty"`
 
-	CpuIds []int `json:"cpuIds,omitempty"`
+	CpuIds []uint `json:"cpuIds,omitempty"`
 }
 
 // PowerWorkloadSpec defines the desired state of PowerWorkload
@@ -44,7 +44,7 @@ type PowerWorkloadSpec struct {
 
 	// Reserved CPUs are the CPUs that have been reserved by Kubelet for use by the Kubernetes admin process
 	// This list must match the list in the user's Kubelet configuration
-	ReservedCPUs []int `json:"reservedCPUs,omitempty"`
+	ReservedCPUs []uint `json:"reservedCPUs,omitempty"`
 
 	// The labels signifying the nodes the user wants to use
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`

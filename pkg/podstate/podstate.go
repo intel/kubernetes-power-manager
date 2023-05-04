@@ -38,8 +38,8 @@ func (s *State) GetPodFromState(podName string) powerv1.GuaranteedPod {
 	return powerv1.GuaranteedPod{}
 }
 
-func (s *State) GetCPUsFromPodState(podState powerv1.GuaranteedPod) []int {
-	cpus := make([]int, 0)
+func (s *State) GetCPUsFromPodState(podState powerv1.GuaranteedPod) []uint {
+	cpus := make([]uint, 0)
 	for _, container := range podState.Containers {
 		cpus = append(cpus, container.ExclusiveCPUs...)
 	}

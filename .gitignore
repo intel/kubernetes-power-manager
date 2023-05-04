@@ -23,6 +23,5 @@
 *.swo
 *~
 
-# ignore sum files as well
-#go.mod
-#go.sum
+go.work
+go.work.sum

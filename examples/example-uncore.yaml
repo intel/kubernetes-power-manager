@@ -1,0 +1,17 @@
+apiVersion: power.intel.com/v1
+kind: Uncore
+metadata:
+  name: <NODE_NAME>
+  namespace: intel-power
+spec:
+  sysMax: 2300000
+  sysMin: 1300000
+  dieSelector:
+    - package: 0
+      die: 0
+      min: 1500000
+      max: 2400000
+    # - package: 0
+    #   die: 1
+    #   min: 1200000
+    #   max: 2400000

@@ -10,22 +10,22 @@ spec:
       # this sets the profile for the shared pool
       powerProfile: balance-performance
       # this transitions a pod with the given name from one profile to another
-      pods: 
-        four-pod-v2: 
+      pods:
+        four-pod-v2:
           performance: balance-performance
         four-pod-v4:
           balance-power: performance
       # this field simply takes a cstate spec
-      cState: 
+      cState:
         sharedPoolCStates:
           C1: false
           C6: true
     - time: "14:26"
       powerProfile: performance
-      cState: 
+      cState:
         sharedPoolCStates:
           C1: true
           C6: false
     - time: "14:28"
       powerProfile: balance-power
-  reservedCPUs: [0,1]
+  reservedCPUs: [ 0,1 ]

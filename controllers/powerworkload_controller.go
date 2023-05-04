@@ -39,7 +39,7 @@ type PowerWorkloadReconciler struct {
 	client.Client
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
-	PowerLibrary power.Node
+	PowerLibrary power.Host
 }
 
 const (
@@ -55,33 +55,35 @@ var sharedPowerWorkloadName = ""
 func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
-
+	if req.Namespace != IntelPowerNamespace {
+		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{}, nil
+	}
 	nodeName := os.Getenv("NODE_NAME")
 
 	workload := &powerv1.PowerWorkload{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, workload)
+	logger.V(5).Info("Retriving Power workload instance")
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// If the profile still exists in the Power Library, then only the Power Workloads was deleted
 			// and we need to remove it from the Power Library here. If the profile doesn't exist, then
 			// the Power Library will already have deleted it for us
-			profileFromLibrary := r.PowerLibrary.GetProfile(req.NamespacedName.Name)
-
 			if req.NamespacedName.Name == sharedPowerWorkloadName {
-				profileFromLibrary = r.PowerLibrary.GetSharedPool().GetPowerProfile()
+				err = r.PowerLibrary.GetSharedPool().SetPowerProfile(nil)
+				if err != nil {
+					logger.Error(err, "failed to remove exclusive pool")
+					return ctrl.Result{}, err
+				}
 				sharedPowerWorkloadName = ""
-				if profileFromLibrary != nil {
-					err = r.PowerLibrary.RemoveSharedPool()
+			} else {
+				pool := r.PowerLibrary.GetExclusivePool(req.NamespacedName.Name)
+				if pool != nil {
+					err = pool.Remove()
 					if err != nil {
+						logger.Error(err, "failed to remove exclusive pool")
 						return ctrl.Result{}, err
 					}
-				}
-			}
-
-			if profileFromLibrary != nil {
-				err = r.PowerLibrary.RemoveExclusivePool(req.NamespacedName.Name)
-				if err != nil {
-					return ctrl.Result{}, err
 				}
 			}
 
@@ -92,6 +94,7 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 	}
 
 	// If there are multiple nodes that the Shared PowerWorkload's Node Selector satisfies we need to fail here before anything is done
+	logger.V(5).Info("Checking that the Node Selector is satisfied with the Shared PowerWorkload")
 	if workload.Spec.AllCores {
 		labelledNodeList := &corev1.NodeList{}
 		listOption := workload.Spec.PowerNodeSelector
@@ -103,10 +106,12 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 		}
 
 		// If there were no Nodes that matched the provided labels, check the NodeInfo of the Workload for a name
+		logger.V(5).Info("Checking NodeInfo to see if Node name is provided")
 		if (len(labelledNodeList.Items) == 0 && workload.Spec.Node.Name != nodeName) || !util.NodeNameInNodeList(nodeName, labelledNodeList.Items) {
 			return ctrl.Result{}, nil
 		}
 
+		logger.V(5).Info("Verifying that there is only one Shared PowerWorkload and if there is more than one delete this instance")
 		if sharedPowerWorkloadName != "" && sharedPowerWorkloadName != req.NamespacedName.Name {
 			// Delete this Shared PowerWorkload as another already exists
 			err = r.Client.Delete(context.TODO(), workload)
@@ -120,16 +125,12 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 			return ctrl.Result{}, nil
 		}
 
-		profileFromLibrary := r.PowerLibrary.GetProfile(workload.Spec.PowerProfile)
-		if profileFromLibrary == nil {
-			profileNotFound := errors.NewServiceUnavailable(fmt.Sprintf("Profile '%s' does not exist in Power Library", workload.Spec.PowerProfile))
-			logger.Error(profileNotFound, "error retrieving Profile")
-			return ctrl.Result{}, profileNotFound
-		}
-
-		err = r.PowerLibrary.AddSharedPool(workload.Spec.ReservedCPUs, profileFromLibrary)
+		// add cores to shared pool by selecting which cores should be reserved
+		// remaining cores will be moved to the shared pool
+		logger.V(5).Info("Creating Shared Pool in the Power Library")
+		err = r.PowerLibrary.GetReservedPool().SetCpuIDs(workload.Spec.ReservedCPUs)
 		if err != nil {
-			logger.Error(err, "error creating Shared Pool in Power Library")
+			logger.Error(err, "error configuring Shared Pool in Power Library")
 			return ctrl.Result{}, err
 		}
 
@@ -146,22 +147,23 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 			return ctrl.Result{}, nil
 		}
 
-		cores := poolFromLibrary.GetCoreIds()
-		coresToRemoveFromLibrary := detectCoresRemoved(cores, workload.Spec.Node.CpuIds)
-		coresToBeAddedToLibrary := detectCoresAdded(cores, workload.Spec.Node.CpuIds)
+		logger.V(5).Info("Updating Cpu list in Power Library")
+		cores := poolFromLibrary.Cpus().IDs()
+		coresToRemoveFromLibrary := detectCoresRemoved(cores, workload.Spec.Node.CpuIds, &logger)
+		coresToBeAddedToLibrary := detectCoresAdded(cores, workload.Spec.Node.CpuIds, &logger)
 
 		if len(coresToRemoveFromLibrary) > 0 {
-			err = r.PowerLibrary.RemoveCoresFromExclusivePool(workload.Spec.PowerProfile, coresToRemoveFromLibrary)
+			err = r.PowerLibrary.GetSharedPool().MoveCpuIDs(coresToRemoveFromLibrary)
 			if err != nil {
-				logger.Error(err, "error updating Power Library Core list")
+				logger.Error(err, "error updating Power Library Cpu list")
 				return ctrl.Result{}, err
 			}
 		}
 
 		if len(coresToBeAddedToLibrary) > 0 {
-			err = r.PowerLibrary.AddCoresToExclusivePool(workload.Spec.PowerProfile, coresToBeAddedToLibrary)
+			err = r.PowerLibrary.GetExclusivePool(workload.Spec.PowerProfile).MoveCpuIDs(coresToBeAddedToLibrary)
 			if err != nil {
-				logger.Error(err, "error updating Power Library Core list")
+				logger.Error(err, "error updating Power Library Cpu list")
 				return ctrl.Result{}, err
 			}
 		}
@@ -170,8 +172,9 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 	return ctrl.Result{}, nil
 }
 
-func detectCoresRemoved(originalCoreList []int, updatedCoreList []int) []int {
-	coresRemoved := []int{}
+func detectCoresRemoved(originalCoreList []uint, updatedCoreList []uint, logger *logr.Logger) []uint {
+	var coresRemoved []uint
+	logger.V(5).Info("Detecting if Cores are Removed from the CoreList")
 	for _, core := range originalCoreList {
 		if !coreInCoreList(core, updatedCoreList) {
 			coresRemoved = append(coresRemoved, core)
@@ -181,8 +184,9 @@ func detectCoresRemoved(originalCoreList []int, updatedCoreList []int) []int {
 	return coresRemoved
 }
 
-func detectCoresAdded(originalCoreList []int, updatedCoreList []int) []int {
-	coresAdded := []int{}
+func detectCoresAdded(originalCoreList []uint, updatedCoreList []uint, logger *logr.Logger) []uint {
+	var coresAdded []uint
+	logger.V(5).Info("Creating Shared Pool in the Power Library")
 	for _, core := range updatedCoreList {
 		if !coreInCoreList(core, originalCoreList) {
 			coresAdded = append(coresAdded, core)
@@ -192,7 +196,7 @@ func detectCoresAdded(originalCoreList []int, updatedCoreList []int) []int {
 	return coresAdded
 }
 
-func coreInCoreList(core int, coreList []int) bool {
+func coreInCoreList(core uint, coreList []uint) bool {
 	for _, c := range coreList {
 		if c == core {
 			return true
