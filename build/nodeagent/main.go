@@ -18,13 +18,12 @@ package main
 
 import (
 	"flag"
-	"os"
-
-	"k8s.io/apimachinery/pkg/api/errors"
+	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -51,52 +50,45 @@ func init() {
 
 func main() {
 	var metricsAddr string
-	var enableLeaderElection bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":10001", "The address the metric endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
+
+	logOpts := zap.Options{}
+	logOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	ctrl.SetLogger(zap.New(
+		zap.UseDevMode(true),
+		func(o *zap.Options) {
+			o.TimeEncoder = zapcore.ISO8601TimeEncoder
+		},
+		zap.UseFlagOptions(&logOpts),
+	),
+	)
 	nodeName := os.Getenv("NODE_NAME")
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		Port:               9443,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "6846766c.intel.com",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-
+	power.SetLogger(ctrl.Log.WithName("powerLibrary"))
 	powerLibrary, err := power.CreateInstance(nodeName)
-	for _, feature := range powerLibrary.GetFeaturesInfo() {
-		setupLog.Info(
-			"feature status",
-			"feature", feature.Name,
-			"driver", feature.Driver,
-			"available", power.IsFeatureSupported(feature.Feature))
+	if powerLibrary == nil {
+		setupLog.Error(err, "unable to create Power Library instance")
+		os.Exit(1)
 	}
 
-	if err != nil {
-		if !power.IsFeatureSupported(power.PStatesFeature) {
-			pStatesNotSupported := errors.NewServiceUnavailable("P-States not supported")
-			setupLog.Error(pStatesNotSupported, "error setting up P-States in Power Library")
-		}
-
-		if !power.IsFeatureSupported(power.CStatesFeature) {
-			cStateNotSupported := errors.NewServiceUnavailable("C-States not supported")
-			setupLog.Error(cStateNotSupported, "error setting up C-States in Power Library")
-		}
-
-		if powerLibrary == nil {
-			setupLog.Error(err, "unable to create Power Library instance")
-			os.Exit(1)
-		}
+	for id, feature := range powerLibrary.GetFeaturesInfo() {
+		setupLog.Info(
+			"feature status",
+			"feature", feature.Name(),
+			"driver", feature.Driver(),
+			"error", feature.FeatureError(),
+			"available", power.IsFeatureSupported(id))
 	}
 
 	powerNodeState, err := podstate.NewState()
@@ -172,6 +164,15 @@ func main() {
 		PowerLibrary: powerLibrary,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TimeOfDayCronJob")
+		os.Exit(1)
+	}
+	if err = (&controllers.UncoreReconciler{
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName("controllers").WithName("Uncore"),
+		Scheme:       mgr.GetScheme(),
+		PowerLibrary: powerLibrary,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Uncore")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

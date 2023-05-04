@@ -3,8 +3,10 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -45,17 +47,17 @@ func TestPowerWorkload(t *testing.T) {
 	pwrWorkloadObj := &powerv1.PowerWorkload{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workloadName,
-			Namespace: "default",
+			Namespace: IntelPowerNamespace,
 		},
 		Spec: powerv1.PowerWorkloadSpec{
 			Name:              "",
 			AllCores:          false,
-			ReservedCPUs:      []int{0, 1},
+			ReservedCPUs:      []uint{0, 1},
 			PowerNodeSelector: map[string]string{"powernode": "selector"},
 			PowerProfile:      "shared",
 			Node: powerv1.WorkloadNode{
 				Name:   testNode,
-				CpuIds: []int{2, 3},
+				CpuIds: []uint{2, 3},
 			},
 		},
 	}
@@ -88,7 +90,7 @@ func TestPowerWorkload(t *testing.T) {
 		t.Fatalf("error creating reconciler object")
 	}
 
-	nodemk := new(nodeMock)
+	nodemk := new(hostMock)
 
 	nodemk.On("GetExclusivePool", mock.Anything).Return(nil)
 	r.PowerLibrary = nodemk
@@ -96,7 +98,7 @@ func TestPowerWorkload(t *testing.T) {
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
 			Name:      workloadName,
-			Namespace: "default",
+			Namespace: IntelPowerNamespace,
 		},
 	}
 
@@ -111,13 +113,10 @@ func TestPowerWorkload(t *testing.T) {
 		t.Fatal("error creating reconciler object")
 	}
 	sharedPowerWorkloadName = "something"
-	nodemk = new(nodeMock)
-	profilemk := new(mockProfile)
-	poolmk := new(mockPool)
-	nodemk.On("GetProfile", "performance-TestNode").Return(profilemk)
-	nodemk.On("RemoveExclusivePool", workloadName).Return(errors.New("err"))
-	poolmk.On("GetPowerProfile").Return(profilemk)
-	//nodemk.On("GetSharedPool").Return(poolmk)
+	nodemk = new(hostMock)
+	poolmk := new(poolMock)
+	nodemk.On("GetExclusivePool", workloadName).Return(poolmk)
+	poolmk.On("Remove").Return(errors.New("err"))
 
 	r.PowerLibrary = nodemk
 	_, err = r.Reconcile(context.TODO(), req)
@@ -132,17 +131,14 @@ func TestPowerWorkload(t *testing.T) {
 	r, err = createWorkloadReconcilerObject([]runtime.Object{})
 	assert.NoError(t, err, "Failed to create reconciler object")
 
-	nodemk = new(nodeMock)
-
+	nodemk = new(hostMock)
 	nodemk.On("GetSharedPool").Return(poolmk)
-	nodemk.On("GetProfile", "shared").Return(profilemk)
-	nodemk.On("RemoveSharedPool").Return(nil)
-	nodemk.On("RemoveExclusivePool", "shared").Return(errors.New("err"))
+	poolmk.On("SetPowerProfile", nil).Return(nil)
 	r.PowerLibrary = nodemk
 	req.Name = "shared"
 
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.Error(t, err)
+	assert.NoError(t, err)
 
 	nodemk.AssertExpectations(t)
 	assert.Empty(t, sharedPowerWorkloadName)
@@ -151,7 +147,7 @@ func TestPowerWorkload(t *testing.T) {
 	pwrWorkloadObj.Spec.AllCores = true
 	r, err = createWorkloadReconcilerObject([]runtime.Object{pwrWorkloadObj})
 	assert.NoError(t, err, "Failed to create reconciler object")
-	r.PowerLibrary = new(nodeMock)
+	r.PowerLibrary = new(hostMock)
 
 	req.Name = workloadName
 	_, err = r.Reconcile(context.TODO(), req)
@@ -160,7 +156,7 @@ func TestPowerWorkload(t *testing.T) {
 	// shared workload already exists
 	r, err = createWorkloadReconcilerObject([]runtime.Object{pwrWorkloadObj, nodesObj})
 	assert.NoError(t, err, "Failed to create reconciler object")
-	r.PowerLibrary = new(nodeMock)
+	r.PowerLibrary = new(hostMock)
 
 	sharedPowerWorkloadName = "shared"
 	req.Name = workloadName
@@ -168,48 +164,33 @@ func TestPowerWorkload(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Error(t, r.Client.Get(context.TODO(), req.NamespacedName, &powerv1.PowerWorkload{}))
 
-	// shared profile does not exist in the library
-	r, err = createWorkloadReconcilerObject([]runtime.Object{pwrWorkloadObj, nodesObj})
-	assert.NoError(t, err, "Failed to create reconciler object")
-
-	nodemk = new(nodeMock)
-	r.PowerLibrary = nodemk
-
-	nodemk.On("GetProfile", "shared").Return(nil)
-
-	sharedPowerWorkloadName = ""
-	req.Name = workloadName
-	_, err = r.Reconcile(context.TODO(), req)
-	nodemk.AssertExpectations(t)
-	assert.Error(t, err)
-
 	// error adding shared pool
 	r, err = createWorkloadReconcilerObject([]runtime.Object{pwrWorkloadObj, nodesObj})
 	assert.NoError(t, err, "Failed to create reconciler object")
 
-	profilemk = new(mockProfile)
-	nodemk = new(nodeMock)
+	nodemk = new(hostMock)
+	poolmk = new(poolMock)
+	nodemk.On("GetReservedPool").Return(poolmk)
+	poolmk.On("SetCpuIDs", mock.Anything).Return(fmt.Errorf("scuffed"))
 	r.PowerLibrary = nodemk
-
-	nodemk.On("GetProfile", "shared").Return(profilemk)
-	nodemk.On("AddSharedPool", mock.Anything, mock.Anything).Return(errors.New("err"))
 
 	sharedPowerWorkloadName = ""
 	req.Name = workloadName
 	_, err = r.Reconcile(context.TODO(), req)
 	nodemk.AssertExpectations(t)
+	poolmk.AssertExpectations(t)
 	assert.Error(t, err)
 
 	// successful add shared pool
 	r, err = createWorkloadReconcilerObject([]runtime.Object{pwrWorkloadObj, nodesObj})
 	assert.NoError(t, err, "Failed to create reconciler object")
 
-	profilemk = new(mockProfile)
-	nodemk = new(nodeMock)
+	nodemk = new(hostMock)
+	poolmk = new(poolMock)
 	r.PowerLibrary = nodemk
 
-	nodemk.On("GetProfile", "shared").Return(profilemk)
-	nodemk.On("AddSharedPool", mock.Anything, mock.Anything).Return(nil)
+	nodemk.On("GetReservedPool").Return(poolmk)
+	poolmk.On("SetCpuIDs", mock.Anything).Return(nil)
 
 	sharedPowerWorkloadName = ""
 	req.Name = workloadName
@@ -219,19 +200,19 @@ func TestPowerWorkload(t *testing.T) {
 	assert.Equal(t, req.Name, sharedPowerWorkloadName)
 }
 func Test_detectCoresRemoved(t *testing.T) {
-	orig := []int{1, 2, 3, 4}
-	updated := []int{1, 2, 4, 5}
+	orig := []uint{1, 2, 3, 4}
+	updated := []uint{1, 2, 4, 5}
 
-	expectedResult := []int{3}
-	result := detectCoresRemoved(orig, updated)
+	expectedResult := []uint{3}
+	result := detectCoresRemoved(orig, updated, &logr.Logger{})
 	assert.ElementsMatch(t, result, expectedResult)
 }
 
 func Test_detectCoresAdded(t *testing.T) {
-	orig := []int{1, 2, 3, 4}
-	updated := []int{1, 2, 4, 5}
+	orig := []uint{1, 2, 3, 4}
+	updated := []uint{1, 2, 4, 5}
 
-	expectedResult := []int{5}
-	result := detectCoresAdded(orig, updated)
+	expectedResult := []uint{5}
+	result := detectCoresAdded(orig, updated, &logr.Logger{})
 	assert.ElementsMatch(t, result, expectedResult)
 }

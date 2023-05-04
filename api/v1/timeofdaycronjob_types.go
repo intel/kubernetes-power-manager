@@ -34,7 +34,7 @@ type TimeOfDayCronJobSpec struct {
 	TimeZone     *string                       `json:"timeZone"`
 	Profile      *string                       `json:"profile"`
 	Pods         *map[string]map[string]string `json:"pods,omitempty"`
-	ReservedCPUs *[]int                        `json:"reservedCPUs,omitempty"`
+	ReservedCPUs *[]uint                       `json:"reservedCPUs,omitempty"`
 	CState       *CStatesSpec                  `json:"cState,omitempty"`
 }
 

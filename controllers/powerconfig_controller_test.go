@@ -27,9 +27,8 @@ func createConfigReconcilerObject(objs []runtime.Object) (*PowerConfigReconciler
 	if err := powerv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
-
 	// Create a fake client to mock API calls.
-	cl := fake.NewFakeClient(objs...)
+	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).Build()
 
 	state := state.NewPowerNodeData()
 
@@ -55,7 +54,7 @@ func TestPowerConfigCreation(t *testing.T) {
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerConfigSpec{
 						PowerNodeSelector: map[string]string{
@@ -93,7 +92,7 @@ func TestPowerConfigCreation(t *testing.T) {
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerConfigSpec{
 						PowerNodeSelector: map[string]string{
@@ -133,7 +132,7 @@ func TestPowerConfigCreation(t *testing.T) {
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerConfigSpec{
 						PowerNodeSelector: map[string]string{
@@ -181,7 +180,7 @@ func TestPowerConfigCreation(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.configName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -241,7 +240,7 @@ func TestPowerConfigExists(t *testing.T) {
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerConfigSpec{
 						PowerNodeSelector: map[string]string{
@@ -255,7 +254,7 @@ func TestPowerConfigExists(t *testing.T) {
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config2",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerConfigSpec{
 						PowerNodeSelector: map[string]string{
@@ -284,7 +283,7 @@ func TestPowerConfigExists(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.configName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -297,7 +296,7 @@ func TestPowerConfigExists(t *testing.T) {
 		config := &powerv1.PowerConfig{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      tc.configName,
-			Namespace: "default",
+			Namespace: IntelPowerNamespace,
 		}, config)
 		if err == nil {
 			t.Errorf("%s Failed - Expected Power Config Object '%s' to have been deleted", tc.testCase, tc.configName)
@@ -345,7 +344,7 @@ func TestProfilesNoLongerRequested(t *testing.T) {
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerConfigSpec{
 						PowerNodeSelector: map[string]string{
@@ -398,7 +397,7 @@ func TestProfilesNoLongerRequested(t *testing.T) {
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerConfigSpec{
 						PowerNodeSelector: map[string]string{
@@ -451,7 +450,7 @@ func TestProfilesNoLongerRequested(t *testing.T) {
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
-						Namespace: "default",
+						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerConfigSpec{
 						PowerNodeSelector: map[string]string{
@@ -523,7 +522,7 @@ func TestProfilesNoLongerRequested(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.configName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 
@@ -643,7 +642,7 @@ func TestPowerConfigDeletion(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.configName,
-				Namespace: "default",
+				Namespace: IntelPowerNamespace,
 			},
 		}
 

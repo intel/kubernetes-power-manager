@@ -4,21 +4,21 @@ kind: ClusterRole
 metadata:
   name: cstates-editor-role
 rules:
-- apiGroups:
-  - power.intel.com
-  resources:
-  - cstates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - power.intel.com
-  resources:
-  - cstates/status
-  verbs:
-  - get
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - cstates
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - cstates/status
+    verbs:
+      - get

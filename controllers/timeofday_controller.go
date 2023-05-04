@@ -61,16 +61,22 @@ type TimeOfDayReconciler struct {
 func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("timeofday", req.NamespacedName)
+	if req.Namespace != IntelPowerNamespace {
+		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{}, nil
+	}
 	//logger.Info("Reconciling TimeOfDay")
 	timeRegex := regexp.MustCompile("([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]")
 
 	timeOfDayList := &powerv1.TimeOfDayList{}
+	logger.V(5).Info("Retrieving TimeOfDay objects from lists")
 	err := r.Client.List(c, timeOfDayList)
 	if err != nil {
 		logger.Error(err, "Error retrieving TimeOfDayList")
 		return ctrl.Result{}, err
 	}
 
+	logger.V(5).Info("Confirming that there can only be one TimeOfDay object")
 	if len(timeOfDayList.Items) > 1 {
 		err := errors.NewServiceUnavailable("Cannot have more than one TimeOfDay")
 		logger.Error(err, "Error reconciling TimeOfDay")
@@ -81,6 +87,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	err = r.Client.Get(c, req.NamespacedName, timeOfDay)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			logger.V(5).Info("Deleting TimeOfDay Cronjobs from Cluster")
 			err = r.Client.DeleteAllOf(c, &powerv1.TimeOfDayCronJob{}, client.InNamespace(IntelPowerNamespace))
 			if err != nil {
 				logger.Error(err, "Error deleting TimeOfDay CronJobs")
@@ -93,6 +100,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 
 	// Validate incoming values from TimeOfDay manifest
 	timeZone := timeOfDay.Spec.TimeZone
+	logger.V(5).Info("Validated timezone for TimeOfDay, values are: %s", timeZone)
 
 	if timeZone != "" {
 		_, err := time.LoadLocation(timeZone)
@@ -105,6 +113,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	var cronJobNames []string
+	logger.V(5).Info("Creating TimeOfDay Cronjobs")
 	for _, scheduleInfo := range timeOfDay.Spec.Schedule {
 		if !timeRegex.MatchString(scheduleInfo.Time) {
 			err := errors.NewServiceUnavailable("Time filed must be in format HH:MM and cannot be empty")
@@ -148,6 +157,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 			Namespace: IntelPowerNamespace,
 		}, cronJob)
 		// if cronjob doesn't exist create one
+		logger.V(5).Info("Creating Cronjob if one doesn't exist")
 		if err != nil {
 
 			if errors.IsNotFound(err) {

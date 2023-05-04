@@ -1,0 +1,72 @@
+@startuml
+
+<style>
+node {
+  BackGroundColor #22ccaa
+  LineThickness 1
+  LineColor black
+  FontSize 20
+}
+
+rectangle {
+  BackGroundColor #d1ffff
+  LineThickness 1
+  LineColor black
+  FontSize 40
+  FontStyle italic
+}
+
+agent {
+  BackGroundColor #9edafb
+  LineThickness 1
+  LineColor black
+}
+</style>
+
+
+actor Developer
+actor Georgina
+
+title <b>Kubernetes Power Manager Architectural Diagram
+skinparam roundCorner 15
+rectangle "<b>Kubernetes Cluster" {
+
+node "<b>Control-Plane (Master Node)" {
+
+agent "<b>etcd" as etcd 
+agent "<b>Power Operator" as po #effbda
+agent "\t\t\t<b>API Server\t\t\t" as api 
+agent "<b>Scheduler" as sch 
+agent "<b>Controller Manger" as cm 
+
+etcd -down-> api 
+po <--> api
+api <--> sch 
+api <-down-> cm
+
+
+}
+
+Developer -left-> api #red;line.dashed : kubectl
+
+node "<b>Worker Node" {
+
+agent "<b>Kube-Proxy" as proxy
+agent "<b>Kubelet" as kube 
+agent "<b>Power Node Agent" as pna #effbda
+agent "<b>Power Optimization\n <b>Library" as pol #effbfa
+agent "<b>K8s Objects" as obj 
+
+pna <-right- kube
+pna <--> pol 
+obj <-down-> pna
+}
+
+
+proxy <-Left- Georgina #red;line.dashed;
+api <-ri-> proxy
+api <--> kube
+}
+
+@enduml
+

@@ -41,7 +41,7 @@ type TimeOfDaySpec struct {
 
 	// Schedule for adjusting performance mode
 	Schedule     []ScheduleInfo `json:"schedule"`
-	ReservedCPUs *[]int         `json:"reservedCPUs,omitempty"`
+	ReservedCPUs *[]uint        `json:"reservedCPUs,omitempty"`
 }
 
 // TimeOfDayStatus defines the observed state of TimeOfDay

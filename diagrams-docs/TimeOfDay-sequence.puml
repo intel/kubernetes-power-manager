@@ -1,0 +1,127 @@
+@startuml
+skinparam noteBorderColor Black
+skinparam noteBorderThickness 1
+skinparam noteBackgroundColor Yellow
+skinparam legendBackgroundColor WhiteSmoke
+
+skinparam sequence {
+	BoxBorderColor Black
+	BoxFontSize 20
+
+	ArrowColor Black
+	ArrowThickness 1
+
+	ActorBorderColor Black
+	ActorBorderThickness 3
+	ActorBackgroundColor Business
+	ActorFontSize 15
+
+	ParticipantBorderColor Black
+	ParticipantBorderThickness 1
+	ParticipantBackgroundColor Business
+	ParticipantFontSize 15
+
+	LifeLineBorderColor Black
+	LifeLineBorderThickness 1
+	LifeLineBackgroundColor LightGray
+}
+
+
+ legend top right
+|= |= Legend |
+|<back:LightBlue>   </back>| Control Plane ~ Master Node |
+|<back:LightGreen>   </back>| Worker Node |
+|<back:DarkGray>   </back>| Power Manager System Setup |
+|<back:LightYellow>   </back>| Power Manager Configuration |
+|<back:Orange>   </back>| Power Manager Deployment |
+endlegend 
+
+actor Georgina
+participant apiSrv as "<b>API-Server" #LightBlue
+participant etcd as "<b>etcd" #LightBlue
+participant cntrlMgr as "<b>Controller Manager" #LightBlue
+participant sched as "<b>Scheduler" #LightBlue
+participant powerOperator as "<b>Power Operator" #LightBlue
+participant kubelet as "<b>Kubelet" #LightGreen
+participant agent as "<b>Power Node Agent" #LightGreen
+participant library as "<b>Power Optimization Library" #LightGreen
+participant objects as "<b>K8s Objects" #LightGreen
+participant proxy as "<b>Kube-Proxy" #LightGreen
+
+title : Interactions between the Control Plane (master node) and the Worker Node
+
+
+
+== Power Manager Initialization ==
+autonumber
+
+Georgina -> proxy : Ensure correct proxy configuration 
+
+Georgina -> kubelet: Confirm CPU Manager policy
+note right #DarkGray: <color #White>cpuManagerPolicy = "static"</color>
+
+Georgina -> kubelet: Reserve System CPUs
+note right #DarkGray: <color #White>reservedSystemCPUs = "0"</color>
+
+kubelet -> agent: Create Namespace
+note right #LightYellow: <color #black>apply config/rbac/namespace.yaml</color>
+
+kubelet -> agent: Create RBAC and Service Accounts
+note right #LightYellow: <color #black>apply config/rbac/rbac.yaml</color>
+
+kubelet -> objects: Create CRDs
+note right #LightYellow: <color #black>make</color>
+
+kubelet -> agent: Label nodes
+note right #LightYellow: <color #black>label node <NODE_NAME> feature.node.kubernetes.io/power-node=”true”</color>
+
+autonumber stop
+
+
+== Power Manager Deployment ==
+autonumber
+
+kubelet -> agent: Deploy Controller Manager
+note right #Orange: <color #black>apply config/manager/manager.yaml</color>
+
+powerOperator -> library: Deploy the config
+note right #Orange: <color #black>examples/example-powerconfig.yaml</color>
+
+agent -> library: Set Shared Profile 
+note right #Orange: <color #black>examples/example-shared-profile.yaml</color>
+
+agent -> library: Deploy th Workload
+note right #Orange: <color #black>examples/example-shared-workload.yaml</color>
+
+agent -> library: Deploy Pod 
+note right #Orange: <color #black>examples/example-pod.yaml</color>
+
+autonumber stop
+
+== Power Manager additional functionality ==
+
+
+== Time of Day ==
+autonumber
+
+kubelet -> agent: Deploy Controller Manager
+note right #Orange: <color #black>apply config/manager/manager.yaml</color>
+
+powerOperator -> library: Deploy the config
+note right #Orange: <color #black>examples/example-powerconfig.yaml</color>
+
+agent -> library: Set Shared Profile 
+note right #Orange: <color #black>examples/example-shared-profile.yaml</color>
+
+agent -> library: Deploy th Workload
+note right #Orange: <color #black>examples/example-shared-workload.yaml</color>
+
+agent -> library: Deploy Pod 
+note right #Orange: <color #black>examples/example-pod.yaml</color>
+
+agent -> library: Set Time of Day functionality 
+note right #Orange: <color #black>examples/example-timeofday</color>
+
+autonumber stop
+
+@enduml

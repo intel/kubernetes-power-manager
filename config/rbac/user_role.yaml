@@ -1,0 +1,103 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: user-role
+rules:
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - powerconfigs
+    verbs:
+      - get
+      - list
+      - update
+      - watch
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - powerconfigs/status
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - powernodes
+    verbs:
+      - get
+      - list
+      - update
+      - watch
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - powernodes/status
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - powerpods
+    verbs:
+      - get
+      - list
+      - update
+      - watch
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - powerpods/status
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - powerprofiles
+    verbs:
+      - get
+      - list
+      - update
+      - watch
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - powerprofiles/status
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - powerworkloads
+    verbs:
+      - get
+      - list
+      - update
+      - watch
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - powerworkloads/status
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - timeofdays
+    verbs:
+      - get
+      - list
+      - update
+      - watch
+  - apiGroups:
+      - power.intel.com
+    resources:
+      - timeofdays/status
+    verbs:
+      - get
+      - update

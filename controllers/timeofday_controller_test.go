@@ -51,11 +51,11 @@ func TestTimeOfDay(t *testing.T) {
 	todObj := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "timeofday-test",
-			Namespace: "intel-power",
+			Namespace: IntelPowerNamespace,
 		},
 		Spec: powerv1.TimeOfDaySpec{
 			TimeZone:     "Eire",
-			ReservedCPUs: &[]int{0, 1},
+			ReservedCPUs: &[]uint{0, 1},
 			Schedule: []powerv1.ScheduleInfo{
 				{
 					Time: "09:00",
@@ -84,23 +84,26 @@ func TestTimeOfDay(t *testing.T) {
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
 			Name:      "timeofday-test",
-			Namespace: "intel-power",
+			Namespace: IntelPowerNamespace,
 		},
 	}
-	nodemk := new(nodeMock)
+	nodemk := new(hostMock)
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
 	nodemk.AssertExpectations(t)
 	jobs := &powerv1.TimeOfDayCronJobList{}
-	r.Client.List(context.TODO(), jobs)
+	err = r.Client.List(context.TODO(), jobs)
+	assert.NoError(t, err)
 	assert.Len(t, jobs.Items, 3)
 
 	// timeofday deletion
 	jobs = &powerv1.TimeOfDayCronJobList{}
-	r.Client.Delete(context.TODO(), todObj)
+	err = r.Client.Delete(context.TODO(), todObj)
+	assert.NoError(t, err)
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	r.Client.List(context.TODO(), jobs)
+	err = r.Client.List(context.TODO(), jobs)
+	assert.NoError(t, err)
 	assert.Len(t, jobs.Items, 0)
 	// incorrect format error
 	todObj = &powerv1.TimeOfDay{
@@ -110,7 +113,7 @@ func TestTimeOfDay(t *testing.T) {
 		},
 		Spec: powerv1.TimeOfDaySpec{
 			TimeZone:     "Eire",
-			ReservedCPUs: &[]int{0, 1},
+			ReservedCPUs: &[]uint{0, 1},
 			Schedule: []powerv1.ScheduleInfo{
 				{
 					Time: "25:61",
@@ -154,7 +157,7 @@ func FuzzTimeOfDayController(f *testing.F) {
 			},
 			Spec: powerv1.TimeOfDaySpec{
 				TimeZone:     timeZone,
-				ReservedCPUs: &[]int{0, 1},
+				ReservedCPUs: &[]uint{0, 1},
 				Schedule: []powerv1.ScheduleInfo{
 					{
 						Time: time1,
@@ -180,6 +183,9 @@ func FuzzTimeOfDayController(f *testing.F) {
 		if err != nil {
 			t.Error(err)
 		}
-		r.Reconcile(context.TODO(), req)
+		_, err = r.Reconcile(context.TODO(), req)
+		if err != nil {
+			t.Error(err)
+		}
 	})
 }

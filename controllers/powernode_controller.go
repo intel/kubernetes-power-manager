@@ -38,7 +38,7 @@ type PowerNodeReconciler struct {
 	client.Client
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
-	PowerLibrary power.Node
+	PowerLibrary power.Host
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powernodes,verbs=get;list;watch;create;update;patch;delete
@@ -47,6 +47,8 @@ type PowerNodeReconciler struct {
 func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 
+	logger := r.Log.WithValues("powernode", req.NamespacedName)
+	logger.V(5).Info("Checking if PowerNode and Node Name match")
 	nodeName := os.Getenv("NODE_NAME")
 	if nodeName != req.NamespacedName.Name {
 		// PowerNode is not on this Node
@@ -59,9 +61,11 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	powerContainers := make([]powerv1.Container, 0)
 
 	powerNode := &powerv1.PowerNode{}
+	logger.V(5).Info("Retrieving Power Node instance")
 	err := r.Client.Get(context.TODO(), req.NamespacedName, powerNode)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			logger.V(5).Info("Power Node not found, requeueing")
 			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 		}
 
@@ -69,6 +73,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	powerProfiles := &powerv1.PowerProfileList{}
+	logger.V(5).Info("Retrieving PowerProfileList")
 	err = r.Client.List(context.TODO(), powerProfiles)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -79,16 +84,22 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	for _, profile := range powerProfiles.Items {
-		profileFromLibrary := r.PowerLibrary.GetProfile(profile.Spec.Name)
+		logger.V(5).Info("Retrieving Profile information from the Power Librarys")
+		pool := r.PowerLibrary.GetExclusivePool(profile.Spec.Name)
+		if pool == nil {
+			continue
+		}
+		profileFromLibrary := pool.GetPowerProfile()
 		if profileFromLibrary == nil {
 			continue
 		}
 
-		profileString := fmt.Sprintf("%s: %v || %v || %s", profileFromLibrary.GetName(), profileFromLibrary.GetMaxFreq(), profileFromLibrary.GetMinFreq(), profileFromLibrary.GetEpp())
+		profileString := fmt.Sprintf("%s: %v || %v || %s", profileFromLibrary.Name(), profileFromLibrary.MaxFreq(), profileFromLibrary.MinFreq(), profileFromLibrary.Epp())
 		powerProfileStrings = append(powerProfileStrings, profileString)
 	}
 
 	powerWorkloads := &powerv1.PowerWorkloadList{}
+	logger.V(5).Info("Retrieving PowerWorkloadList")
 	err = r.Client.List(context.TODO(), powerWorkloads)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -99,44 +110,52 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	for _, workload := range powerWorkloads.Items {
+		logger.V(5).Info("Checking if workload is shared or on the wrong node")
 		if workload.Spec.AllCores || workload.Spec.Node.Name != nodeName {
 			continue
 		}
 
 		poolFromLibrary := r.PowerLibrary.GetExclusivePool(workload.Spec.Name)
+		logger.V(5).Info("Retrieving workload information from Power Library")
 		if poolFromLibrary == nil {
 			continue
 		}
 
-		cores := prettifyCoreList(poolFromLibrary.GetCoreIds())
+		logger.V(5).Info("Retrieving Power Profile information for workload")
+		cores := prettifyCoreList(poolFromLibrary.Cpus().IDs())
 		profile := poolFromLibrary.GetPowerProfile()
-		workloadString := fmt.Sprintf("%s: %s || %s", poolFromLibrary.GetName(), profile.GetName(), cores)
+		workloadString := fmt.Sprintf("%s: %s || %s", poolFromLibrary.Name(), profile.Name(), cores)
 		powerWorkloadStrings = append(powerWorkloadStrings, workloadString)
 
 		for _, container := range workload.Spec.Node.Containers {
+			logger.V(5).Info("Configuring the Power Container information")
 			container.Workload = workload.Name
 			powerContainers = append(powerContainers, container)
 		}
 	}
 
+	logger.V(5).Info("Setting the PowerNode Spec - PowerProfiles, PowerWorkloads, PowerContainers")
 	powerNode.Spec.PowerProfiles = powerProfileStrings
 	powerNode.Spec.PowerWorkloads = powerWorkloadStrings
 	powerNode.Spec.PowerContainers = powerContainers
 
+	logger.V(5).Info("Setting the Shared pool, Shared Cores, Shared profiles and reserved system CPUs")
 	sharedPool := r.PowerLibrary.GetSharedPool()
-	sharedCores := sharedPool.GetCoreIds()
+	sharedCores := sharedPool.Cpus().IDs()
 	sharedProfile := sharedPool.GetPowerProfile()
-	reservedSystemCpus := r.PowerLibrary.GetReservedCoreIds()
+	reservedSystemCpus := r.PowerLibrary.GetReservedPool().Cpus().IDs()
 
+	logger.V(5).Info("Configurating the cores to the SharedPool")
 	powerNode.Spec.PowerContainers = powerContainers
 	if len(sharedCores) > 0 {
 		cores := prettifyCoreList(sharedCores)
-		powerNode.Spec.SharedPool = fmt.Sprintf("%s || %v || %v || %s", sharedProfile.GetName(), sharedProfile.GetMaxFreq(), sharedProfile.GetMinFreq(), cores)
+		powerNode.Spec.SharedPool = fmt.Sprintf("%s || %v || %v || %s", sharedProfile.Name(), sharedProfile.MaxFreq(), sharedProfile.MinFreq(), cores)
 	}
 
 	if len(reservedSystemCpus) > 0 {
+		logger.V(5).Info("Configurating the cores to the ReservedPool")
 		cores := prettifyCoreList(reservedSystemCpus)
-		powerNode.Spec.UneffectedCores = fmt.Sprintf("%s", cores)
+		powerNode.Spec.UneffectedCores = cores
 	}
 
 	err = r.Client.Update(context.TODO(), powerNode)
@@ -147,9 +166,9 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 }
 
-func prettifyCoreList(cores []int) string {
+func prettifyCoreList(cores []uint) string {
 	prettified := ""
-	sort.Ints(cores)
+	sort.Slice(cores, func(i, j int) bool { return cores[i] < cores[j] })
 	for i := 0; i < len(cores); i++ {
 		start := i
 		end := i

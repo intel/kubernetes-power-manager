@@ -17,10 +17,12 @@ import (
 	"testing"
 )
 
-func buildCStatesReconcilerObject(objs []runtime.Object, powerLibMock power.Node) *CStatesReconciler {
+func buildCStatesReconcilerObject(objs []runtime.Object, powerLibMock power.Host) *CStatesReconciler {
 	schm := runtime.NewScheme()
-	powerv1.AddToScheme(schm)
-
+	err := powerv1.AddToScheme(schm)
+	if err != nil {
+		return nil
+	}
 	client := fake.NewClientBuilder().WithRuntimeObjects(objs...).WithScheme(schm).Build()
 	reconciler := &CStatesReconciler{
 		Client:       client,
@@ -36,7 +38,7 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 	cStatesObj := &powerv1.CStates{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "node1",
-			Namespace: "default",
+			Namespace: IntelPowerNamespace,
 		},
 		Spec: powerv1.CStatesSpec{
 			SharedPoolCStates:     power.CStates{"C1": true},
@@ -76,25 +78,37 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 		cStatesObj, powerProfilesObj, powerNodesObj,
 	}
 
-	powerLibMock := new(nodeMock)
-	// verifying cStates exists
-	powerLibMock.On("IsCStateValid", mock.Anything).Return(true)
+	powerLibMock := new(hostMock)
+	sharedPoolMock := new(poolMock)
+	powerLibMock.On("GetSharedPool").Return(sharedPoolMock)
+	exclusivePool := new(poolMock)
+	exclusivePool.On("Name").Return("exclusive")
+	powerLibMock.On("GetAllExclusivePools").Return(&power.PoolList{exclusivePool})
+	powerLibMock.On("GetExclusivePool", "performance").Return(exclusivePool)
+	mockedCore := new(coreMock)
+	mockedCore.On("GetID").Return(uint(3))
+	powerLibMock.On("GetAllCpus").Return(&power.CpuList{mockedCore})
+
+	// validate
+	powerLibMock.On("ValidateCStates", power.CStates(cStatesObj.Spec.SharedPoolCStates)).Return(nil)
+	powerLibMock.On("ValidateCStates", power.CStates(cStatesObj.Spec.ExclusivePoolCStates["performance"])).Return(nil)
+	powerLibMock.On("ValidateCStates", power.CStates(cStatesObj.Spec.IndividualCoreCStates["3"])).Return(nil)
 
 	// reset calls
-	powerLibMock.On("ApplyCStatesToCore", mock.Anything, mock.Anything).Return(nil)
-	powerLibMock.On("ApplyCStateToPool", mock.Anything, mock.Anything).Return(nil)
-	powerLibMock.On("ApplyCStatesToSharedPool", mock.Anything).Return(nil)
+	sharedPoolMock.On("SetCStates", power.CStates(nil)).Return(error(nil))
+	exclusivePool.On("SetCStates", power.CStates(nil)).Return(error(nil))
+	mockedCore.On("SetCStates", power.CStates(nil)).Return(error(nil))
 
-	// set values
-	powerLibMock.On("ApplyCStatesToCore", 3, power.CStates{"C3": true}).Return(nil)
-	powerLibMock.On("ApplyCStateToPool", "performance", power.CStates{"C2": false}).Return(nil)
-	powerLibMock.On("ApplyCStatesToSharedPool", power.CStates{"C1": true}).Return(nil)
+	// set calls
+	sharedPoolMock.On("SetCStates", power.CStates(cStatesObj.Spec.SharedPoolCStates)).Return(error(nil))
+	exclusivePool.On("SetCStates", power.CStates(cStatesObj.Spec.ExclusivePoolCStates["performance"])).Return(error(nil))
+	mockedCore.On("SetCStates", power.CStates(cStatesObj.Spec.IndividualCoreCStates["3"])).Return(error(nil))
 
 	r := buildCStatesReconcilerObject(objs, powerLibMock)
-
+	assert.NotNil(t, r)
 	ctx := context.Background()
 	req := reconcile.Request{NamespacedName: client.ObjectKey{
-		Namespace: "default",
+		Namespace: IntelPowerNamespace,
 		Name:      "node1",
 	}}
 	t.Setenv("NODE_NAME", "node1")
@@ -105,18 +119,18 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 	assert.NoError(t, err)
 
 	powerLibMock.AssertExpectations(t)
-	powerLibMock.AssertNotCalled(t, "ApplyCStateToPool", "shared", mock.Anything)
-	for _, cState := range []string{"C1", "C2", "C3"} {
-		powerLibMock.AssertCalled(t, "IsCStateValid", []string{cState})
-	}
+	sharedPoolMock.AssertExpectations(t)
+	exclusivePool.AssertExpectations(t)
+	mockedCore.AssertExpectations(t)
 
 	// simulate CRD intended for a different node
 	t.Setenv("NODE_NAME", "node2")
-	powerLibMock.Calls = []mock.Call{}
+	powerLibMock = new(hostMock)
+	r.PowerLibrary = powerLibMock
 
 	_, err = r.Reconcile(ctx, req)
 	assert.NoError(t, err)
-	assert.Empty(t, powerLibMock.Calls)
+	powerLibMock.AssertExpectations(t)
 
 	// simulate request for node not in the cluster
 	// expecting error
@@ -125,12 +139,14 @@ func TestCStatesReconciler_Reconcile(t *testing.T) {
 	objs = []runtime.Object{powerNodesObj, cStatesObj, powerProfilesObj}
 
 	r = buildCStatesReconcilerObject(objs, powerLibMock)
+	assert.NotNil(t, r)
+
 	_, err = r.Reconcile(ctx, req)
 	assert.True(t, errors.IsBadRequest(err))
 }
 
 func FuzzCStatesReconciler(f *testing.F) {
-	powerLibMock := new(nodeMock)
+	powerLibMock := new(hostMock)
 	// verifying cStates exists
 	powerLibMock.On("IsCStateValid", mock.Anything).Return(true)
 
@@ -151,11 +167,14 @@ func FuzzCStatesReconciler(f *testing.F) {
 			// if r is nil setupFuzz must have panicked, so we ignore it
 			return
 		}
-		r.Reconcile(context.Background(), req)
+		_, err := r.Reconcile(context.Background(), req)
+		if err != nil {
+			t.Errorf("error reconciling: %s", err)
+		}
 	})
 }
 
-func setupFuzz(t *testing.T, nodeName string, namespace string, extraNode bool, node2name string, runningOnTargetNode bool, powerLib power.Node) (*CStatesReconciler, reconcile.Request) {
+func setupFuzz(t *testing.T, nodeName string, namespace string, extraNode bool, node2name string, runningOnTargetNode bool, powerLib power.Host) (*CStatesReconciler, reconcile.Request) {
 	defer func(t *testing.T) {
 		if r := recover(); r != nil {
 			// if setup fails we ignore it
