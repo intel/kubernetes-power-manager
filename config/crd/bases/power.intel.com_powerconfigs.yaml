@@ -46,6 +46,11 @@ spec:
                 items:
                   type: string
                 type: array
+              customDevices:
+                description: Custom Devices define other CPU Resources to be considered in Pod's spec
+                items:
+                  type: string
+                type: array
             type: object
           status:
             description: PowerConfigStatus defines the observed state of PowerConfig
