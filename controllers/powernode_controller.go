@@ -72,6 +72,11 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
+	CustomDevices := powerNode.Spec.CustomDevices
+	if len(CustomDevices) > 0 {
+		logger.V(5).Info("The PowerNode contains the following custom devices.", "Custom Devices", powerNode.Spec.CustomDevices)
+	}
+
 	powerProfiles := &powerv1.PowerProfileList{}
 	logger.V(5).Info("Retrieving PowerProfileList")
 	err = r.Client.List(context.TODO(), powerProfiles)
@@ -156,6 +161,10 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 		logger.V(5).Info("Configurating the cores to the ReservedPool")
 		cores := prettifyCoreList(reservedSystemCpus)
 		powerNode.Spec.UneffectedCores = cores
+	}
+
+	if len(CustomDevices) > 0 {
+		powerNode.Spec.CustomDevices = CustomDevices
 	}
 
 	err = r.Client.Update(context.TODO(), powerNode)

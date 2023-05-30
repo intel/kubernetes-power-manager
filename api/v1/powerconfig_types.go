@@ -33,6 +33,9 @@ type PowerConfigSpec struct {
 
 	// The PowerProfiles that will be created by the Operator
 	PowerProfiles []string `json:"powerProfiles,omitempty"`
+
+	// The CustomDevices include alternative devices that represents CPU resources
+	CustomDevices []string `json:"customDevices,omitempty"`
 }
 
 // PowerConfigStatus defines the observed state of PowerConfig
