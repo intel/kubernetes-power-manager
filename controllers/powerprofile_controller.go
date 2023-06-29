@@ -66,7 +66,9 @@ var profilePercentages map[string]map[string]float64 = map[string]map[string]flo
 		"difference": 0.0,
 	},
 	// We have the empty string here so users can create Power Profiles that are not associated with SST-CP
-	"": map[string]float64{},
+	"": map[string]float64{
+		"resource": 1.0,
+	},
 }
 
 // PowerProfileReconciler reconciles a PowerProfile object
@@ -174,19 +176,29 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	// If the Profile is shared (epp == power) then the associated Pool will not be created in the Power Library
-	if profile.Spec.Epp == "power" {
-
+	// If the Profile is shared then the associated Pool will not be created in the Power Library
+	if profile.Spec.Shared {
 		if profile.Spec.Max < absoluteMinimumFrequency || profile.Spec.Min < absoluteMinimumFrequency {
 			frequencyTooLowError := errors.NewServiceUnavailable(fmt.Sprintf("Maximum or Minimum frequency value cannot be below %d", absoluteMinimumFrequency))
 			logger.Error(frequencyTooLowError, "error creating Shared Power Profile")
 			return ctrl.Result{}, nil
 		}
 		actualEpp := profile.Spec.Epp
-		if isEppSupported() {
+		if !power.IsFeatureSupported(power.EPPFeature) && actualEpp != "" {
+			err = fmt.Errorf("EPP is not supported but %s provides one. Setting EPP to ''", profile.Name)
+			logger.Error(err, "Invalid EPP")
 			actualEpp = ""
 		}
-		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, uint(profile.Spec.Min), uint(profile.Spec.Max), profile.Spec.Governor, actualEpp)
+		if !checkGovs(profile.Spec.Governor) {
+			err = fmt.Errorf("Governor %s is not supported. PLease use one of the following %v''", profile.Spec.Governor, power.GetAvailableGovernors())
+			logger.Error(err, "Invalid Governor")
+			return ctrl.Result{Requeue: false}, err
+		}
+		powerProfile, err := power.NewPowerProfile(profile.Spec.Name, uint(profile.Spec.Min), uint(profile.Spec.Max), profile.Spec.Governor, actualEpp)
+		if err != nil {
+			logger.Error(err, "could not set power profile for shared pool")
+			return ctrl.Result{}, nil
+		}
 		err = r.PowerLibrary.GetSharedPool().SetPowerProfile(powerProfile)
 		if err != nil {
 			logger.Error(err, "could not set power profile for shared pool")
@@ -213,10 +225,21 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 
 		profileFromLibrary := r.PowerLibrary.GetExclusivePool(profile.Spec.Name)
 		actualEpp := profile.Spec.Epp
-		if isEppSupported() {
+		if !power.IsFeatureSupported(power.EPPFeature) && actualEpp != "" {
+			err = fmt.Errorf("EPP is not supported but %s provides one. Setting EPP to ''", profile.Name)
+			logger.Error(err, "Invalid EPP")
 			actualEpp = ""
 		}
-		powerProfile, _ := power.NewPowerProfile(profile.Spec.Name, uint(profileMinFreq), uint(profileMaxFreq), profile.Spec.Governor, actualEpp)
+		if !checkGovs(profile.Spec.Governor) {
+			err = fmt.Errorf("Governor %s is not supported. PLease use one of the following %v''", profile.Spec.Governor, power.GetAvailableGovernors())
+			logger.Error(err, "Invalid Governor")
+			return ctrl.Result{Requeue: false}, err
+		}
+		powerProfile, err := power.NewPowerProfile(profile.Spec.Name, uint(profileMinFreq), uint(profileMaxFreq), profile.Spec.Governor, actualEpp)
+		if err != nil {
+			logger.Error(err, "could not set power profile")
+			return ctrl.Result{}, nil
+		}
 		if profileFromLibrary == nil {
 			pool, err := r.PowerLibrary.AddExclusivePool(profile.Spec.Name)
 			if err != nil {
@@ -375,7 +398,14 @@ func (r *PowerProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func isEppSupported() bool {
-	_, err := os.Stat("/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference")
-	return !os.IsNotExist(err)
+func checkGovs(profileGovernor string) bool {
+	if profileGovernor == "" {
+		return true
+	}
+	for _, gov := range power.GetAvailableGovernors() {
+		if gov == profileGovernor {
+			return true
+		}
+	}
+	return false
 }
