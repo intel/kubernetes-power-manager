@@ -1,14 +1,25 @@
 package controllers
 
 import (
+	// "errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"context"
+
+	"github.com/go-logr/logr"
 	"github.com/intel/power-optimization-library/pkg/power"
 	"github.com/stretchr/testify/mock"
-	rt "runtime"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 type hostMock struct {
@@ -519,7 +530,7 @@ func setupDummyFiles(cores int, packages int, diesPerPackage int, cpufiles map[s
 
 		}
 	}
-	host, err := power.CreateInstanceWithConf("test-node", power.LibConfig{CpuPath: "testing/cpus", ModulePath: "testing/proc.modules"})
+	host, err := power.CreateInstanceWithConf("test-node", power.LibConfig{CpuPath: "testing/cpus", ModulePath: "testing/proc.modules", Cores: uint(cores)})
 	return host, func() {
 		os.RemoveAll(strings.Split(path, "/")[0])
 	}, err
@@ -527,10 +538,138 @@ func setupDummyFiles(cores int, packages int, diesPerPackage int, cpufiles map[s
 
 // default dummy file system to be used in standard tests
 func fullDummySystem() (power.Host, func(), error) {
-	return setupDummyFiles(rt.NumCPU(), 1, 2, map[string]string{
+	return setupDummyFiles(86, 1, 2, map[string]string{
 		"driver": "intel_pstate", "max": "3700", "min": "1000",
 		"epp": "performance", "governor": "performance",
-		"package": "0", "die": "0", "available_governors": "powersave performance",
-		"uncore_max": "2400000", "uncore_min": "1200000",
+		"available_governors": "powersave performance",
+		"uncore_max":          "2400000", "uncore_min": "1200000",
 		"cstates": "intel_idle"})
+}
+
+
+// mock required for testing setupwithmanager
+type clientMock struct {
+	mock.Mock
+	client.Client
+}
+
+//mock required for testing client errs
+type errClient struct {
+	client.Client
+	mock.Mock
+}
+
+func (e errClient) Get(ctx context.Context, NamespacedName types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
+	if len(opts) != 0 {
+		return e.Called(ctx, NamespacedName, obj, opts).Error(0)
+	}
+	return e.Called(ctx, NamespacedName, obj).Error(0)
+}
+func (e errClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	if len(opts) != 0 {
+		return e.Called(ctx, list, opts).Error(0)
+
+	}
+	return e.Called(ctx, list).Error(0)
+}
+
+func (e errClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	if len(opts) != 0 {
+		return e.Called(ctx, obj, opts).Error(0)
+	}
+	return e.Called(ctx, obj).Error(0)
+}
+
+func (e errClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	if len(opts) != 0 {
+		return e.Called(ctx, obj, opts).Error(0)
+	}
+	return e.Called(ctx, obj).Error(0)
+}
+
+func (e errClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+	if len(opts) != 0 {
+		return e.Called(ctx, obj, opts).Error(0)
+	}
+	return e.Called(ctx, obj).Error(0)
+}
+
+func (e errClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
+	if len(opts) != 0 {
+		return e.Called(ctx, obj, opts).Error(0)
+	}
+	return e.Called(ctx, obj).Error(0)
+}
+
+func (e errClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	if len(opts) != 0 {
+		return e.Called(ctx, obj, patch, opts).Error(0)
+	}
+	return e.Called(ctx, obj, patch).Error(0)
+}
+
+func (e errClient) Status() client.SubResourceWriter {
+	return e.Called().Get(0).(client.SubResourceWriter)
+}
+
+type mockResourceWriter struct {
+	mock.Mock
+	client.SubResourceWriter
+}
+
+func (m mockResourceWriter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+	if len(opts) != 0 {
+		return m.Called(ctx, obj, opts).Error(0)
+	}
+	return m.Called(ctx, obj).Error(0)
+}
+
+
+type mgrMock struct {
+	mock.Mock
+	manager.Manager
+}
+
+func (m mgrMock) Add(r manager.Runnable) error {
+	return m.Called(r).Error(0)
+}
+
+func (m mgrMock) Elected() <-chan struct{} {
+	return m.Called().Get(0).(<-chan struct{})
+}
+
+func (m mgrMock) AddMetricsExtraHandler(path string, handler http.Handler) error {
+	return m.Called(path, handler).Get(0).(error)
+}
+
+func (m mgrMock) AddHealthzCheck(name string, check healthz.Checker) error {
+	return m.Called(name, check).Get(0).(error)
+}
+
+func (m mgrMock) AddReadyzCheck(name string, check healthz.Checker) error {
+	return m.Called(name, check).Get(0).(error)
+}
+
+func (m mgrMock) Start(ctx context.Context) error {
+	return m.Called(ctx).Get(0).(error)
+}
+
+func (m mgrMock) GetWebhookServer() *webhook.Server {
+	return m.Called().Get(0).(*webhook.Server)
+}
+
+func (m mgrMock) GetLogger() logr.Logger {
+	return m.Called().Get(0).(logr.Logger)
+
+}
+
+func (m mgrMock) GetControllerOptions() v1alpha1.ControllerConfigurationSpec {
+	return m.Called().Get(0).(v1alpha1.ControllerConfigurationSpec)
+}
+
+func (m mgrMock) GetScheme() *runtime.Scheme {
+	return m.Called().Get(0).(*runtime.Scheme)
+}
+func (m mgrMock) SetFields(i interface{}) error {
+	return m.Called(i).Error(0)
 }

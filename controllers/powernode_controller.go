@@ -147,7 +147,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 
 	logger.V(5).Info("Configurating the cores to the SharedPool")
 	powerNode.Spec.PowerContainers = powerContainers
-	if len(sharedCores) > 0 && sharedProfile!=nil {
+	if len(sharedCores) > 0 && sharedProfile != nil {
 		cores := prettifyCoreList(sharedCores)
 		powerNode.Spec.SharedPool = fmt.Sprintf("%s || %v || %v || %s", sharedProfile.Name(), sharedProfile.MaxFreq(), sharedProfile.MinFreq(), cores)
 	}

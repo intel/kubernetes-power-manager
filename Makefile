@@ -119,3 +119,7 @@ bundle: manifests
 .PHONY: bundle-build
 bundle-build:
 	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+coverage:
+	go test -v -coverprofile=coverage.out ./controllers/
+	go tool cover -html=coverage.out -o coverage.html
