@@ -31,6 +31,7 @@ type TimeOfDayCronJobSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	Hour         int                           `json:"hour"`
 	Minute       int                           `json:"minute"`
+	Second       int                           `json:"second,omitempty"`
 	TimeZone     *string                       `json:"timeZone"`
 	Profile      *string                       `json:"profile"`
 	Pods         *map[string]map[string]string `json:"pods,omitempty"`

@@ -84,14 +84,15 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 	// reading schedule
 	hr := cronJob.Spec.Hour
 	min := cronJob.Spec.Minute
-	jobActiveTime := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), hr, min, 0, 0, location)
+	sec := cronJob.Spec.Second
+	jobActiveTime := time.Date(time.Now().In(location).Year(), time.Now().In(location).Month(), time.Now().In(location).Day(), hr, min, sec, 0, location)
 	wait := jobActiveTime.Sub(time.Now().In(location))
 	//calculating when next to schedule the job
 	nextActiveTime := jobActiveTime.Add(24 * time.Hour)
 	logger.V(5).Info("Next active time is: %s", nextActiveTime)
 	nextWait := nextActiveTime.Sub(time.Now().In(location))
 	// cronjob missed deadline
-	if wait.Round(1*time.Minute).Minutes() < 0 {
+	if wait.Seconds() <= 0 && cronJob.Status.LastScheduleTime == nil {
 		logger.Info(fmt.Sprintf("cronjob missed deadline by %s. Scheduling for tommorow", wait.String()))
 		cronJob.Status.LastScheduleTime = &metav1.Time{Time: time.Now().In(location)}
 		if err := r.Status().Update(c, cronJob); err != nil {
@@ -100,9 +101,10 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 		}
 		return ctrl.Result{RequeueAfter: nextWait}, nil
 	}
-	// cronjob just created
-	logger.V(5).Info("Reconciling newly created Cronjob")
+
 	if cronJob.Status.LastScheduleTime == nil {
+		// cronjob just created
+		logger.V(5).Info("Reconciling newly created Cronjob")
 		logger.Info(fmt.Sprintf("telling reconciler to wait %s", wait.String()))
 		cronJob.Status.LastScheduleTime = &metav1.Time{Time: time.Now().In(location)}
 		if err := r.Status().Update(c, cronJob); err != nil {
@@ -113,7 +115,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 
 	} else {
 		//cronjob ready for application
-		if wait.Round(1*time.Minute).Minutes() == 0 {
+		if wait.Seconds() <= 0 {
 			logger.V(5).Info("cronjob ready to be applied")
 			if cronJob.Spec.Profile != nil {
 				// check if shared workload exists
@@ -135,6 +137,11 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 				}
 				// a shared workload does not exist so make one
 				if workloadMatch == nil {
+					if cronJob.Spec.ReservedCPUs == nil {
+						err := fmt.Errorf("reserved CPU field left blank")
+						logger.Error(err, "reservedCPUs must be set")
+						return ctrl.Result{Requeue: false}, err
+					}
 					logger.V(5).Info("Creating shared workload as non exists")
 					workloadName := fmt.Sprintf("shared-%s", nodeName)
 					workload := &powerv1.PowerWorkload{
@@ -156,7 +163,6 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 						logger.Error(err, "error creating workload")
 						return ctrl.Result{}, err
 					}
-					//logger.Info(fmt.Sprintf("workload successfully created "))
 					if err != nil {
 						logger.Error(err, "error creating Shared Pool in Power Library")
 						return ctrl.Result{}, err
@@ -232,8 +238,8 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 								Namespace: IntelPowerNamespace,
 							}, &workloadFrom)
 							if err != nil {
-								logger.Error(err, "error retrieving workload")
-								continue
+								logger.Error(err, fmt.Sprintf("error retrieving workload %s", (from + "-" + nodeName)))
+								return ctrl.Result{Requeue: false}, err
 							}
 						}
 						//same check as before
@@ -243,8 +249,8 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 								Namespace: IntelPowerNamespace,
 							}, &workloadTo)
 							if err != nil {
-								logger.Error(err, "error retrieving workload")
-								continue
+								logger.Error(err, fmt.Sprintf("error retrieving workload %s", (to + "-" + nodeName)))
+								return ctrl.Result{Requeue: false}, err
 							}
 						}
 						//looping over the container field of the workload
