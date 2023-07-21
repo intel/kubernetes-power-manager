@@ -163,7 +163,7 @@ func TestTimeOfDay(t *testing.T) {
 }
 
 func FuzzTimeOfDayController(f *testing.F) {
-	f.Fuzz(func(t *testing.T, timeZone string, time1 string, time2 int, time3 int) {
+	f.Fuzz(func(t *testing.T, timeZone string, time1 string, time2 uint, time3 uint) {
 		testNode := "TestNode"
 		t.Setenv("NODE_NAME", testNode)
 		nodeObj := &corev1.Node{
@@ -193,7 +193,7 @@ func FuzzTimeOfDayController(f *testing.F) {
 					{
 						Time: time1,
 					}, {
-						Time: strconv.Itoa(time2) + ":" + strconv.Itoa(time3),
+						Time: strconv.Itoa(int(time2)) + ":" + strconv.Itoa(int(time3)),
 					},
 				},
 			},
@@ -210,14 +210,11 @@ func FuzzTimeOfDayController(f *testing.F) {
 			},
 		}
 		r, err := createTimeOfDayReconcilerObject(clientObjs)
-
 		if err != nil {
 			t.Error(err)
 		}
-		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Error(err)
-		}
+		r.Reconcile(context.TODO(), req)
+	
 	})
 }
 

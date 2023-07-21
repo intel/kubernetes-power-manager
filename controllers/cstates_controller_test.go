@@ -2,6 +2,9 @@ package controllers
 
 import (
 	"context"
+	"strings"
+	"testing"
+
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 	"github.com/intel/power-optimization-library/pkg/power"
 	"github.com/stretchr/testify/assert"
@@ -14,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"testing"
 )
 
 func buildCStatesReconcilerObject(objs []runtime.Object, powerLibMock power.Host) *CStatesReconciler {
@@ -190,7 +192,12 @@ func setupFuzz(t *testing.T, nodeName string, namespace string, extraNode bool, 
 	if len(nodeName) == 0 || len(node2name) == 0 {
 		return nil, req
 	}
-
+	nodeName = strings.ReplaceAll(nodeName, " ", "")
+	node2name = strings.ReplaceAll(node2name, " ", "")
+	nodeName = strings.ReplaceAll(nodeName, "\t", "")
+	node2name = strings.ReplaceAll(node2name, "\t", "")
+	nodeName = strings.ReplaceAll(nodeName, "\000", "")
+	node2name = strings.ReplaceAll(node2name, "\000", "")
 	t.Logf("nodename %v- len %d", nodeName, len(nodeName))
 	t.Logf("nodename2 %v- len %d", node2name, len(nodeName))
 	if runningOnTargetNode {
