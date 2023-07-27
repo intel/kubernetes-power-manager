@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -77,7 +78,7 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 				}
 				sharedPowerWorkloadName = ""
 			} else {
-				pool := r.PowerLibrary.GetExclusivePool(req.NamespacedName.Name)
+				pool := r.PowerLibrary.GetExclusivePool(strings.ReplaceAll(req.NamespacedName.Name, ("-" + nodeName), ""))
 				if pool != nil {
 					err = pool.Remove()
 					if err != nil {

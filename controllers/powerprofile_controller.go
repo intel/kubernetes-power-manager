@@ -107,6 +107,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			pool := r.PowerLibrary.GetExclusivePool(req.Name)
 			if pool == nil {
 				logger.Info("Attempted to remove non existing pool", "pool", req.Name)
+				return ctrl.Result{Requeue: false}, err
 			}
 			err = pool.Remove()
 			if err != nil {

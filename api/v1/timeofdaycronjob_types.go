@@ -29,14 +29,19 @@ import (
 type TimeOfDayCronJobSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Hour         int                           `json:"hour"`
-	Minute       int                           `json:"minute"`
-	Second       int                           `json:"second,omitempty"`
-	TimeZone     *string                       `json:"timeZone"`
-	Profile      *string                       `json:"profile"`
-	Pods         *map[string]map[string]string `json:"pods,omitempty"`
-	ReservedCPUs *[]uint                       `json:"reservedCPUs,omitempty"`
-	CState       *CStatesSpec                  `json:"cState,omitempty"`
+	Hour         int          `json:"hour"`
+	Minute       int          `json:"minute"`
+	Second       int          `json:"second,omitempty"`
+	TimeZone     *string      `json:"timeZone"`
+	Profile      *string      `json:"profile"`
+	Pods         *[]PodInfo   `json:"pods,omitempty"`
+	ReservedCPUs *[]uint      `json:"reservedCPUs,omitempty"`
+	CState       *CStatesSpec `json:"cState,omitempty"`
+}
+
+type PodInfo struct {
+	Labels metav1.LabelSelector `json:"labels"`
+	Target string               `json:"target"`
 }
 
 // TimeOfDayCronJobStatus defines the observed state of TimeOfDayCronJob

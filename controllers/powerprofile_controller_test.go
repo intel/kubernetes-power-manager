@@ -59,7 +59,7 @@ func createProfileReconcilerObject(objs []runtime.Object) (*PowerProfileReconcil
 
 // basic exclusive pool scenario
 func TestPowerProfileExclusivePoolCreation(t *testing.T) {
-	nodeName := "Testnode"
+	nodeName := "TestNode"
 	clientObjs := []runtime.Object{
 		&powerv1.PowerProfile{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1222,7 +1222,7 @@ func TestPowerProfileLibraryErrs(t *testing.T) {
 				return nodemk
 			},
 			validateErr: func(e error) bool {
-				return assert.Nil(t, e)
+				return assert.Error(t, e)
 			},
 			clientObjs: []runtime.Object{},
 		},

@@ -79,6 +79,8 @@ type GuaranteedPod struct {
 	// The name of the Pod
 	Name string `json:"name,omitempty"`
 
+	Namespace string `json:"namespace,omitempty"`
+
 	// The UID of the Pod
 	UID string `json:"uid,omitempty"`
 

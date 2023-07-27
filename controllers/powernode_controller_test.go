@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+	"github.com/intel/kubernetes-power-manager/pkg/podstate"
 	"github.com/intel/power-optimization-library/pkg/power"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -34,9 +35,12 @@ func createPowerNodeReconcilerObject(objs []runtime.Object) (*PowerNodeReconcile
 
 	// Create a fake client to mock API calls.
 	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).Build()
-
+	state, err := podstate.NewState()
+	if err != nil {
+		return nil, err
+	}
 	// Create a ReconcileNode object with the scheme and fake client.
-	r := &PowerNodeReconciler{cl, ctrl.Log.WithName("testing"), s, nil}
+	r := &PowerNodeReconciler{cl, ctrl.Log.WithName("testing"), s, state, map[string]corev1.Pod{},nil}
 
 	return r, nil
 }
@@ -48,7 +52,6 @@ var defaultNode = &powerv1.PowerNode{
 	},
 	Spec: powerv1.PowerNodeSpec{},
 }
-
 var defaultProf = &powerv1.PowerProfile{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "perfromance",
@@ -61,14 +64,13 @@ var defaultProf = &powerv1.PowerProfile{
 		Min:  3200,
 	},
 }
-
 var defaultWload = &powerv1.PowerWorkload{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "performance-Testnode",
+		Name:      "performance-TestNode",
 		Namespace: IntelPowerNamespace,
 	},
 	Spec: powerv1.PowerWorkloadSpec{
-		Name:         "performance-Testnode",
+		Name:         "performance-TestNode",
 		PowerProfile: "performance",
 		Node: powerv1.WorkloadNode{
 			Name: "TestNode",
@@ -78,7 +80,6 @@ var defaultWload = &powerv1.PowerWorkload{
 		},
 	},
 }
-
 var defaultObs = struct {
 	testCase      string
 	nodeName      string
@@ -105,8 +106,24 @@ var defaultObs = struct {
 	},
 }
 
-//tests scenarios where the powernode is incorrect or does not exist
-func TestPowerNodeInvalidNodes(t *testing.T) {
+var nodeGuaranteedPod = powerv1.GuaranteedPod{
+	Node:      "TestNode",
+	Name:      "test-pod-1",
+	Namespace: IntelPowerNamespace,
+	UID:       "abcdefg",
+	Containers: []powerv1.Container{
+		{
+			Name:          "test-container-1",
+			Id:            "abcdefg",
+			Pod:           "test-pod-1",
+			ExclusiveCPUs: []uint{3, 4},
+			PowerProfile:  "performance",
+			Workload:      "performance-TestNode",
+		},
+	},
+}
+
+func TestPowerNode(t *testing.T) {
 	tcases := []struct {
 		testCase      string
 		nodeName      string
@@ -115,13 +132,13 @@ func TestPowerNodeInvalidNodes(t *testing.T) {
 	}{
 		defaultObs,
 		{
-			testCase:      "Test Case 1 - PowerNode not for this Node",
+			testCase:      "Test Case 1 - default test case",
 			nodeName:      "TestNode",
-			powerNodeName: "DifferentNode",
+			powerNodeName: "TestNode",
 			clientObjs: []runtime.Object{
 				&powerv1.PowerNode{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "DifferentNode",
+						Name:      "TestNode",
 						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerNodeSpec{},
@@ -159,9 +176,13 @@ func TestPowerNodeInvalidNodes(t *testing.T) {
 	dummyFilesystemHost, teardown, err := fullDummySystem()
 	assert.Nil(t, err)
 	defer teardown()
-	pool, err := dummyFilesystemHost.AddExclusivePool("performance-Testnode")
+	pool, err := dummyFilesystemHost.AddExclusivePool("performance-TestNode")
 	assert.Nil(t, err)
 	prof, err := power.NewPowerProfile("performance", 10000, 10000, "powersave", "")
+	assert.Nil(t, err)
+	err = dummyFilesystemHost.GetSharedPool().SetPowerProfile(prof)
+	assert.Nil(t, err)
+	err = dummyFilesystemHost.GetSharedPool().SetCpuIDs([]uint{2})
 	assert.Nil(t, err)
 	pool.SetPowerProfile(prof)
 	for _, tc := range tcases {
@@ -195,14 +216,14 @@ func TestPowerNodeClientErrs(t *testing.T) {
 		testCase      string
 		nodeName      string
 		powerNodeName string
-		convertClient func(client.Client) client.Client
+		convertClient func(client.Client, map[string]corev1.Pod) client.Client
 		clientErr     string
 	}{
 		{
 			testCase:      "Test Case 1 - Invalid Get requests",
 			nodeName:      "TestNode",
 			powerNodeName: "TestNode",
-			convertClient: func(c client.Client) client.Client {
+			convertClient: func(c client.Client, orphanedPods map[string]corev1.Pod) client.Client {
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client get error"))
 				return mkcl
@@ -213,7 +234,7 @@ func TestPowerNodeClientErrs(t *testing.T) {
 			testCase:      "Test Case 2 - Invalid List requests",
 			nodeName:      "TestNode",
 			powerNodeName: "TestNode",
-			convertClient: func(c client.Client) client.Client {
+			convertClient: func(c client.Client, orphanedPods map[string]corev1.Pod) client.Client {
 				mkcl := new(errClient)
 				//returns power node
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
@@ -229,11 +250,58 @@ func TestPowerNodeClientErrs(t *testing.T) {
 			testCase:      "Test Case 3 - Invalid Update requests",
 			nodeName:      "TestNode",
 			powerNodeName: "TestNode",
-			convertClient: func(c client.Client) client.Client {
+			convertClient: func(c client.Client, orphanedPods map[string]corev1.Pod) client.Client {
 				mkcl := new(errClient)
-				mkcl.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerNode")).Return(nil).Run(func(args mock.Arguments) {
 					node := args.Get(2).(*powerv1.PowerNode)
 					*node = *defaultNode
+				})
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.Pod")).Return(nil).Run(func(args mock.Arguments) {
+					pod := args.Get(2).(*corev1.Pod)
+					*pod = corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        "test-pod-1",
+							Namespace:   IntelPowerNamespace,
+							UID:         "abcdefg",
+							Annotations: make(map[string]string),
+						},
+					}
+				})
+				mkcl.On("List", mock.Anything, mock.AnythingOfType("*v1.PowerProfileList")).Return(nil).Run(func(args mock.Arguments) {
+					profList := args.Get(1).(*powerv1.PowerProfileList)
+					*profList = powerv1.PowerProfileList{Items: []powerv1.PowerProfile{*defaultProf}}
+				})
+				mkcl.On("List", mock.Anything, mock.AnythingOfType("*v1.PowerWorkloadList")).Return(nil).Run(func(args mock.Arguments) {
+					wList := args.Get(1).(*powerv1.PowerWorkloadList)
+					*wList = powerv1.PowerWorkloadList{Items: []powerv1.PowerWorkload{*defaultWload}}
+				})
+				mkcl.On("Update", mock.Anything, mock.AnythingOfType("*v1.Pod")).Return(nil)
+				mkcl.On("Update", mock.Anything, mock.Anything).Return(fmt.Errorf("client update error"))
+				return mkcl
+			},
+			clientErr: "client update error",
+		},
+		{
+			testCase:      "Test Case 4 - Invalid pod Update requests",
+			nodeName:      "TestNode",
+			powerNodeName: "TestNode",
+			convertClient: func(c client.Client, orphanedPods map[string]corev1.Pod) client.Client {
+				mkcl := new(errClient)
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerNode")).Return(nil).Run(func(args mock.Arguments) {
+					node := args.Get(2).(*powerv1.PowerNode)
+					*node = *defaultNode
+				})
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.Pod")).Return(nil).Run(func(args mock.Arguments) {
+					pod := args.Get(2).(*corev1.Pod)
+					*pod = corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        "test-pod-1",
+							Namespace:   IntelPowerNamespace,
+							UID:         "abcdefg",
+							Annotations: map[string]string{"PM-updated": "0"},
+						},
+					}
+					orphanedPods[guaranteedPod.Name] = *pod
 				})
 				mkcl.On("List", mock.Anything, mock.AnythingOfType("*v1.PowerProfileList")).Return(nil).Run(func(args mock.Arguments) {
 					profList := args.Get(1).(*powerv1.PowerProfileList)
@@ -257,13 +325,16 @@ func TestPowerNodeClientErrs(t *testing.T) {
 	prof, err := power.NewPowerProfile("performance", 10000, 10000, "powersave", "")
 	assert.Nil(t, err)
 	pool.SetPowerProfile(prof)
+	err = dummyFilesystemHost.GetSharedPool().SetPowerProfile(prof)
+	assert.Nil(t, err)
 	for _, tc := range tcases {
 		t.Setenv("NODE_NAME", tc.nodeName)
 
 		r, err := createPowerNodeReconcilerObject([]runtime.Object{})
+		r.State.UpdateStateGuaranteedPods(nodeGuaranteedPod)
 		assert.Nil(t, err)
 		r.PowerLibrary = dummyFilesystemHost
-		r.Client = tc.convertClient(r.Client)
+		r.Client = tc.convertClient(r.Client, r.OrphanedPods)
 		assert.Nil(t, err)
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{

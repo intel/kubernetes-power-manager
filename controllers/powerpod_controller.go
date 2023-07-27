@@ -50,7 +50,7 @@ type PowerPodReconciler struct {
 	client.Client
 	Log                logr.Logger
 	Scheme             *runtime.Scheme
-	State              podstate.State
+	State              *podstate.State
 	PodResourcesClient podresourcesclient.PodResourcesClient
 }
 
@@ -66,8 +66,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Delete the Pod from the internal state in case it was never deleted
-			err = r.State.DeletePodFromState(req.NamespacedName.Name)
-			if err != nil {
+			if err := r.State.DeletePodFromState(req.NamespacedName.Name, req.NamespacedName.Namespace); err != nil {
 				return ctrl.Result{}, err
 			}
 
@@ -92,15 +91,13 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 	if !pod.ObjectMeta.DeletionTimestamp.IsZero() || pod.Status.Phase == corev1.PodSucceeded {
 		// If the Pod's DeletionTimestamp is not zero then the Pod has been deleted
 
-		powerPodState := r.State.GetPodFromState(pod.GetName())
+		powerPodState := r.State.GetPodFromState(pod.GetName(), pod.GetNamespace())
 
 		logger.V(5).Info("Removing Pod from internal state")
-		err = r.State.DeletePodFromState(pod.GetName())
-		if err != nil {
+		if err = r.State.DeletePodFromState(pod.GetName(), pod.GetNamespace()); err != nil {
 			logger.Error(err, "error removing Pod from internal state")
 			return ctrl.Result{}, err
 		}
-
 		workloadToCPUsRemoved := make(map[string][]uint)
 
 		logger.V(5).Info("Removing pods CPUs from internal state")
@@ -113,7 +110,6 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 				workloadToCPUsRemoved[workload] = cpus
 			}
 		}
-
 		for workloadName, cpus := range workloadToCPUsRemoved {
 			logger.V(5).Info("Retrieving workload instance %s", workloadName)
 			workload := &powerv1.PowerWorkload{}
@@ -170,10 +166,9 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 
 	powerProfileCRs := &powerv1.PowerProfileList{}
 	logger.V(5).Info("Retrieving Power Profiles from the Cluster")
-	err = r.Client.List(context.TODO(), powerProfileCRs)
-	if err != nil {
+	if err = r.Client.List(context.TODO(), powerProfileCRs); err != nil {
 		logger.Error(err, "Error retrieving Power Profiles from Cluster")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, err
 	}
 	powerProfilesFromContainers, powerContainers, err := r.getPowerProfileRequestsFromContainers(containersRequestingExclusiveCPUs, powerProfileCRs.Items, pod, &logger)
 	logger.V(5).Info("Retrieving Power Profiles and cores from Pods requests")
@@ -239,6 +234,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 	guaranteedPod := powerv1.GuaranteedPod{}
 	guaranteedPod.Node = pod.Spec.NodeName
 	guaranteedPod.Name = pod.GetName()
+	guaranteedPod.Namespace = pod.Namespace
 	guaranteedPod.UID = string(podUID)
 	guaranteedPod.Containers = make([]powerv1.Container, 0)
 	guaranteedPod.Containers = powerContainers
@@ -258,7 +254,6 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 
 	profiles := make(map[string][]uint)
 	powerContainers := make([]powerv1.Container, 0)
-
 	for _, container := range containers {
 		logger.V(5).Info("Retrieving the requested Power Profile from Container spec")
 		profile, err := getContainerProfileFromRequests(container, logger)
@@ -271,7 +266,11 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 			logger.V(5).Info("No Profile was requested by the Container")
 			continue
 		}
-
+		// checks if pod has been altered by time of day
+		newProf, ok := pod.ObjectMeta.Annotations["PM-altered"]
+		if ok {
+			profile = newProf
+		}
 		if !profileExists(profile, profileCRs, logger) {
 			powerProfileNotFoundError := errors.NewServiceUnavailable(fmt.Sprintf("Power Profile '%s' not found", profile))
 			return map[string][]uint{}, []powerv1.Container{}, powerProfileNotFoundError
@@ -322,7 +321,7 @@ func profileExists(profile string, powerProfiles []powerv1.PowerProfile, logger 
 func getNewWorkloadCPUList(cpuList []uint, nodeCpuIds []uint, logger *logr.Logger) []uint {
 	updatedWorkloadCPUList := make([]uint, 0)
 
-	logger.V(5).Info("Getting updateing Workload CPU list")
+	logger.V(5).Info("Getting updated Workload CPU list")
 	for _, cpu := range nodeCpuIds {
 		if !util.CPUInCPUList(cpu, cpuList) {
 			updatedWorkloadCPUList = append(updatedWorkloadCPUList, cpu)

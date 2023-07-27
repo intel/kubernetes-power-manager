@@ -188,7 +188,7 @@ func TestPowerWorkload(t *testing.T) {
 	sharedPowerWorkloadName = "something"
 	nodemk = new(hostMock)
 	poolmk := new(poolMock)
-	nodemk.On("GetExclusivePool", workloadName).Return(poolmk)
+	nodemk.On("GetExclusivePool", mock.Anything).Return(poolmk)
 	poolmk.On("Remove").Return(errors.New("err"))
 
 	r.PowerLibrary = nodemk

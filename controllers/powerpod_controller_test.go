@@ -71,7 +71,7 @@ func createPodReconcilerObject(objs []runtime.Object, podResourcesClient *podres
 		return nil, err
 	}
 	// Create a ReconcileNode object with the scheme and fake client.
-	r := &PowerPodReconciler{cl, ctrl.Log.WithName("testing"), s, *state, *podResourcesClient}
+	r := &PowerPodReconciler{cl, ctrl.Log.WithName("testing"), s, state, *podResourcesClient}
 
 	return r, nil
 }
@@ -114,7 +114,7 @@ var defaultWorkload = &powerv1.PowerWorkload{
 	},
 }
 
-//runs through some basic cases for the controller with no errors
+// runs through some basic cases for the controller with no errors
 func TestPodCreation(t *testing.T) {
 	tcases := []struct {
 		testCase       string
@@ -302,7 +302,7 @@ func TestPodCreation(t *testing.T) {
 	}
 }
 
-//tests where the workload associated with the profile requested does not exist
+// tests where the workload associated with the profile requested does not exist
 func TestNonExistingWorkload(t *testing.T) {
 	tcases := []struct {
 		testCase       string
@@ -393,7 +393,7 @@ func TestNonExistingWorkload(t *testing.T) {
 	}
 }
 
-//tests for error cases involving invalid pods
+// tests for error cases involving invalid pods
 func TestPodControllerErrors(t *testing.T) {
 	tcases := []struct {
 		testCase      string
@@ -772,7 +772,7 @@ func TestPodControllerErrors(t *testing.T) {
 	}
 }
 
-//testing some error cases where the controller returns nil to prevent a reconcile loop
+// testing some error cases where the controller returns nil to prevent a reconcile loop
 func TestPodControllerReturningNil(t *testing.T) {
 	tcases := []struct {
 		testCase      string
@@ -1011,7 +1011,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 	}
 }
 
-//ensures workloads remove cores upon pod deletion correctly
+// ensures workloads remove cores upon pod deletion correctly
 func TestPodDeletion(t *testing.T) {
 	tcases := []struct {
 		testCase      string
@@ -1077,9 +1077,10 @@ func TestPodDeletion(t *testing.T) {
 				},
 			},
 			guaranteedPod: powerv1.GuaranteedPod{
-				Node: "TestNode",
-				Name: "test-pod-1",
-				UID:  "abcdefg",
+				Node:      "TestNode",
+				Name:      "test-pod-1",
+				Namespace: IntelPowerNamespace,
+				UID:       "abcdefg",
 				Containers: []powerv1.Container{
 					{
 						Name:          "test-container-1",
@@ -1222,9 +1223,10 @@ func TestPodClientErrs(t *testing.T) {
 				},
 			},
 			guaranteedPod: powerv1.GuaranteedPod{
-				Node: "TestNode",
-				Name: "test-pod-1",
-				UID:  "abcdefg",
+				Node:      "TestNode",
+				Name:      "test-pod-1",
+				Namespace: IntelPowerNamespace,
+				UID:       "abcdefg",
 				Containers: []powerv1.Container{
 					{
 						Name:          "test-container-1",
@@ -1291,7 +1293,7 @@ func TestPodClientErrs(t *testing.T) {
 
 }
 
-//tests positive and negative cases for SetupWithManager function
+// tests positive and negative cases for SetupWithManager function
 func TestPowerPodReconcileSetupPass(t *testing.T) {
 	podResources := []*podresourcesapi.PodResources{}
 	podResourcesClient := createFakePodResourcesListerClient(podResources)

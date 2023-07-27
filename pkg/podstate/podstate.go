@@ -18,7 +18,7 @@ func NewState() (*State, error) {
 
 func (s *State) UpdateStateGuaranteedPods(guaranteedPod powerv1.GuaranteedPod) error {
 	for i, existingPod := range s.GuaranteedPods {
-		if existingPod.Name == guaranteedPod.Name {
+		if existingPod.Name == guaranteedPod.Name && existingPod.Namespace == guaranteedPod.Namespace {
 			s.GuaranteedPods[i] = guaranteedPod
 			return nil
 		}
@@ -28,9 +28,9 @@ func (s *State) UpdateStateGuaranteedPods(guaranteedPod powerv1.GuaranteedPod) e
 	return nil
 }
 
-func (s *State) GetPodFromState(podName string) powerv1.GuaranteedPod {
+func (s *State) GetPodFromState(podName string, podNamespace string) powerv1.GuaranteedPod {
 	for _, existingPod := range s.GuaranteedPods {
-		if existingPod.Name == podName {
+		if existingPod.Name == podName && existingPod.Namespace == podNamespace {
 			return existingPod
 		}
 	}
@@ -47,9 +47,9 @@ func (s *State) GetCPUsFromPodState(podState powerv1.GuaranteedPod) []uint {
 	return cpus
 }
 
-func (s *State) DeletePodFromState(podName string) error {
+func (s *State) DeletePodFromState(podName string, podNamespace string) error {
 	for i, pod := range s.GuaranteedPods {
-		if pod.Name == podName {
+		if pod.Name == podName && pod.Namespace == podNamespace {
 			s.GuaranteedPods = append(s.GuaranteedPods[:i], s.GuaranteedPods[i+1:]...)
 		}
 	}

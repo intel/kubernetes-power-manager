@@ -111,7 +111,7 @@ func (r *CStatesReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *CStatesReconciler) checkIfNodeExists(ctx context.Context, cStatesCRD *powerv1.CStates, logger *logr.Logger) error {
 	nodes := &powerv1.PowerNodeList{}
-	logger.V(5).Info("retreivingall Node Listed and checking names match CRDs")
+	logger.V(5).Info("Retrieving all Node Listed and checking names match CRDs")
 	err := r.Client.List(ctx, nodes)
 	if err != nil {
 		logger.Error(err, "failed to retrieve list of nodes")

@@ -19,13 +19,17 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"os"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 
 	"time"
 
 	"github.com/go-logr/logr"
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+	"github.com/intel/kubernetes-power-manager/pkg/podstate"
 	"github.com/intel/power-optimization-library/pkg/power"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -39,6 +43,7 @@ type TimeOfDayCronJobReconciler struct {
 	client.Client
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
+	State        *podstate.State
 	PowerLibrary power.Host
 }
 
@@ -89,7 +94,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 	wait := jobActiveTime.Sub(time.Now().In(location))
 	//calculating when next to schedule the job
 	nextActiveTime := jobActiveTime.Add(24 * time.Hour)
-	logger.V(5).Info("Next active time is: %s", nextActiveTime)
+	logger.V(5).Info(fmt.Sprintf("Next active time is: %s", nextActiveTime))
 	nextWait := nextActiveTime.Sub(time.Now().In(location))
 	// cronjob missed deadline
 	if wait.Seconds() <= 0 && cronJob.Status.LastScheduleTime == nil {
@@ -116,8 +121,11 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 	} else {
 		//cronjob ready for application
 		if wait.Seconds() <= 0 {
-			logger.V(5).Info("cronjob ready to be applied")
+			logger.V(5).Info("Cronjob ready to be applied")
 			if cronJob.Spec.Profile != nil {
+				var workloadMatch *powerv1.PowerWorkload
+				var profileMaxFreq int
+				var profileMinFreq int
 				// check if shared workload exists
 				// if not create one
 				logger.V(5).Info("Checking for existing shared workload")
@@ -128,7 +136,6 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 					return ctrl.Result{}, err
 				}
 				//if an active workload exists with allcores set to true it must be shared
-				var workloadMatch *powerv1.PowerWorkload
 				for _, workload := range workloadList.Items {
 					if workload.Spec.AllCores {
 						workloadMatch = &workload
@@ -142,7 +149,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 						logger.Error(err, "reservedCPUs must be set")
 						return ctrl.Result{Requeue: false}, err
 					}
-					logger.V(5).Info("Creating shared workload as non exists")
+					logger.V(5).Info("Creating shared workload as none exists")
 					workloadName := fmt.Sprintf("shared-%s", nodeName)
 					workload := &powerv1.PowerWorkload{
 						ObjectMeta: metav1.ObjectMeta{
@@ -163,22 +170,44 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 						logger.Error(err, "error creating workload")
 						return ctrl.Result{}, err
 					}
-					if err != nil {
-						logger.Error(err, "error creating Shared Pool in Power Library")
-						return ctrl.Result{}, err
-					}
-				} else {
-					// A shared workload exists so we swap out the profile attached
-					logger.V(5).Info("A shared workload already exists so we need to change it")
-					workloadMatch.Spec.PowerProfile = *cronJob.Spec.Profile
-					logger.V(5).Info("setting profile %s", *cronJob.Spec.Profile)
-
-					if err := r.Client.Update(c, workloadMatch); err != nil {
-						logger.Error(err, "cannot update workload")
-						return ctrl.Result{}, err
-					}
-
+					workloadMatch = workload
 				}
+				// A shared workload exists so we attach it to the profile
+				logger.V(5).Info("Modifying shared workload")
+				workloadMatch.Spec.PowerProfile = *cronJob.Spec.Profile
+				logger.V(5).Info(fmt.Sprintf("Setting profile %s", *cronJob.Spec.Profile))
+				prof := &powerv1.PowerProfile{}
+				if err := r.Client.Get(context.TODO(), client.ObjectKey{Name: *cronJob.Spec.Profile, Namespace: IntelPowerNamespace}, prof); err != nil {
+					logger.Error(err, "cannot retrieve profile")
+					return ctrl.Result{Requeue: false}, err
+				}
+				var absoluteMaximumFrequency, absoluteMinimumFrequency int
+				if absoluteMaximumFrequency, absoluteMinimumFrequency, err = getMaxMinFrequencyValues(); err != nil {
+					logger.Error(err, "error retrieving frequency values from Node")
+					return ctrl.Result{}, nil
+				}
+				if prof.Spec.Epp != "" && prof.Spec.Max == 0 && prof.Spec.Min == 0 {
+					profileMaxFreq = int(float64(absoluteMaximumFrequency) - (float64((absoluteMaximumFrequency - absoluteMinimumFrequency)) * profilePercentages[prof.Spec.Epp]["difference"]))
+					profileMinFreq = int(profileMaxFreq) - 200
+				} else {
+					profileMaxFreq = prof.Spec.Max
+					profileMinFreq = prof.Spec.Min
+				}
+				powerProfile, err := power.NewPowerProfile(prof.Spec.Name, uint(profileMinFreq), uint(profileMaxFreq), prof.Spec.Governor, prof.Spec.Epp)
+				if err != nil {
+					logger.Error(err, "could not set power profile for shared pool")
+					return ctrl.Result{}, nil
+				}
+				err = r.PowerLibrary.GetSharedPool().SetPowerProfile(powerProfile)
+				if err != nil {
+					logger.Error(err, "could not set power profile for shared pool")
+					return ctrl.Result{}, nil
+				}
+				if err := r.Client.Update(c, workloadMatch); err != nil {
+					logger.Error(err, "cannot update workload")
+					return ctrl.Result{}, err
+				}
+
 				logger.V(5).Info("New shared pool applied")
 			}
 			if cronJob.Spec.CState != nil {
@@ -189,7 +218,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 				}, cstate)
 				if errors.IsNotFound(err) {
 					//if cstate does not exist
-					logger.V(5).Info("creating new cstate")
+					logger.V(5).Info("Creating new cstate")
 					newCstate := &powerv1.CStates{
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: IntelPowerNamespace,
@@ -208,7 +237,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 
 				} else {
 					//if cstate already exists
-					logger.V(5).Info("Modifying cstate %s", cstate.Name)
+					logger.V(5).Info(fmt.Sprintf("Modifying cstate %s", cstate.Name))
 					newSpec := powerv1.CStatesSpec{
 						SharedPoolCStates:     cronJob.Spec.CState.SharedPoolCStates,
 						ExclusivePoolCStates:  cronJob.Spec.CState.ExclusivePoolCStates,
@@ -220,7 +249,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 						return ctrl.Result{}, err
 					}
 				}
-				logger.V(5).Info("cstate successfully applied")
+				logger.V(5).Info("Cstate successfully applied")
 
 			}
 			//logic for tuning individual pods
@@ -229,37 +258,66 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 				workloadFrom := powerv1.PowerWorkload{}
 				workloadTo := powerv1.PowerWorkload{}
 				//looping over each pod to tune
-				for podName, profToProf := range *cronJob.Spec.Pods {
-					for from, to := range profToProf {
+				for _, podInfo := range *cronJob.Spec.Pods {
+					var selector labels.Selector
+					if selector, err = metav1.LabelSelectorAsSelector(&podInfo.Labels); err != nil {
+						logger.Error(err, "error parsing pod label info")
+						return ctrl.Result{Requeue: false}, err
+					}
+					listOptions := client.ListOptions{
+						LabelSelector: selector,
+					}
+					powerpods := &corev1.PodList{}
+					if err := r.Client.List(context.TODO(), powerpods, &listOptions); err != nil {
+						logger.Error(err, "retrieving pods")
+						return ctrl.Result{}, err
+					}
+					for _, pod := range powerpods.Items {
+						podName := pod.Name
+						podState := r.State.GetPodFromState(pod.Name, pod.Namespace)
+						if podState.Name != pod.Name {
+							logger.Error(err, fmt.Sprintf("mismatch between pod name and internal state name. %s and %s", podState.Name, pod.Name))
+							return ctrl.Result{}, nil
+						}
+						var from string
+						for i, container := range podState.Containers {
+							if container.Workload != "" {
+								from = container.Workload
+								podState.Containers[i].Workload = podInfo.Target + "-" + nodeName
+							}
+						}
+						if err = r.State.UpdateStateGuaranteedPods(podState); err != nil {
+							logger.Error(err, "error updating internal state")
+							return ctrl.Result{}, err
+						}
 						//useful check to see if we've already retrieved the workload in an earlier loop
 						if workloadFrom.Name != from {
 							err = r.Client.Get(context.TODO(), client.ObjectKey{
-								Name:      from + "-" + nodeName,
+								Name:      from,
 								Namespace: IntelPowerNamespace,
 							}, &workloadFrom)
 							if err != nil {
-								logger.Error(err, fmt.Sprintf("error retrieving workload %s", (from + "-" + nodeName)))
+								logger.Error(err, fmt.Sprintf("error retrieving workload %s", from))
 								return ctrl.Result{Requeue: false}, err
 							}
 						}
 						//same check as before
-						if workloadTo.Name != to {
+						if workloadTo.Name != podInfo.Target+"-"+nodeName {
 							err = r.Client.Get(context.TODO(), client.ObjectKey{
-								Name:      to + "-" + nodeName,
+								Name:      podInfo.Target + "-" + nodeName,
 								Namespace: IntelPowerNamespace,
 							}, &workloadTo)
 							if err != nil {
-								logger.Error(err, fmt.Sprintf("error retrieving workload %s", (to + "-" + nodeName)))
+								logger.Error(err, fmt.Sprintf("error retrieving workload %s", (podInfo.Target+"-"+nodeName)))
 								return ctrl.Result{Requeue: false}, err
 							}
 						}
 						//looping over the container field of the workload
 						for i, container := range workloadFrom.Spec.Node.Containers {
-							//logger.Info(fmt.Sprintf("value of i is %d",i))
 							if container.Pod == podName {
-								logger.V(5).Info("found %s for tuning", container.Pod)
+								logger.V(5).Info(fmt.Sprintf("Found %s for tuning", container.Pod))
 								// first we set the profile on the container to it's new value
-								container.PowerProfile = to
+								container.PowerProfile = podInfo.Target
 								// copying container to its' new workload
 								workloadTo.Spec.Node.Containers = append(workloadTo.Spec.Node.Containers, container)
 								//getting cores to be removed from one workload and added to another
@@ -279,8 +337,14 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 									logger.Error(err, "cannot update workload")
 									return ctrl.Result{}, err
 								}
-								break
+
 							}
+						}
+						pod.ObjectMeta.Annotations["PM-updated"] = fmt.Sprint(time.Now().Unix())
+						pod.ObjectMeta.Annotations["PM-altered"] = podInfo.Target
+						if err = r.Client.Update(context.TODO(), &pod); err != nil {
+							logger.Error(err, "Could not update pod")
+							return ctrl.Result{}, err
 						}
 					}
 				}
@@ -289,7 +353,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 			//reschedule for tomorrow
 			cronJob.Status.LastSuccessfulTime = &metav1.Time{Time: time.Now().In(location)}
 			cronJob.Status.LastScheduleTime = &metav1.Time{Time: time.Now().In(location)}
-			logger.V(5).Info("Telling reconciler to wait till %s", nextWait.String())
+			logger.V(5).Info(fmt.Sprintf("Telling reconciler to wait till %s", nextWait.String()))
 			if err := r.Status().Update(c, cronJob); err != nil {
 				logger.Error(err, "cannot update status")
 				return ctrl.Result{}, err

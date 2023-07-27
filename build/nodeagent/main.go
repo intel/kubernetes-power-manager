@@ -35,6 +35,7 @@ import (
 	"github.com/intel/kubernetes-power-manager/controllers"
 	"github.com/intel/kubernetes-power-manager/pkg/podstate"
 	"github.com/intel/power-optimization-library/pkg/power"
+	corev1 "k8s.io/api/core/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -92,7 +93,7 @@ func main() {
 			"error", feature.FeatureError(),
 			"available", power.IsFeatureSupported(id))
 		if id == power.FreqencyScalingFeature {
-			govs :=power.GetAvailableGovernors()
+			govs := power.GetAvailableGovernors()
 			setupLog.Info(fmt.Sprintf("available governors: %v", govs))
 		}
 	}
@@ -131,6 +132,8 @@ func main() {
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerNode"),
 		Scheme:       mgr.GetScheme(),
+		State:        powerNodeState,
+		OrphanedPods: make(map[string]corev1.Pod),
 		PowerLibrary: powerLibrary,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerNode")
@@ -140,7 +143,7 @@ func main() {
 		Client:             mgr.GetClient(),
 		Log:                ctrl.Log.WithName("controllers").WithName("PowerPod"),
 		Scheme:             mgr.GetScheme(),
-		State:              *powerNodeState,
+		State:              powerNodeState,
 		PodResourcesClient: *podResourcesClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerPod")
@@ -167,6 +170,7 @@ func main() {
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("TimeOfDayCronJob"),
 		Scheme:       mgr.GetScheme(),
+		State:        powerNodeState,
 		PowerLibrary: powerLibrary,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TimeOfDayCronJob")
