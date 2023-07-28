@@ -73,6 +73,8 @@ spec:
                 items:
                   type: integer
                 type: array
+              second:
+                type: integer
               timeZone:
                 type: string
             required:

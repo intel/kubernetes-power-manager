@@ -44,6 +44,30 @@ images: generate manifests install
 run: generate fmt vet manifests
 	go run ./main.go
 
+helm-install: generate manifests install
+	helm install kubernetes-power-manager-v2.3.0 ./helm/kubernetes-power-manager-v2.3.0
+
+helm-uninstall:
+	helm uninstall kubernetes-power-manager-v2.3.0
+
+helm-install-v2.2.0: generate manifests install
+	helm install kubernetes-power-manager-v2.2.0 ./helm/kubernetes-power-manager-v2.2.0
+
+helm-uninstall-v2.2.0:
+	helm uninstall kubernetes-power-manager-v2.2.0
+
+helm-install-v2.1.0: generate manifests install
+	helm install kubernetes-power-manager-v2.1.0 ./helm/kubernetes-power-manager-v2.1.0
+
+helm-uninstall-v2.1.0:
+	helm uninstall kubernetes-power-manager-v2.1.0
+
+helm-install-v2.0.0: generate manifests install
+	helm install kubernetes-power-manager-v2.0.0 ./helm/kubernetes-power-manager-v2.0.0
+
+helm-uninstall-v2.0.0:
+	helm uninstall kubernetes-power-manager-v2.0.0
+
 # Install CRDs into a cluster
 install: manifests kustomize
 	$(KUSTOMIZE) build config/crd | kubectl apply -f -
