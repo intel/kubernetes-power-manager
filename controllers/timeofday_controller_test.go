@@ -43,7 +43,7 @@ func createTimeOfDayReconcilerObject(objs []runtime.Object) (*TimeOfDayReconcile
 
 	return r, nil
 }
-func TestTimeOfDay(t *testing.T) {
+func TestTimeOfDay_Reconcile(t *testing.T) {
 	testNode := "TestNode"
 	nodeObj := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -85,7 +85,7 @@ func TestTimeOfDay(t *testing.T) {
 	clientObjs := []runtime.Object{
 		todObj, nodesObj,
 	}
-	//time of day creation
+	// time of day creation
 	t.Setenv("NODE_NAME", testNode)
 	r, err := createTimeOfDayReconcilerObject(clientObjs)
 	assert.NoError(t, err)
@@ -135,8 +135,8 @@ func TestTimeOfDay(t *testing.T) {
 	r, err = createTimeOfDayReconcilerObject(clientObjs)
 	assert.NoError(t, err)
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.ErrorContains(t, err, "Time filed must be in format HH:MM:SS or HH:MM")
-	//time overflow
+	assert.ErrorContains(t, err, "time filed must be in format HH:MM:SS or HH:MM")
+	// time overflow
 	todObj = &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "timeofday-test",
@@ -214,12 +214,12 @@ func FuzzTimeOfDayController(f *testing.F) {
 			t.Error(err)
 		}
 		r.Reconcile(context.TODO(), req)
-	
+
 	})
 }
 
-func TestInvalidTODRequests(t *testing.T) {
-	//incorrect node
+func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
+	// incorrect node
 	testNode := "TestNode"
 	nodeObj := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -263,11 +263,11 @@ func TestInvalidTODRequests(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.Nil(t, err)
-	//ensure object was not created
+	// ensure object was not created
 	dummyObject := powerv1.TimeOfDay{}
 	err = r.Client.Get(context.TODO(), req.NamespacedName, &dummyObject)
 	assert.ErrorContains(t, err, "not found")
-	// inalid timezone
+	// invalid timezone
 	todObj = &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "timeofday-test",
@@ -295,8 +295,8 @@ func TestInvalidTODRequests(t *testing.T) {
 	r, err = createTimeOfDayReconcilerObject(clientObjs)
 	assert.NoError(t, err)
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.ErrorContains(t, err, "Invalid timezone")
-	//multiple TODs
+	assert.ErrorContains(t, err, "invalid timezone")
+	// multiple TODs
 	todObj1 := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "timeofday-test1",
@@ -339,10 +339,10 @@ func TestInvalidTODRequests(t *testing.T) {
 	r, err = createTimeOfDayReconcilerObject(clientObjs)
 	assert.NoError(t, err)
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.ErrorContains(t, err, "Cannot have more than one TimeOfDay")
+	assert.ErrorContains(t, err, "cannot have more than one time-of-day")
 }
 
-func TestClientErrs(t *testing.T) {
+func TestTimeOfDay_Reconcile_ClientErrs(t *testing.T) {
 	timeZone := "Eire"
 	profile := "performance"
 	todObj := &powerv1.TimeOfDay{
@@ -385,7 +385,7 @@ func TestClientErrs(t *testing.T) {
 	r.Client = mkcl
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.ErrorContains(t, err, "client list error")
-	//cronjob cleanup error
+	// cron job cleanup error
 	r, err = createTimeOfDayReconcilerObject([]runtime.Object{})
 	assert.NoError(t, err)
 	mkcl = new(errClient)
@@ -420,7 +420,7 @@ func TestClientErrs(t *testing.T) {
 
 }
 
-func TestTimeOfDayReconcileSetupPass(t *testing.T) {
+func TestTimeOfDay_Reconcile_SetupPass(t *testing.T) {
 	r, err := createTimeOfDayReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
@@ -436,7 +436,8 @@ func TestTimeOfDayReconcileSetupPass(t *testing.T) {
 	assert.Nil(t, err)
 
 }
-func TestTimeOfDayReconcileSetupFail(t *testing.T) {
+
+func TestTimeOfDay_Reconcile_SetupFail(t *testing.T) {
 	r, err := createTimeOfDayReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{

@@ -36,7 +36,7 @@ func buildCStatesReconcilerObject(objs []runtime.Object, powerLibMock power.Host
 	return reconciler
 }
 
-func TestCStatesReconciler_Reconcile(t *testing.T) {
+func TestCStates_Reconcile(t *testing.T) {
 	cStatesObj := &powerv1.CStates{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "node1",

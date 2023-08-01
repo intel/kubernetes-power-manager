@@ -44,7 +44,7 @@ func createWorkloadReconcilerObject(objs []runtime.Object) (*PowerWorkloadReconc
 	return r, nil
 }
 
-func TestPowerWorkload(t *testing.T) {
+func TestPowerWorkload_Reconcile(t *testing.T) {
 	testNode := "TestNode"
 	workloadName := "performance-TestNode"
 	pwrWorkloadObj := &powerv1.PowerWorkload{
@@ -90,7 +90,7 @@ func TestPowerWorkload(t *testing.T) {
 	r, err := createWorkloadReconcilerObject(clientObjs)
 	if err != nil {
 		t.Error(err)
-		t.Fatalf("error creating reconciler object")
+		t.Fatalf("error creating the reconciler object")
 	}
 
 	nodemk := new(hostMock)
@@ -157,7 +157,7 @@ func TestPowerWorkload(t *testing.T) {
 	r, err = createWorkloadReconcilerObject(clientObjs)
 	if err != nil {
 		t.Error(err)
-		t.Fatalf("error creating reconciler object")
+		t.Fatalf("error creating the reconciler object")
 	}
 	r.PowerLibrary = host
 	host.AddExclusivePool("performance")
@@ -183,7 +183,7 @@ func TestPowerWorkload(t *testing.T) {
 	r, err = createWorkloadReconcilerObject([]runtime.Object{})
 	if err != nil {
 		t.Error(err)
-		t.Fatal("error creating reconciler object")
+		t.Fatal("error creating the reconciler object")
 	}
 	sharedPowerWorkloadName = "something"
 	nodemk = new(hostMock)
@@ -202,7 +202,7 @@ func TestPowerWorkload(t *testing.T) {
 	sharedPowerWorkloadName = "shared"
 
 	r, err = createWorkloadReconcilerObject([]runtime.Object{})
-	assert.NoError(t, err, "Failed to create reconciler object")
+	assert.NoError(t, err, "failed to create the reconciler object")
 
 	nodemk = new(hostMock)
 	nodemk.On("GetSharedPool").Return(poolmk)
@@ -219,7 +219,7 @@ func TestPowerWorkload(t *testing.T) {
 	// not running on node with stuff
 	pwrWorkloadObj.Spec.AllCores = true
 	r, err = createWorkloadReconcilerObject([]runtime.Object{pwrWorkloadObj})
-	assert.NoError(t, err, "Failed to create reconciler object")
+	assert.NoError(t, err, "failed to create the reconciler object")
 	r.PowerLibrary = new(hostMock)
 
 	req.Name = workloadName
@@ -228,7 +228,7 @@ func TestPowerWorkload(t *testing.T) {
 
 	// shared workload already exists
 	r, err = createWorkloadReconcilerObject([]runtime.Object{pwrWorkloadObj, nodesObj})
-	assert.NoError(t, err, "Failed to create reconciler object")
+	assert.NoError(t, err, "failed to create the reconciler object")
 	r.PowerLibrary = new(hostMock)
 
 	sharedPowerWorkloadName = "shared"
@@ -239,7 +239,7 @@ func TestPowerWorkload(t *testing.T) {
 
 	// error adding shared pool
 	r, err = createWorkloadReconcilerObject([]runtime.Object{pwrWorkloadObj, nodesObj})
-	assert.NoError(t, err, "Failed to create reconciler object")
+	assert.NoError(t, err, "failed to create the reconciler object")
 
 	nodemk = new(hostMock)
 	poolmk = new(poolMock)
@@ -256,7 +256,7 @@ func TestPowerWorkload(t *testing.T) {
 
 	// successful add shared pool
 	r, err = createWorkloadReconcilerObject([]runtime.Object{pwrWorkloadObj, nodesObj})
-	assert.NoError(t, err, "Failed to create reconciler object")
+	assert.NoError(t, err, "failed to create the reconciler object")
 
 	nodemk = new(hostMock)
 	poolmk = new(poolMock)
@@ -273,7 +273,7 @@ func TestPowerWorkload(t *testing.T) {
 	assert.Equal(t, req.Name, sharedPowerWorkloadName)
 }
 
-func Test_detectCoresRemoved(t *testing.T) {
+func TestPowerWorkload_Reconcile_DetectCoresRemoved(t *testing.T) {
 	orig := []uint{1, 2, 3, 4}
 	updated := []uint{1, 2, 4, 5}
 
@@ -282,7 +282,7 @@ func Test_detectCoresRemoved(t *testing.T) {
 	assert.ElementsMatch(t, result, expectedResult)
 }
 
-func Test_detectCoresAdded(t *testing.T) {
+func TestPowerWorkload_Reconcile_DetectCoresAdded(t *testing.T) {
 	orig := []uint{1, 2, 3, 4}
 	updated := []uint{1, 2, 4, 5}
 
@@ -291,7 +291,7 @@ func Test_detectCoresAdded(t *testing.T) {
 	assert.ElementsMatch(t, result, expectedResult)
 }
 
-func TestWrongNamespace(t *testing.T) {
+func TestPowerWorkload_Reconcile_WrongNamespace(t *testing.T) {
 	// ensure request for wrong namespace is ignored
 
 	r, err := createWorkloadReconcilerObject([]runtime.Object{})
@@ -310,7 +310,7 @@ func TestWrongNamespace(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestWorkloadClientErrs(t *testing.T) {
+func TestPowerWorkload_Reconcile_ClientErrs(t *testing.T) {
 	// error getting power nodes
 	testNode := "TestNode"
 	workloadName := "performance-TestNode"
@@ -352,7 +352,7 @@ func TestWorkloadClientErrs(t *testing.T) {
 	r, err := createWorkloadReconcilerObject([]runtime.Object{})
 	if err != nil {
 		t.Error(err)
-		t.Fatalf("error creating reconciler object")
+		t.Fatalf("error creating the reconciler object")
 	}
 	mkcl := new(errClient)
 	mkcl.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
@@ -397,7 +397,7 @@ func TestWorkloadClientErrs(t *testing.T) {
 	assert.ErrorContains(t, err, "client delete error")
 }
 
-func TestPowerWorkloadReconcileSetupPass(t *testing.T) {
+func TestPowerWorkload_Reconcile_SetupPass(t *testing.T) {
 	r, err := createPowerNodeReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
@@ -413,7 +413,7 @@ func TestPowerWorkloadReconcileSetupPass(t *testing.T) {
 	assert.Nil(t, err)
 
 }
-func TestPowerWorkloadReconcileSetupFail(t *testing.T) {
+func TestPowerWorkload_Reconcile_SetupFail(t *testing.T) {
 	r, err := createPowerNodeReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{

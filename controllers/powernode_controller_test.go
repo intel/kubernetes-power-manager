@@ -40,7 +40,7 @@ func createPowerNodeReconcilerObject(objs []runtime.Object) (*PowerNodeReconcile
 		return nil, err
 	}
 	// Create a ReconcileNode object with the scheme and fake client.
-	r := &PowerNodeReconciler{cl, ctrl.Log.WithName("testing"), s, state, map[string]corev1.Pod{},nil}
+	r := &PowerNodeReconciler{cl, ctrl.Log.WithName("testing"), s, state, map[string]corev1.Pod{}, nil}
 
 	return r, nil
 }
@@ -123,7 +123,8 @@ var nodeGuaranteedPod = powerv1.GuaranteedPod{
 	},
 }
 
-func TestPowerNode(t *testing.T) {
+// tests scenarios where the power node is incorrect or does not exist
+func TestPowerNode_Reconcile(t *testing.T) {
 	tcases := []struct {
 		testCase      string
 		nodeName      string
@@ -191,7 +192,7 @@ func TestPowerNode(t *testing.T) {
 		r, err := createPowerNodeReconcilerObject(tc.clientObjs)
 		if err != nil {
 			t.Error(err)
-			t.Fatalf("%s - error creating reconciler object", tc.testCase)
+			t.Fatalf("%s failed: error creating reconciler object", tc.testCase)
 		}
 		r.PowerLibrary = dummyFilesystemHost
 		assert.Nil(t, err)
@@ -204,14 +205,14 @@ func TestPowerNode(t *testing.T) {
 
 		_, err = r.Reconcile(context.TODO(), req)
 		if err != nil {
-			t.Errorf("%s Failed - expected reconciler to not have failed", tc.testCase)
+			t.Errorf("%s failed: expected reconciler to not have failed", tc.testCase)
 		}
 	}
 }
 
 // test to check for errors returned by the client
 // uses an errclient which mocks client calls
-func TestPowerNodeClientErrs(t *testing.T) {
+func TestPowerNode_Reconcile_ClientErrs(t *testing.T) {
 	tcases := []struct {
 		testCase      string
 		nodeName      string
@@ -349,7 +350,7 @@ func TestPowerNodeClientErrs(t *testing.T) {
 }
 
 // positive and negative test casses for the SetupWithManager function
-func TestPowerNodeReconcileSetupPass(t *testing.T) {
+func TestPowerNode_Reconcile_SetupPass(t *testing.T) {
 	r, err := createPowerNodeReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
@@ -365,7 +366,8 @@ func TestPowerNodeReconcileSetupPass(t *testing.T) {
 	assert.Nil(t, err)
 
 }
-func TestPowerNodeReconcileSetupFail(t *testing.T) {
+
+func TestPowerNode_Reconcile_SetupFail(t *testing.T) {
 	r, err := createPowerNodeReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{

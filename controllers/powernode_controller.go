@@ -46,23 +46,21 @@ type PowerNodeReconciler struct {
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
 	State        *podstate.State
-	OrphanedPods  map[string]corev1.Pod
+	OrphanedPods map[string]corev1.Pod
 	PowerLibrary power.Host
 }
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powernodes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=power.intel.com,resources=powernodes/status,verbs=get;update;patch
 
-
 func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 
 	logger := r.Log.WithValues("powernode", req.NamespacedName)
-	logger.V(5).Info("Checking if PowerNode and Node Name match")
+	logger.V(5).Info("checking if power node and node name match")
 	nodeName := os.Getenv("NODE_NAME")
 	if nodeName != req.NamespacedName.Name {
-		// PowerNode is not on this Node
-
+		// power node is not on this node
 		return ctrl.Result{}, nil
 	}
 
@@ -71,17 +69,17 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	powerContainers := make([]powerv1.Container, 0)
 
 	powerNode := &powerv1.PowerNode{}
-	logger.V(5).Info("Retrieving Power Node instance")
+	logger.V(5).Info("retrieving the power node instance")
 	err := r.Client.Get(context.TODO(), req.NamespacedName, powerNode)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			logger.V(5).Info("Power Node not found, requeueing")
+			logger.V(5).Info("power node not found, requeueing")
 			return ctrl.Result{RequeueAfter: queuetime}, nil
 		}
 		return ctrl.Result{RequeueAfter: queuetime}, err
 	}
 	powerProfiles := &powerv1.PowerProfileList{}
-	logger.V(5).Info("Retrieving PowerProfileList")
+	logger.V(5).Info("retrieving the power profile list")
 	err = r.Client.List(context.TODO(), powerProfiles)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -92,7 +90,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	for _, profile := range powerProfiles.Items {
-		logger.V(5).Info("Retrieving Profile information from the Power Librarys")
+		logger.V(5).Info("retrieving profile information from the power library")
 		pool := r.PowerLibrary.GetExclusivePool(profile.Spec.Name)
 		if pool == nil {
 			continue
@@ -107,7 +105,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	powerWorkloads := &powerv1.PowerWorkloadList{}
-	logger.V(5).Info("Retrieving PowerWorkloadList")
+	logger.V(5).Info("retrieving the power workload list")
 	err = r.Client.List(context.TODO(), powerWorkloads)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -118,50 +116,50 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	for _, workload := range powerWorkloads.Items {
-		logger.V(5).Info("Checking if workload is shared or on the wrong node")
+		logger.V(5).Info("checking if the workload is shared or on the wrong node")
 		if workload.Spec.AllCores || workload.Spec.Node.Name != nodeName {
 			continue
 		}
 		poolFromLibrary := r.PowerLibrary.GetExclusivePool(workload.Spec.PowerProfile)
-		logger.V(5).Info("Retrieving workload information from Power Library")
+		logger.V(5).Info("retrieving the workload information from the power library")
 		if poolFromLibrary == nil {
 			continue
 		}
 		// checks for pods that aren't in the pool they should be
 		if r.PowerLibrary.GetSharedPool().GetPowerProfile() != nil {
 			for _, guaranteedPod := range r.State.GuaranteedPods {
-				if err = r.itterPods(nodeName, workload, poolFromLibrary, guaranteedPod, logger); err !=nil {
+				if err = r.itterPods(nodeName, workload, poolFromLibrary, guaranteedPod, logger); err != nil {
 					// erroring out here risks a loop but in that scenario something is seriously wrong with k8s
 					// or the managers' internal state
 					return ctrl.Result{RequeueAfter: queuetime}, err
 				}
 			}
 		}
-		logger.V(5).Info("Retrieving Power Profile information for workload")
+		logger.V(5).Info("retrieving the power profile information for workload")
 		cores := prettifyCoreList(poolFromLibrary.Cpus().IDs())
 		profile := poolFromLibrary.GetPowerProfile()
 		workloadString := fmt.Sprintf("%s: %s || %s", poolFromLibrary.Name(), profile.Name(), cores)
 		powerWorkloadStrings = append(powerWorkloadStrings, workloadString)
 
 		for _, container := range workload.Spec.Node.Containers {
-			logger.V(5).Info("Configuring the Power Container information")
+			logger.V(5).Info("configuring the power container information")
 			container.Workload = workload.Name
 			powerContainers = append(powerContainers, container)
 		}
 	}
 
-	logger.V(5).Info("Setting the PowerNode Spec - PowerProfiles, PowerWorkloads, PowerContainers")
+	logger.V(5).Info("setting the power node spec - profiles, workloads, containers")
 	powerNode.Spec.PowerProfiles = powerProfileStrings
 	powerNode.Spec.PowerWorkloads = powerWorkloadStrings
 	powerNode.Spec.PowerContainers = powerContainers
 
-	logger.V(5).Info("Setting the Shared pool, Shared Cores, Shared profiles and reserved system CPUs")
+	logger.V(5).Info("setting the shared pool, shared cores, shared profiles and reserved system CPUs")
 	sharedPool := r.PowerLibrary.GetSharedPool()
 	sharedCores := sharedPool.Cpus().IDs()
 	sharedProfile := sharedPool.GetPowerProfile()
 	reservedSystemCpus := r.PowerLibrary.GetReservedPool().Cpus().IDs()
 
-	logger.V(5).Info("Configurating the cores to the SharedPool")
+	logger.V(5).Info("configurating the cores to the shared pool")
 	powerNode.Spec.PowerContainers = powerContainers
 	if len(sharedCores) > 0 && sharedProfile != nil {
 		cores := prettifyCoreList(sharedCores)
@@ -169,7 +167,7 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	}
 
 	if len(reservedSystemCpus) > 0 {
-		logger.V(5).Info("Configurating the cores to the ReservedPool")
+		logger.V(5).Info("configurating the cores to the reserved pool")
 		cores := prettifyCoreList(reservedSystemCpus)
 		powerNode.Spec.UneffectedCores = cores
 	}
@@ -212,52 +210,51 @@ func prettifyCoreList(cores []uint) string {
 	return prettified
 }
 
-func (r *PowerNodeReconciler) itterPods(nodeName string, workload powerv1.PowerWorkload, poolFromLibrary power.Pool, guaranteedPod powerv1.GuaranteedPod, logger logr.Logger) error{
-		pod := &corev1.Pod{}
-		for _, container := range guaranteedPod.Containers {
-			if workload.Name == (container.PowerProfile + "-" + nodeName) {
-				for _, core := range container.ExclusiveCPUs {
-					if !coreInCoreList(core, poolFromLibrary.Cpus().IDs()) {
-						if err := r.Client.Get(context.TODO(), types.NamespacedName{Namespace: guaranteedPod.Namespace, Name: guaranteedPod.Name}, pod); err != nil {
-							logger.Error(err, "Could not retrieve pod")
-							return err
-						}
-						if !pod.ObjectMeta.DeletionTimestamp.IsZero() || pod.Status.Phase == corev1.PodSucceeded {
-							break
-						}
-						// this annotation is used to force a reconcile on the pod
-						timestamp, exists := r.OrphanedPods[pod.Name].ObjectMeta.Annotations["PM-updated"]
-						if exists {
-							if t, err := strconv.ParseInt(timestamp, 10, 64); err == nil {
-								// gives 20 seconds to ensure pod is not moving from one pool to another
-								if (time.Now().Unix() - int64(t)) > 20 {
-									logger.V(5).Info(fmt.Sprintf("Pod %s found with cores in the wrong pool. Updating pod.", guaranteedPod.Name))
-									pod.ObjectMeta.Annotations["PM-updated"] = fmt.Sprint(time.Now().Unix())
-									err := r.Client.Update(context.TODO(), pod)
-									if err != nil {
-										logger.Error(err, "Could not update pod")
-										return err
-									}
-									// update success so remove from map
-									delete(r.OrphanedPods, pod.Name)
+func (r *PowerNodeReconciler) itterPods(nodeName string, workload powerv1.PowerWorkload, poolFromLibrary power.Pool, guaranteedPod powerv1.GuaranteedPod, logger logr.Logger) error {
+	pod := &corev1.Pod{}
+	for _, container := range guaranteedPod.Containers {
+		if workload.Name == (container.PowerProfile + "-" + nodeName) {
+			for _, core := range container.ExclusiveCPUs {
+				if !validateCoreIsInCoreList(core, poolFromLibrary.Cpus().IDs()) {
+					if err := r.Client.Get(context.TODO(), types.NamespacedName{Namespace: guaranteedPod.Namespace, Name: guaranteedPod.Name}, pod); err != nil {
+						logger.Error(err, "could not retrieve the pod")
+						return err
+					}
+					if !pod.ObjectMeta.DeletionTimestamp.IsZero() || pod.Status.Phase == corev1.PodSucceeded {
+						break
+					}
+					// this annotation is used to force a reconcile on the pod
+					timestamp, exists := r.OrphanedPods[pod.Name].ObjectMeta.Annotations["PM-updated"]
+					if exists {
+						if t, err := strconv.ParseInt(timestamp, 10, 64); err == nil {
+							// gives 20 seconds to ensure pod is not moving from one pool to another
+							if (time.Now().Unix() - int64(t)) > 20 {
+								logger.V(5).Info(fmt.Sprintf("pod %s found with cores in the wrong pool, updating the pod", guaranteedPod.Name))
+								pod.ObjectMeta.Annotations["PM-updated"] = fmt.Sprint(time.Now().Unix())
+								err := r.Client.Update(context.TODO(), pod)
+								if err != nil {
+									logger.Error(err, "could not update the pod")
+									return err
 								}
-							}else {
-								logger.Error(err, fmt.Sprintf("Error parsing PM-updated annotation in pod %s", guaranteedPod.Name))
+								// update success so remove from map
 								delete(r.OrphanedPods, pod.Name)
 							}
 						} else {
-							pod.ObjectMeta.Annotations["PM-updated"] = fmt.Sprint(time.Now().Unix())
-							r.OrphanedPods[pod.Name] = *pod
+							logger.Error(err, fmt.Sprintf("error parsing PM-updated annotation in pod %s", guaranteedPod.Name))
+							delete(r.OrphanedPods, pod.Name)
 						}
-						// we've found a problem pod so forego itterating other cores
-						return nil
+					} else {
+						pod.ObjectMeta.Annotations["PM-updated"] = fmt.Sprint(time.Now().Unix())
+						r.OrphanedPods[pod.Name] = *pod
 					}
+					// we've found a problem pod so forego itterating other cores
+					return nil
 				}
 			}
 		}
-		return nil
 	}
-
+	return nil
+}
 
 func (r *PowerNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	pred := predicate.LabelChangedPredicate{}
@@ -266,4 +263,3 @@ func (r *PowerNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithEventFilter(pred).
 		Complete(r)
 }
-

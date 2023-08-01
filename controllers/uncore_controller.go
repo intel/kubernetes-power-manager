@@ -86,7 +86,7 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 	err = r.Client.Get(context.TODO(), req.NamespacedName, uncore)
 	if err != nil {
-		//uncore deleted so we can ignore here since everything is already reset
+		// uncore deleted so we can ignore here since everything is already reset
 		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 
@@ -112,8 +112,8 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if uncore.Spec.DieSelectors != nil {
 		for _, dieselect := range *uncore.Spec.DieSelectors {
 			if dieselect.Max == nil || dieselect.Min == nil || dieselect.Package == nil {
-				err = errors.NewServiceUnavailable("die selector max,min and package fields must not be empty")
-				logger.Error(err, "max,min and package values must be set for die selector")
+				err = errors.NewServiceUnavailable("die selector max, min and package fields must not be empty")
+				logger.Error(err, "max, min and package values must be set for die selector")
 
 				return ctrl.Result{Requeue: false}, err
 			}
@@ -125,7 +125,7 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			// package tuning
 			if dieselect.Die == nil {
 				pkg := r.PowerLibrary.Topology().Package(*dieselect.Package)
-				//used to prevent invalid package or die input causing a panic
+				// used to prevent invalid package or die input causing a panic
 				if pkg == nil {
 					err = errors.NewServiceUnavailable(fmt.Sprintf("invalid package: %d", *dieselect.Package))
 					return ctrl.Result{Requeue: false}, err
@@ -135,7 +135,7 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 					logger.Error(err, fmt.Sprintf("error setting uncore for package %d and die %d", dieselect.Package, dieselect.Die))
 					return ctrl.Result{Requeue: false}, err
 				}
-			} else { //die tuning
+			} else { // die tuning
 				pkg := r.PowerLibrary.Topology().Package(*dieselect.Package)
 				if pkg == nil {
 					err = errors.NewServiceUnavailable(fmt.Sprintf("invalid package: %d", *dieselect.Package))

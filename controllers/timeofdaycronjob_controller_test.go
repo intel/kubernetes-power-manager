@@ -161,7 +161,7 @@ func addSeconds(queueTime time.Duration, loc *time.Location) (int, int, int) {
 	fmt.Printf("values are %d %d %d with location %v \n", hour, minute, second, loc)
 	return hour, minute, second
 }
-func TestTODCronProfile(t *testing.T) {
+func TestTimeOfDayCronJob_Reconcile_CronProfile(t *testing.T) {
 	zone := "Eire"
 	profile := "performance"
 	loc, err := time.LoadLocation(zone)
@@ -238,25 +238,25 @@ func TestTODCronProfile(t *testing.T) {
 	r, err := createTODCronReconcilerObject(clientObjs)
 	r.PowerLibrary = nodemk
 	assert.NoError(t, err)
-	//this just prevents a feature not enabled error from the library
+	// this just prevents a feature not enabled error from the library
 	_, teardown, err := fullDummySystem()
 	assert.Nil(t, err)
 	defer teardown()
-	//ensure workload has correct initial profile
+	// ensure the workload has the correct initial profile
 	workload := powerv1.PowerWorkload{}
 	err = r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
 	assert.NoError(t, err)
 	assert.True(t, workload.Spec.AllCores)
 	assert.Equal(t, workload.Spec.PowerProfile, "shared-TestNode")
-	//initiate cronjob
+	// initiate the cron job
 	res, err := r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	//wait till job needs to run
+	// wait till the job needs to run
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 	time.Sleep(res.RequeueAfter)
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	//ensure workload profile has been changed
+	// ensure the workload profile has been changed
 	workload = powerv1.PowerWorkload{}
 	err = r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
 	assert.NoError(t, err)
@@ -265,7 +265,7 @@ func TestTODCronProfile(t *testing.T) {
 
 }
 
-func TestCronPods(t *testing.T) {
+func TestTimeOfDayCronJob_Reconcile_CronPods(t *testing.T) {
 	nodename := "TestNode"
 	t.Setenv("NODE_NAME", nodename)
 	zone := "Eire"
@@ -392,21 +392,21 @@ func TestCronPods(t *testing.T) {
 	nodemk := new(hostMock)
 	r, err := createTODCronReconcilerObject(clientObjs)
 	assert.NoError(t, err)
-	//adding pods to internal state
+	// adding pods to the internal state
 	err = r.State.UpdateStateGuaranteedPods(guaranteedPod)
 	assert.Nil(t, err)
-	//ensure pod is in correct workload
+	// ensure pod is in the correct workload
 	workload := powerv1.PowerWorkload{}
 	err = r.Client.Get(context.TODO(), performanceReq.NamespacedName, &workload)
 	assert.NoError(t, err)
 	assert.True(t, findPodInWorkload(workload, "test-pod-1"))
-	//reconcile job and wait for schedule time
+	// reconcile job and wait for schedule time
 	res, err := r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
-	//ensure initial workload no longer has pod
+	// ensure initial workload no longer has pod
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
 	workload = powerv1.PowerWorkload{}
@@ -415,7 +415,7 @@ func TestCronPods(t *testing.T) {
 	assert.False(t, findPodInWorkload(workload, "test-pod-1"))
 	assert.False(t, findPodInWorkload(workload, "test-pod-1"))
 
-	//ensure new workload has pod
+	// ensure new workload has pod
 	workload = powerv1.PowerWorkload{}
 	err = r.Client.Get(context.TODO(), balancePerformanceReq.NamespacedName, &workload)
 	assert.NoError(t, err)
@@ -432,7 +432,7 @@ func findPodInWorkload(workload powerv1.PowerWorkload, podName string) bool {
 	return false
 }
 
-func TestCronCstates(t *testing.T) {
+func TestTimeOfDayCronJob_Reconcile_Cstates(t *testing.T) {
 	nodename := "TestNode"
 	t.Setenv("NODE_NAME", nodename)
 	zone := "Eire"
@@ -492,12 +492,12 @@ func TestCronCstates(t *testing.T) {
 	nodemk := new(hostMock)
 	r, err := createTODCronReconcilerObject(clientObjs)
 	assert.NoError(t, err)
-	//ensure no initial cstate object exists
+	// ensure no initial C-State object exists
 	cstate := powerv1.CStates{}
 	err = r.Client.Get(context.TODO(), cstateReq.NamespacedName, &cstate)
 	assert.Empty(t, cstate.Name)
 	assert.Error(t, err)
-	//reconcile job and wait for schedule time
+	// reconcile job and wait for the scheduled time
 	res, err := r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
@@ -505,7 +505,7 @@ func TestCronCstates(t *testing.T) {
 	time.Sleep(res.RequeueAfter)
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	// ensure cstate was created and has correct values
+	// ensure C-State was created and has the correct values
 	cstate = powerv1.CStates{}
 	err = r.Client.Get(context.TODO(), cstateReq.NamespacedName, &cstate)
 	assert.NoError(t, err)
@@ -517,8 +517,8 @@ func TestCronCstates(t *testing.T) {
 
 }
 
-// tests setting c-states when they already exist
-func TestCronExistingCstates(t *testing.T) {
+// tests setting C-States when they already exist
+func TestTimeOfDayCronJob_Reconcile_ExistingCstates(t *testing.T) {
 	nodename := "TestNode"
 	t.Setenv("NODE_NAME", nodename)
 	zone := "Eire"
@@ -587,7 +587,7 @@ func TestCronExistingCstates(t *testing.T) {
 	nodemk := new(hostMock)
 	r, err := createTODCronReconcilerObject(clientObjs)
 	assert.NoError(t, err)
-	//reconcile job and wait for schedule time
+	// reconcile job and wait for schedule time
 	res, err := r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
@@ -595,7 +595,7 @@ func TestCronExistingCstates(t *testing.T) {
 	time.Sleep(res.RequeueAfter)
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	// ensure cstate was created and has correct values
+	// ensure C-State was created and has correct values
 	cstate := powerv1.CStates{}
 	err = r.Client.Get(context.TODO(), cstateReq.NamespacedName, &cstate)
 	assert.NoError(t, err)
@@ -607,7 +607,7 @@ func TestCronExistingCstates(t *testing.T) {
 }
 
 // tests setting workload when one exists
-func TestCronNoExistingWorkload(t *testing.T) {
+func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload(t *testing.T) {
 	nodename := "TestNode"
 	t.Setenv("NODE_NAME", nodename)
 	zone := "Eire"
@@ -680,16 +680,16 @@ func TestCronNoExistingWorkload(t *testing.T) {
 	poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("forced library err"))
 	r, err := createTODCronReconcilerObject(clientObjs)
 	assert.NoError(t, err)
-	//initiate cronjob
+	// initiate cron job
 	res, err := r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	//wait till job needs to run
+	// wait till job needs to run
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	//ensure workload profile has been created
+	// ensure the workload profile has been created
 	workload := powerv1.PowerWorkload{}
 	err = r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
 	assert.NoError(t, err)
@@ -698,7 +698,7 @@ func TestCronNoExistingWorkload(t *testing.T) {
 }
 
 // test setting tod for an earlier point in the day
-func TestCronMissedDeadline(t *testing.T) {
+func TestTimeOfDayCronJob_Reconcile_MissedDeadline(t *testing.T) {
 	nodename := "TestNode"
 	t.Setenv("NODE_NAME", nodename)
 	zone := "Eire"
@@ -742,16 +742,16 @@ func TestCronMissedDeadline(t *testing.T) {
 	}
 	r, err := createTODCronReconcilerObject(clientObjs)
 	assert.NoError(t, err)
-	//initiate cronjob
+	// initiate cron job
 	res, err := r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	//ensure cronjob was requeued for tommorow
+	// ensure cron job was requeued for tommorow
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 	assert.GreaterOrEqual(t, int(res.RequeueAfter.Seconds()), 8600)
 }
 
 // checks for error cases with shared pool aplication
-func TestTODErrsSharedPoolExists(t *testing.T) {
+func TestTimeOfDayCronJob_Reconcile_ErrsSharedPoolExists(t *testing.T) {
 	nodename := "TestNode"
 	t.Setenv("NODE_NAME", nodename)
 	zone := "Eire"
@@ -903,23 +903,23 @@ func TestTODErrsSharedPoolExists(t *testing.T) {
 		r, err := createTODCronReconcilerObject(clientObjs)
 		assert.NoError(t, err)
 		r.PowerLibrary = tc.getNodemk()
-		//this just prevents a feature not enabled error from the library
+		// this just prevents a feature not enabled error from the library
 		res, err := r.Reconcile(context.TODO(), req)
 		assert.NoError(t, err)
 		r.Client = tc.convertClient(r.Client, *cronjob)
-		//wait till job needs to run
+		// wait till job needs to run
 		t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 		time.Sleep(res.RequeueAfter)
 		_, err = r.Reconcile(context.TODO(), req)
 		assert.True(t, tc.validateErr(err))
-		//remove cronjob so next can be added
+		// remove cron job so next can be added
 		clientObjs = clientObjs[0 : len(clientObjs)-1]
 
 	}
 }
 
 // tests error cases with pod tuning
-func TestTODErrsPodTuning(t *testing.T) {
+func TestTimeOfDayCronJob_Reconcile_ErrsPodTuning(t *testing.T) {
 	nodename := "TestNode"
 	t.Setenv("NODE_NAME", nodename)
 	zone := "Eire"
@@ -1104,22 +1104,22 @@ func TestTODErrsPodTuning(t *testing.T) {
 		r, err := createTODCronReconcilerObject(clientObjs)
 		assert.NoError(t, err)
 		r.PowerLibrary = tc.getNodemk(r)
-		//this just prevents a feature not enabled error from the library
+		// this just prevents a feature not enabled error from the library
 		res, err := r.Reconcile(context.TODO(), req)
 		assert.NoError(t, err)
 		r.Client = tc.convertClient(r.Client, *cronjob)
-		//wait till job needs to run
+		// wait till job needs to run
 		t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 		time.Sleep(res.RequeueAfter)
 		_, err = r.Reconcile(context.TODO(), req)
 		assert.True(t, tc.validateErr(err))
-		//remove cronjob so next can be added
+		// remove cronjob so next can be added
 		clientObjs = clientObjs[0 : len(clientObjs)-1]
 
 	}
 }
 
-func TestTODInvalidRequests(t *testing.T) {
+func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
 	// incorrect namespace
 	r, err := createTODCronReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
@@ -1131,7 +1131,7 @@ func TestTODInvalidRequests(t *testing.T) {
 	}
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.Nil(t, err)
-	//incorrect node
+	// incorrect node
 	req = reconcile.Request{
 		NamespacedName: client.ObjectKey{
 			Name:      "wrong-node",
@@ -1188,13 +1188,13 @@ func TestTODInvalidRequests(t *testing.T) {
 	assert.NoError(t, err)
 	res, err := r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	//wait till job needs to run
+	// wait till job needs to run
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	//nil timezone in spec
+	// nil timezone in spec
 	hour, minute, second = addSeconds(queueTime, nil)
 	cronSpec = &powerv1.TimeOfDayCronJobSpec{
 		Hour:         hour,
@@ -1214,13 +1214,13 @@ func TestTODInvalidRequests(t *testing.T) {
 	assert.NoError(t, err)
 	res, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	//wait till job needs to run
+	// wait till job needs to run
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	//reserved cpus not set
+	// reserved cpus not set
 	zone = "Eire"
 	loc, err := time.LoadLocation(zone)
 	assert.Nil(t, err)
@@ -1243,7 +1243,7 @@ func TestTODInvalidRequests(t *testing.T) {
 	assert.NoError(t, err)
 	res, err = r.Reconcile(context.TODO(), req)
 	assert.NoError(t, err)
-	//wait till job needs to run
+	// wait till job needs to run
 	t.Logf("requeue after %f", res.RequeueAfter.Seconds())
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
@@ -1252,7 +1252,7 @@ func TestTODInvalidRequests(t *testing.T) {
 }
 
 // tests positive and negative cases for SetupWithManager function
-func TestCronReconcileSetupPass(t *testing.T) {
+func TestTimeOfDayCronJob_Reconcile_SetupPass(t *testing.T) {
 	r, err := createTODCronReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
@@ -1268,7 +1268,8 @@ func TestCronReconcileSetupPass(t *testing.T) {
 	assert.Nil(t, err)
 
 }
-func TestCronReconcileSetupFail(t *testing.T) {
+
+func TestTimeOfDayCronJob_Reconcile_SetupFail(t *testing.T) {
 	r, err := createTODCronReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{

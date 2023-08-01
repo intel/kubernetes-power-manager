@@ -59,7 +59,7 @@ func (r *CStatesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 	nodeName := os.Getenv("NODE_NAME")
-	logger.Info("Reconciling C-states")
+	logger.Info("reconciling C-States")
 
 	cStatesCRD := &powerv1.CStates{}
 	cStatesConfigRetrieveError := r.Client.Get(ctx, req.NamespacedName, cStatesCRD)
@@ -68,37 +68,37 @@ func (r *CStatesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, cStatesConfigRetrieveError
 	}
 
-	logger.V(3).Info("Checking if node exists")
-	err = r.checkIfNodeExists(ctx, cStatesCRD, &logger)
+	logger.V(3).Info("checking if the node exists in any C-States defined CRD...")
+	err = r.verifyNodeExistsInCRD(ctx, cStatesCRD, &logger)
 	if err != nil {
-		logger.Error(err, "CRD validation failed")
+		logger.Error(err, "node & CRD validation failed")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
 	// don't do anything else if we're not running on the node specified in the CRD Name
-	logger.V(4).Info("Checking if request is intended for this node")
+	logger.V(4).Info("checking if request is intended for this node")
 	if req.Name != nodeName {
 		return ctrl.Result{}, nil
 	}
 
-	logger.V(4).Info("Checking to verify that C-States exist")
+	logger.V(4).Info("checking to verify that C-States exist")
 	err = r.verifyCSStatesExist(&cStatesCRD.Spec, &logger)
 	if err != nil {
-		logger.Error(err, "CStates validation failed")
+		logger.Error(err, "the C-States validation failed")
 	}
 	// prepare system by resetting configuration
-	logger.V(4).Info("Resetting system configuration")
+	logger.V(4).Info("resetting system configuration")
 	err = r.restoreCStates(ctx, &logger)
 	if err != nil {
-		logger.Error(err, "failed to restore CStates")
+		logger.Error(err, "failed to restore C-States")
 		return ctrl.Result{}, err
 	}
 
-	logger.V(4).Info("Applying C-States to CRD Spec")
+	logger.V(4).Info("applying C-States to the CRD Spec")
 	err = r.applyCStates(&cStatesCRD.Spec, &logger)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	logger.Info("Successfully Applied new CStates config")
+	logger.Info("successfully applied new C-States config")
 	return ctrl.Result{}, nil
 }
 
@@ -109,9 +109,9 @@ func (r *CStatesReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *CStatesReconciler) checkIfNodeExists(ctx context.Context, cStatesCRD *powerv1.CStates, logger *logr.Logger) error {
+func (r *CStatesReconciler) verifyNodeExistsInCRD(ctx context.Context, cStatesCRD *powerv1.CStates, logger *logr.Logger) error {
 	nodes := &powerv1.PowerNodeList{}
-	logger.V(5).Info("Retrieving all Node Listed and checking names match CRDs")
+	logger.V(5).Info("retrieving all nodes listed and checking names match CRDs")
 	err := r.Client.List(ctx, nodes)
 	if err != nil {
 		logger.Error(err, "failed to retrieve list of nodes")
@@ -119,7 +119,7 @@ func (r *CStatesReconciler) checkIfNodeExists(ctx context.Context, cStatesCRD *p
 	}
 
 	exists := false
-	logger.V(5).Info("The C-Stats CRD names match the list in powerNodes and if true set the bool")
+	logger.V(5).Info("the C-States CRD names must match at least one node in the power node list and if true set the bool")
 	for _, item := range nodes.Items {
 		if item.Name == cStatesCRD.Name {
 			exists = true
@@ -127,7 +127,7 @@ func (r *CStatesReconciler) checkIfNodeExists(ctx context.Context, cStatesCRD *p
 		}
 	}
 	if !exists {
-		return errors.NewBadRequest("CStates CRD name must match name of one of the powerNodes")
+		return errors.NewBadRequest("the C-States CRD name must match name of one of the power nodes")
 	}
 	return nil
 }
@@ -135,31 +135,31 @@ func (r *CStatesReconciler) checkIfNodeExists(ctx context.Context, cStatesCRD *p
 func (r *CStatesReconciler) verifyCSStatesExist(cStatesSpec *powerv1.CStatesSpec, logger *logr.Logger) error {
 	nodeName := os.Getenv("NODE_NAME")
 	results := new(multierror.Error)
-	logger.V(5).Info("Checking the Power Library to confirm that C-States are in the shared pool")
+	logger.V(5).Info("checking the power library to confirm that C-States are in the shared pool")
 	err := r.PowerLibrary.ValidateCStates(cStatesSpec.SharedPoolCStates)
 	if err != nil {
-		results = multierror.Append(results, fmt.Errorf("C-States reconcile on node %s: %w", nodeName, err))
+		results = multierror.Append(results, fmt.Errorf("error reconciling C-States on node %s: %w", nodeName, err))
 	}
 	for poolName, poolCStateList := range cStatesSpec.ExclusivePoolCStates {
-		logger.V(5).Info("Checking the Power Library to confirm that C-States are in the exclusive pool", "name", poolName)
+		logger.V(5).Info("checking the power library to confirm that C-States are in the exclusive pool", "name", poolName)
 		err := r.PowerLibrary.ValidateCStates(poolCStateList)
 		if err != nil {
-			results = multierror.Append(results, fmt.Errorf("C-States reconcile on node %s: %w", nodeName, err))
+			results = multierror.Append(results, fmt.Errorf("error reconciling C-States on node %s: %w", nodeName, err))
 		}
 	}
 	for coreID, coreCStates := range cStatesSpec.IndividualCoreCStates {
-		logger.V(5).Info("Checking the Power Library to confirm that S-States are a individual core", "coreID", coreID)
+		logger.V(5).Info("checking the power library to confirm that C-States are a individual core", "coreID", coreID)
 		err := r.PowerLibrary.ValidateCStates(coreCStates)
 		if err != nil {
-			results = multierror.Append(results, fmt.Errorf("C-States reconcile on node %s: %w", nodeName, err))
+			results = multierror.Append(results, fmt.Errorf("error reconciling C-States on node %s: %w", nodeName, err))
 		}
 	}
 	return results.ErrorOrNil()
 }
 
 func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec, logger *logr.Logger) error {
-	// if CRD is empty or were handling a delete event this function will do nothing
-	logger.V(5).Info("Checking if CRD is empty or a deleted event")
+	// If CRD is empty or we're handling a delete event this function will do nothing
+	logger.V(5).Info("checking if the CRD is empty or we received a delete event")
 	results := new(multierror.Error)
 	// individual cores
 	for core, cStatesMap := range cStatesSpec.IndividualCoreCStates {
@@ -168,7 +168,7 @@ func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec, logge
 			results = multierror.Append(results, fmt.Errorf("%s must be an integer core ID", core))
 			continue
 		}
-		logger.V(5).Info("Applying C-States to cores", "coreID", coreID)
+		logger.V(5).Info("applying C-States to cores", "coreID", coreID)
 		coreObj := r.PowerLibrary.GetAllCpus().ByID(uint(coreID))
 		if coreObj == nil {
 			return fmt.Errorf("invalid core id ID: %d", coreID)
@@ -179,16 +179,16 @@ func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec, logge
 	for poolName, cStatesMap := range cStatesSpec.ExclusivePoolCStates {
 		pool := r.PowerLibrary.GetExclusivePool(poolName)
 		if pool == nil {
-			return fmt.Errorf("pool with name %s doesn not exist", poolName)
+			return fmt.Errorf("pool with name %s does not exist", poolName)
 		}
 		err := pool.SetCStates(cStatesMap)
 		results = multierror.Append(results, err)
-		logger.V(5).Info("Applying C-States to exclusive pools", "name", poolName)
+		logger.V(5).Info("applying C-States to exclusive pools", "name", poolName)
 	}
-	//shared pool
+	// shared pool
 	err := r.PowerLibrary.GetSharedPool().SetCStates(cStatesSpec.SharedPoolCStates)
 	results = multierror.Append(results, err)
-	logger.V(5).Info("Applying C-States to Shared pool")
+	logger.V(5).Info("applying C-States to the shared pool")
 
 	return results.ErrorOrNil()
 }
@@ -196,15 +196,15 @@ func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec, logge
 func (r *CStatesReconciler) restoreCStates(ctx context.Context, logger *logr.Logger) error {
 	var results *multierror.Error
 
-	logger.V(5).Info("Resetting to default state for the shared pool")
+	logger.V(5).Info("resetting to default state for the shared pool")
 	results = multierror.Append(results, r.PowerLibrary.GetSharedPool().SetCStates(nil))
 
 	for _, pool := range *r.PowerLibrary.GetAllExclusivePools() {
-		logger.V(5).Info("Resetting C-States on pool", "name", pool.Name())
+		logger.V(5).Info("resetting C-States on pool", "name", pool.Name())
 		results = multierror.Append(results, pool.SetCStates(nil))
 	}
 
-	logger.V(5).Info("Resetting C-States on each core")
+	logger.V(5).Info("resetting C-States on each core")
 	for _, core := range *r.PowerLibrary.GetAllCpus() {
 		results = multierror.Append(results, core.SetCStates(nil))
 	}

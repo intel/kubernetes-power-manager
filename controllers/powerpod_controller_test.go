@@ -55,22 +55,23 @@ func createFakePodResourcesListerClient(fakePodResources []*podresourcesapi.PodR
 }
 
 func createPodReconcilerObject(objs []runtime.Object, podResourcesClient *podresourcesclient.PodResourcesClient) (*PowerPodReconciler, error) {
-	// Register operator types with the runtime scheme.
+	// register operator types with the runtime scheme.
 	s := scheme.Scheme
 
-	// Add route Openshift scheme
+	// add route Openshift scheme
 	if err := powerv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 
-	// Create a fake client to mock API calls.
+	// create a fake client to mock API calls.
 	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).Build()
 
 	state, err := podstate.NewState()
 	if err != nil {
 		return nil, err
 	}
-	// Create a ReconcileNode object with the scheme and fake client.
+
+	// create a ReconcileNode object with the scheme and fake client.
 	r := &PowerPodReconciler{cl, ctrl.Log.WithName("testing"), s, state, *podResourcesClient}
 
 	return r, nil
@@ -115,7 +116,7 @@ var defaultWorkload = &powerv1.PowerWorkload{
 }
 
 // runs through some basic cases for the controller with no errors
-func TestPodCreation(t *testing.T) {
+func TestPowerPod_Reconcile_Create(t *testing.T) {
 	tcases := []struct {
 		testCase       string
 		nodeName       string
@@ -297,13 +298,13 @@ func TestPodCreation(t *testing.T) {
 			return workload.Spec.Node.CpuIds[i] < workload.Spec.Node.CpuIds[j]
 		})
 		if !reflect.DeepEqual(tc.expectedCpuIds, sortedCpuIds) {
-			t.Errorf("%s Failed - expected Cpu Ids to be %v, got %v", tc.testCase, tc.expectedCpuIds, sortedCpuIds)
+			t.Errorf("%s failed: expected CPU Ids to be %v, got %v", tc.testCase, tc.expectedCpuIds, sortedCpuIds)
 		}
 	}
 }
 
 // tests where the workload associated with the profile requested does not exist
-func TestNonExistingWorkload(t *testing.T) {
+func TestPowerPod_Reconcile_NonExistingWorkload(t *testing.T) {
 	tcases := []struct {
 		testCase       string
 		nodeName       string
@@ -394,7 +395,7 @@ func TestNonExistingWorkload(t *testing.T) {
 }
 
 // tests for error cases involving invalid pods
-func TestPodControllerErrors(t *testing.T) {
+func TestPowerPod_Reconcile_ControllerErrors(t *testing.T) {
 	tcases := []struct {
 		testCase      string
 		nodeName      string
@@ -754,7 +755,7 @@ func TestPodControllerErrors(t *testing.T) {
 
 		_, err = r.Reconcile(context.TODO(), req)
 		if err == nil {
-			t.Errorf("%s Failed - expected Pod controller to have failed", tc.testCase)
+			t.Errorf("%s failed: expected the pod controller to have failed", tc.testCase)
 		}
 
 		for _, workloadName := range tc.workloadNames {
@@ -766,14 +767,13 @@ func TestPodControllerErrors(t *testing.T) {
 			assert.Nil(t, err)
 
 			if len(workload.Spec.Node.CpuIds) > 0 {
-				t.Errorf("%s Failed - expected Cpu Ids to be empty, got %v", tc.testCase, workload.Spec.Node.CpuIds)
+				t.Errorf("%s failed: expected the CPU Ids to be empty, got %v", tc.testCase, workload.Spec.Node.CpuIds)
 			}
 		}
 	}
 }
 
-// testing some error cases where the controller returns nil to prevent a reconcile loop
-func TestPodControllerReturningNil(t *testing.T) {
+func TestPowerPod_Reconcile_ControllerReturningNil(t *testing.T) {
 	tcases := []struct {
 		testCase      string
 		nodeName      string
@@ -1005,14 +1005,14 @@ func TestPodControllerReturningNil(t *testing.T) {
 			assert.Nil(t, err)
 
 			if len(workload.Spec.Node.CpuIds) > 0 {
-				t.Errorf("%s Failed - expected Cpu Ids to be empty, got %v", tc.testCase, workload.Spec.Node.CpuIds)
+				t.Errorf("%s failed: expected the CPU Ids to be empty, got %v", tc.testCase, workload.Spec.Node.CpuIds)
 			}
 		}
 	}
 }
 
 // ensures workloads remove cores upon pod deletion correctly
-func TestPodDeletion(t *testing.T) {
+func TestPowerPod_Reconcile_Delete(t *testing.T) {
 	tcases := []struct {
 		testCase      string
 		nodeName      string
@@ -1125,13 +1125,13 @@ func TestPodDeletion(t *testing.T) {
 		assert.Nil(t, err)
 
 		if len(workload.Spec.Node.CpuIds) != 1 {
-			t.Errorf("%s Failed - expected one remaining core in workload, got %v", tc.testCase, workload.Spec.Node.CpuIds)
+			t.Errorf("%s failed: expected one remaining core in the workload, got %v", tc.testCase, workload.Spec.Node.CpuIds)
 		}
 	}
 }
 
 // uses errclient to mock errors from the client
-func TestPodClientErrs(t *testing.T) {
+func TestPowerPod_Reconcile_PodClientErrs(t *testing.T) {
 	var deletedPod = &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "test-pod-1",
@@ -1294,7 +1294,7 @@ func TestPodClientErrs(t *testing.T) {
 }
 
 // tests positive and negative cases for SetupWithManager function
-func TestPowerPodReconcileSetupPass(t *testing.T) {
+func TestPowerPod_Reconcile_SetupPass(t *testing.T) {
 	podResources := []*podresourcesapi.PodResources{}
 	podResourcesClient := createFakePodResourcesListerClient(podResources)
 	r, err := createPodReconcilerObject([]runtime.Object{}, podResourcesClient)
@@ -1312,7 +1312,8 @@ func TestPowerPodReconcileSetupPass(t *testing.T) {
 	assert.Nil(t, err)
 
 }
-func TestPowerPodReconcileSetupFail(t *testing.T) {
+
+func TestPowerPod_Reconcile_SetupFail(t *testing.T) {
 	podResources := []*podresourcesapi.PodResources{}
 	podResourcesClient := createFakePodResourcesListerClient(podResources)
 	r, err := createPodReconcilerObject([]runtime.Object{}, podResourcesClient)

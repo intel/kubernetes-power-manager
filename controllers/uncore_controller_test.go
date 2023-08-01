@@ -44,8 +44,8 @@ func createUncoreReconcilerObject(objs []runtime.Object) (*UncoreReconciler, err
 	return r, nil
 }
 
-//tests setting a system wide uncore
-func TestSystemUncore(t *testing.T) {
+// tests setting a system wide uncore
+func TestUncore_Reconcile_SystemUncore(t *testing.T) {
 	max := uint(2400000)
 	min := uint(1200000)
 	uncoreName := ""
@@ -81,8 +81,8 @@ func TestSystemUncore(t *testing.T) {
 
 }
 
-//tests tuning a specific die
-func TestDieTuning(t *testing.T) {
+// tests tuning a specific die
+func TestUncore_Reconcile_TestDieTuning(t *testing.T) {
 	max := uint(2200000)
 	min := uint(1300000)
 	pkg := uint(0)
@@ -122,8 +122,8 @@ func TestDieTuning(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-//tests tuning a specific package
-func TestPackageTuning(t *testing.T) {
+// tests tuning a specific package
+func TestUncore_Reconcile_PackageTuning(t *testing.T) {
 	max := uint(2200000)
 	min := uint(1400000)
 	pkg := uint(0)
@@ -163,8 +163,8 @@ func TestPackageTuning(t *testing.T) {
 
 }
 
-//tests invalid uncore fields
-func TestInvalidUncores(t *testing.T) {
+// tests invalid uncore fields
+func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	// uncore does not exist
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
@@ -202,8 +202,8 @@ func TestInvalidUncores(t *testing.T) {
 	r.PowerLibrary = host
 
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.ErrorContains(t, err, "max,min and package fields must not be empty")
-	//missing max
+	assert.ErrorContains(t, err, "max, min and package fields must not be empty")
+	// missing max
 	min := uint(1200000)
 	pkg = uint(0)
 	die := uint(0)
@@ -224,8 +224,8 @@ func TestInvalidUncores(t *testing.T) {
 	assert.Nil(t, err)
 	r.PowerLibrary = host
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.ErrorContains(t, err, "max,min and package fields must not be empty")
-	//missing package
+	assert.ErrorContains(t, err, "max, min and package fields must not be empty")
+	// missing package
 	max = uint(2400000)
 	min = uint(1200000)
 	die = uint(0)
@@ -246,8 +246,8 @@ func TestInvalidUncores(t *testing.T) {
 	assert.Nil(t, err)
 	r.PowerLibrary = host
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.ErrorContains(t, err, "max,min and package fields must not be empty")
-	//no die selector or system wide values
+	assert.ErrorContains(t, err, "max, min and package fields must not be empty")
+	// no die selector or system wide values
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
@@ -262,7 +262,7 @@ func TestInvalidUncores(t *testing.T) {
 	r.PowerLibrary = host
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.ErrorContains(t, err, "no system wide or per die min/max values were provided")
-	//no package or die on selector
+	// no package or die on selector
 	max = uint(2400000)
 	min = uint(1200000)
 	clientObjs = []runtime.Object{
@@ -282,8 +282,8 @@ func TestInvalidUncores(t *testing.T) {
 	assert.Nil(t, err)
 	r.PowerLibrary = host
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.ErrorContains(t, err, "max,min and package fields must not be empty")
-	//no die selector or system wide values
+	assert.ErrorContains(t, err, "max, min and package fields must not be empty")
+	// no die selector or system wide values
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
@@ -298,7 +298,7 @@ func TestInvalidUncores(t *testing.T) {
 	r.PowerLibrary = host
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.ErrorContains(t, err, "no system wide or per die min/max values were provided")
-	//package that does not exist
+	// package that does not exist
 	max = uint(2400000)
 	min = uint(1200000)
 	pkg = uint(100000)
@@ -340,7 +340,7 @@ func TestInvalidUncores(t *testing.T) {
 	r.PowerLibrary = host
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.ErrorContains(t, err, "invalid package")
-	//die that does not exist
+	// die that does not exist
 	max = uint(2400000)
 	min = uint(1200000)
 	pkg = uint(0)
@@ -363,7 +363,7 @@ func TestInvalidUncores(t *testing.T) {
 	r.PowerLibrary = host
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.ErrorContains(t, err, "invalid die")
-	//large sys max
+	// large sys max
 	max = uint(20000000000)
 	min = uint(1200000)
 	pkg = uint(0)
@@ -385,7 +385,7 @@ func TestInvalidUncores(t *testing.T) {
 	r.PowerLibrary = host
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.ErrorContains(t, err, "specified Max frequency is higher than")
-	//large package max
+	// large package max
 	max = uint(20000000000)
 	min = uint(1200000)
 	pkg = uint(0)
@@ -407,7 +407,7 @@ func TestInvalidUncores(t *testing.T) {
 	r.PowerLibrary = host
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.ErrorContains(t, err, "specified Max frequency is higher than")
-	//large die max
+	// large die max
 	max = uint(20000000000)
 	min = uint(1200000)
 	pkg = uint(0)
@@ -432,8 +432,8 @@ func TestInvalidUncores(t *testing.T) {
 	assert.ErrorContains(t, err, "specified Max frequency is higher than")
 }
 
-//tests requests for the wrong node and namespace
-func TestInvalidRequests(t *testing.T) {
+// tests requests for the wrong node and namespace
+func TestUncore_Reconcile_InvalidRequests(t *testing.T) {
 	// incorrect namespace
 	r, err := createUncoreReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
@@ -445,7 +445,7 @@ func TestInvalidRequests(t *testing.T) {
 	}
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.Nil(t, err)
-	//incorrect node
+	// incorrect node
 	req = reconcile.Request{
 		NamespacedName: client.ObjectKey{
 			Name:      "wrong-node",
@@ -456,8 +456,9 @@ func TestInvalidRequests(t *testing.T) {
 	assert.Nil(t, err)
 
 }
-//test for a file system with missing files (ie. some broken kernel module etc)
-func TestInvalidFileSystem(t *testing.T) {
+
+// test for a file system with missing files (ie. some broken kernel module etc)
+func TestUncore_Reconcile_InvalidFileSystem(t *testing.T) {
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
 			Name:      "",
@@ -496,7 +497,7 @@ func TestInvalidFileSystem(t *testing.T) {
 }
 
 // tests failed client Get function call
-func TestUnexpectedClientErr(t *testing.T) {
+func TestUncore_Reconcile_UnexpectedClientErr(t *testing.T) {
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
 			Name:      "",
@@ -517,7 +518,7 @@ func TestUnexpectedClientErr(t *testing.T) {
 }
 
 // tests positive and negative cases for SetupWithManager function
-func TestUncoreReconcileSetupPass(t *testing.T) {
+func TestUncore_Reconcile_SetupPass(t *testing.T) {
 	r, err := createUncoreReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
@@ -534,7 +535,7 @@ func TestUncoreReconcileSetupPass(t *testing.T) {
 
 }
 
-func TestUncoreReconcileSetupFail(t *testing.T) {
+func TestUncore_Reconcile_SetupFail(t *testing.T) {
 	r, err := createUncoreReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
@@ -549,7 +550,7 @@ func TestUncoreReconcileSetupFail(t *testing.T) {
 
 }
 
-//fuzzing function for uncore
+// fuzzing function for uncore
 func FuzzUncoreReconciler(f *testing.F) {
 	hostmk := new(hostMock)
 	mocktop := new(mockCpuTopology)
@@ -581,7 +582,7 @@ func FuzzUncoreReconciler(f *testing.F) {
 	})
 }
 
-//sets up fuzzing and discards invalid inputs
+// sets up fuzzing and discards invalid inputs
 func setupUncoreFuzz(t *testing.T, nodeName string, namespace string, extraNode bool, node2Name string, runningOnTargetNode bool, powerLib power.Host) (*UncoreReconciler, reconcile.Request) {
 	max := uint(2400000)
 	min := uint(1200000)

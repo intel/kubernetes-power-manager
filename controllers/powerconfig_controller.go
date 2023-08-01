@@ -69,88 +69,88 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 	}
 
 	configs := &powerv1.PowerConfigList{}
-	logger.V(5).Info("Retrieving PowerConfigList")
+	logger.V(5).Info("retrieving the power config list")
 	err := r.Client.List(context.TODO(), configs)
 	if err != nil {
-		logger.Error(err, "error retrieving PowerConfigList")
+		logger.Error(err, "error retrieving the power config list")
 		return ctrl.Result{}, err
 	}
 
 	config := &powerv1.PowerConfig{}
-	logger.V(5).Info("Retrieving PowerConfig")
+	logger.V(5).Info("retrieving the power config")
 	err = r.Client.Get(context.TODO(), req.NamespacedName, config)
 	if err != nil {
-		logger.V(5).Info("Failed retrieving the PowerConfig, Checking if exist")
+		logger.V(5).Info("failed retrieving the power config, checking if exists")
 		if errors.IsNotFound(err) {
-			// PowerConfig was deleted, if the number PowerConfigs is > 0, don't delete the PowerProfiles
+			// Power config was deleted, if the number of power configs is > 0, don't delete the power profiles
 			if len(configs.Items) == 0 {
 				powerProfiles := &powerv1.PowerProfileList{}
 				err = r.Client.List(context.TODO(), powerProfiles)
-				logger.V(5).Info("Retrieving all PowerProfiles in the cluster")
+				logger.V(5).Info("retrieving all power profiles in the cluster")
 				if err != nil {
-					logger.Error(err, "error retrieving PowerProfiles")
+					logger.Error(err, "error retrieving the power profiles")
 					return ctrl.Result{}, err
 				}
 
 				for _, profile := range powerProfiles.Items {
 					err = r.Client.Delete(context.TODO(), &profile)
-					logger.V(5).Info("Deleting Power Profile %s", profile.Name)
+					logger.V(5).Info("deleting power profile %s", profile.Name)
 					if err != nil {
-						logger.Error(err, fmt.Sprintf("error deleting Power Profile '%s' from cluster", profile.Name))
+						logger.Error(err, fmt.Sprintf("error deleting power profile '%s' from cluster", profile.Name))
 						return ctrl.Result{}, err
 					}
 				}
 
-				// Make sure all PowerWorkloads have been removed
+				// Make sure all power workloads have been removed
 				powerWorkloads := &powerv1.PowerWorkloadList{}
 				err = r.Client.List(context.TODO(), powerWorkloads)
-				logger.V(5).Info("Retrieving all Power Workload in the cluster")
+				logger.V(5).Info("retrieving all power workloads in the cluster")
 				if err != nil {
-					logger.Error(err, "error retrieving PowerWorkloads")
+					logger.Error(err, "error retrieving the power workloads")
 					return ctrl.Result{}, err
 				}
 
 				for _, workload := range powerWorkloads.Items {
-					logger.V(5).Info("Deleting Power Workload %s", workload.Name)
+					logger.V(5).Info("deleting power workload %s", workload.Name)
 					err = r.Client.Delete(context.TODO(), &workload)
 					if err != nil {
-						logger.Error(err, fmt.Sprintf("error deleting Power Workload '%s' from cluster", workload.Name))
+						logger.Error(err, fmt.Sprintf("error deleting power workload '%s' from cluster", workload.Name))
 						return ctrl.Result{}, err
 					}
 				}
 
 				powerNodes := &powerv1.PowerNodeList{}
 				err = r.Client.List(context.TODO(), powerNodes)
-				logger.V(5).Info("Retrieving all PowerNodes in the cluster")
+				logger.V(5).Info("retrieving all power nodes in the cluster")
 				if err != nil {
-					logger.Error(err, "error retrieving PowerNodes")
+					logger.Error(err, "error retrieving power nodes")
 					return ctrl.Result{}, err
 				}
 
 				for _, node := range powerNodes.Items {
-					logger.V(5).Info("Deleting PowerNodes %s", node.Name)
+					logger.V(5).Info("deleting power nodes %s", node.Name)
 					err = r.Client.Delete(context.TODO(), &node)
 					if err != nil {
-						logger.Error(err, fmt.Sprintf("error deleting PowerNode '%s' from cluster", node.Name))
+						logger.Error(err, fmt.Sprintf("error deleting power node '%s' from cluster", node.Name))
 						return ctrl.Result{}, err
 					}
 				}
 
 				daemonSet := &appsv1.DaemonSet{}
-				logger.V(5).Info("Retrieving PowerNodeAgent DaemonSet")
+				logger.V(5).Info("retrieving the power node-agent daemonSet")
 				err = r.Client.Get(context.TODO(), client.ObjectKey{
 					Name:      NodeAgentDSName,
 					Namespace: IntelPowerNamespace,
 				}, daemonSet)
 				if err != nil {
 					if !errors.IsNotFound(err) {
-						logger.Error(err, "error retrieving Power Node Agent DaemonSet")
+						logger.Error(err, "error retrieving the power node-agent daemonSet")
 						return ctrl.Result{}, err
 					}
 				} else {
 					err = r.Client.Delete(context.TODO(), daemonSet)
 					if err != nil {
-						logger.Error(err, "error deleting Power Node Agent Daemonset")
+						logger.Error(err, "error deleting the power node-agent daemonset")
 						return ctrl.Result{}, err
 					}
 				}
@@ -159,44 +159,44 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 			return ctrl.Result{}, nil
 		}
 
-		logger.Error(err, "Error retreiving PowerConfig")
+		logger.Error(err, "error retrieving the power config")
 		return ctrl.Result{}, err
 	}
 
 	if len(configs.Items) > 1 {
-		logger.V(5).Info("Checking to make sure there is only one PowerConfig")
-		moreThanOneConfigError := errors.NewServiceUnavailable("Cannot have more than one PowerConfig")
-		logger.Error(moreThanOneConfigError, "error reconciling PowerConfig")
+		logger.V(5).Info("checking to make sure there is only one power config")
+		moreThanOneConfigError := errors.NewServiceUnavailable("cannot have more than one power config")
+		logger.Error(moreThanOneConfigError, "error reconciling the power config")
 
 		err = r.Client.Delete(context.TODO(), config)
 		if err != nil {
-			logger.Error(err, "error deleting PowerConfig")
+			logger.Error(err, "error deleting the power config")
 			return ctrl.Result{}, err
 		}
 
 		return ctrl.Result{}, nil
 	}
 
-	// Create PowerNodeAgent DaemonSet
-	logger.V(5).Info("Creating PowerNodeAgent DaemonSet")
+	// Create power node-agent daemonSet
+	logger.V(5).Info("creating the power node-agent daemonSet")
 	err = r.createDaemonSetIfNotPresent(config, NodeAgentDaemonSetPath, &logger)
 	if err != nil {
-		logger.Error(err, "Error creating Power Node Agent")
+		logger.Error(err, "error creating the power node-agent")
 		return ctrl.Result{}, err
 	}
 
 	labelledNodeList := &corev1.NodeList{}
 	listOption := config.Spec.PowerNodeSelector
 
-	logger.V(5).Info("Confirming desired Nodes match the PowerNodeSelector")
+	logger.V(5).Info("confirming desired nodes match the power node selector")
 	err = r.Client.List(context.TODO(), labelledNodeList, client.MatchingLabels(listOption))
 	if err != nil {
-		logger.Info("Failed to list Nodes with PowerNodeSelector", listOption)
+		logger.Info("failed to list nodes with power node selector", listOption)
 		return ctrl.Result{}, err
 	}
 
 	for _, node := range labelledNodeList.Items {
-		logger.V(5).Info("Updating the Node Name")
+		logger.V(5).Info("updating the node name")
 		r.State.UpdatePowerNodeData(node.Name)
 
 		powerNode := &powerv1.PowerNode{}
@@ -205,7 +205,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 			Name:      node.Name,
 		}, powerNode)
 
-		logger.V(5).Info("Creating the PowerNode CRD %s", node.Name)
+		logger.V(5).Info("creating the power node CRD %s", node.Name)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				powerNode = &powerv1.PowerNode{
@@ -222,7 +222,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 				powerNode.Spec = *powerNodeSpec
 				err = r.Client.Create(context.TODO(), powerNode)
 				if err != nil {
-					logger.Error(err, "Error creating PowerNode CRD")
+					logger.Error(err, "error creating the power node CRD")
 					return ctrl.Result{}, err
 				}
 			} else {
@@ -232,17 +232,17 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 	}
 
 	config.Status.Nodes = r.State.PowerNodeList
-	logger.V(5).Info("Configured PowerNode added to the PowerNodeList")
+	logger.V(5).Info("configured power node added to the power node list")
 	err = r.Client.Status().Update(context.TODO(), config)
 	if err != nil {
-		logger.Error(err, "Failed to update PowerConfig")
+		logger.Error(err, "failed to update the power config")
 		return ctrl.Result{}, err
 	}
 
-	// Create the PowerProfiles that were requested in the PowerConfig if it doesn't exist
-	// Delete any PowerProfiles that are not being requested but exist
+	// Create the power profiles that were requested in the power config if it doesn't exist
+	// Delete any power profiles that are not being requested but exist
 	for _, profile := range config.Spec.PowerProfiles {
-		logger.V(5).Info("Checking if Power Profile exists %s", profile)
+		logger.V(5).Info("checking if the power profile exists %s", profile)
 		profileFromCluster := &powerv1.PowerProfile{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      profile,
@@ -250,8 +250,8 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 		}, profileFromCluster)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				// PowerProfile does not exist, so we need to create it
-				logger.V(5).Info("Creating Power Profile %s", profile)
+				// Power profile does not exist, so we need to create it
+				logger.V(5).Info("creating power profile %s", profile)
 				epp := strings.Replace(profile, "-", "_", 1)
 				powerProfileSpec := &powerv1.PowerProfileSpec{
 					Name: profile,
@@ -266,35 +266,35 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 				powerProfile.Spec = *powerProfileSpec
 				err = r.Client.Create(context.TODO(), powerProfile)
 				if err != nil {
-					logger.Error(err, fmt.Sprintf("error creating PowerProfile '%s'", profile))
+					logger.Error(err, fmt.Sprintf("error creating power profile '%s'", profile))
 					return ctrl.Result{}, err
 				}
 			} else {
-				logger.Error(err, fmt.Sprintf("error retrieving PowerProfile '%s'", profile))
+				logger.Error(err, fmt.Sprintf("error retrieving power profile '%s'", profile))
 				return ctrl.Result{}, err
 			}
 		}
 
-		// If the PowerProfile/PowerWorkload was successfull retrieved, we don't need to do anything
+		// If the power profile/workload was successfull retrieved, we don't need to do anything
 	}
 
 	powerProfiles := &powerv1.PowerProfileList{}
-	logger.V(5).Info("Retrieving the list of PowerProfiles")
+	logger.V(5).Info("retrieving the list of power profiles")
 	err = r.Client.List(context.TODO(), powerProfiles)
 	if err != nil {
-		logger.Error(err, "error retrieving PowerProfile List")
+		logger.Error(err, "error retrieving the power profile list")
 		return ctrl.Result{}, err
 	}
 
-	// Check PowerProfiles for any that are no longer requested; only check base profiles
+	// Check power profiles for any that are no longer requested; only check base profiles
 	for _, profile := range powerProfiles.Items {
-		logger.V(5).Info("Checking if Power Profile exists and is not requested")
+		logger.V(5).Info("checking if the power profile exists and is not requested")
 		convertedName := strings.Replace(profile.Spec.Name, "-", "_", 1)
 		if _, exists := profilePercentages[convertedName]; exists {
 			if !util.StringInStringList(profile.Spec.Name, config.Spec.PowerProfiles) {
 				err = r.Client.Delete(context.TODO(), &profile)
 				if err != nil {
-					logger.Error(err, fmt.Sprintf("error deleting PowerProfile '%s'", profile.Spec.Name))
+					logger.Error(err, fmt.Sprintf("error deleting power profile '%s'", profile.Spec.Name))
 					return ctrl.Result{}, err
 				}
 			}
@@ -305,7 +305,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 }
 
 func (r *PowerConfigReconciler) createDaemonSetIfNotPresent(powerConfig *powerv1.PowerConfig, path string, logger *logr.Logger) error {
-	logger.V(5).Info("Creating DaemonSet")
+	logger.V(5).Info("creating the daemonSet")
 
 	daemonSet := &appsv1.DaemonSet{}
 	var err error
@@ -316,9 +316,9 @@ func (r *PowerConfigReconciler) createDaemonSetIfNotPresent(powerConfig *powerv1
 	}, daemonSet)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			daemonSet, err = newDaemonSet(path)
+			daemonSet, err = createDaemonSetFromManifest(path)
 			if err != nil {
-				logger.Error(err, "Error creating DaemonSet")
+				logger.Error(err, "error creating the daemonSet")
 				return err
 			}
 			if len(powerConfig.Spec.PowerNodeSelector) != 0 {
@@ -326,21 +326,21 @@ func (r *PowerConfigReconciler) createDaemonSetIfNotPresent(powerConfig *powerv1
 			}
 			err = r.Client.Create(context.TODO(), daemonSet)
 			if err != nil {
-				logger.Error(err, "Error creating DaemonSet")
+				logger.Error(err, "error creating the daemonSet")
 				return err
 			}
-			logger.V(5).Info("New PowerNodeAgent DaemonSet created")
+			logger.V(5).Info("new power node-agent daemonSet created")
 			return nil
 		}
 	}
 
-	// If the the DaemonSet already exists and is different than the selected nodes, update it
+	// If the daemonSet already exists and is different than the selected nodes, update it
 	if !reflect.DeepEqual(daemonSet.Spec.Template.Spec.NodeSelector, powerConfig.Spec.PowerNodeSelector) {
-		logger.V(5).Info("Updating existing DeamonSet")
+		logger.V(5).Info("updating the existing daemonSet")
 		daemonSet.Spec.Template.Spec.NodeSelector = powerConfig.Spec.PowerNodeSelector
 		err = r.Client.Update(context.TODO(), daemonSet)
 		if err != nil {
-			logger.Error(err, "error updating PowerNodeAgent DaemonSet")
+			logger.Error(err, "error updating the power node-agent daemonSet")
 			return err
 		}
 	}
@@ -348,7 +348,7 @@ func (r *PowerConfigReconciler) createDaemonSetIfNotPresent(powerConfig *powerv1
 	return nil
 }
 
-func newDaemonSet(path string) (*appsv1.DaemonSet, error) {
+func createDaemonSetFromManifest(path string) (*appsv1.DaemonSet, error) {
 	yamlFile, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err

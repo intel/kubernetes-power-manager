@@ -546,14 +546,13 @@ func fullDummySystem() (power.Host, func(), error) {
 		"cstates": "intel_idle"})
 }
 
-
 // mock required for testing setupwithmanager
 type clientMock struct {
 	mock.Mock
 	client.Client
 }
 
-//mock required for testing client errs
+// mock required for testing client errs
 type errClient struct {
 	client.Client
 	mock.Mock
@@ -623,7 +622,6 @@ func (m mockResourceWriter) Update(ctx context.Context, obj client.Object, opts 
 	}
 	return m.Called(ctx, obj).Error(0)
 }
-
 
 type mgrMock struct {
 	mock.Mock
