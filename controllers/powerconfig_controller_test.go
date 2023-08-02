@@ -7,13 +7,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 	"github.com/intel/kubernetes-power-manager/pkg/state"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -694,4 +698,36 @@ func TestPowerConfig_Reconcile_Deletion(t *testing.T) {
 			t.Errorf("%s failed: expected daemonSet '%s' to have been deleted", tc.testCase, NodeAgentDSName)
 		}
 	}
+}
+
+// tests positive and negative cases for SetupWithManager function
+func TestPowerConfig_Reconcile_SetupPass(t *testing.T) {
+	r, err := createConfigReconcilerObject([]runtime.Object{})
+	assert.Nil(t, err)
+	mgr := new(mgrMock)
+	mgr.On("GetControllerOptions").Return(v1alpha1.ControllerConfigurationSpec{})
+	mgr.On("GetScheme").Return(r.Scheme)
+	mgr.On("GetLogger").Return(r.Log)
+	mgr.On("SetFields", mock.Anything).Return(nil)
+	mgr.On("Add", mock.Anything).Return(nil)
+	err = (&PowerConfigReconciler{
+		Client: r.Client,
+		Scheme: r.Scheme,
+	}).SetupWithManager(mgr)
+	assert.Nil(t, err)
+
+}
+func TesPowerConfig_Reconcile_SetupFail(t *testing.T) {
+	r, err := createConfigReconcilerObject([]runtime.Object{})
+	assert.Nil(t, err)
+	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
+		Scheme: scheme.Scheme,
+	})
+
+	err = (&PowerConfigReconciler{
+		Client: r.Client,
+		Scheme: r.Scheme,
+	}).SetupWithManager(mgr)
+	assert.Error(t, err)
+
 }

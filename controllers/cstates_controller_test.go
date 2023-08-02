@@ -13,9 +13,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	// "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -253,4 +255,21 @@ func setupFuzz(t *testing.T, nodeName string, namespace string, extraNode bool, 
 	objs := []runtime.Object{cStatesObj, powerProfilesObj, powerNodesObj}
 
 	return buildCStatesReconcilerObject(objs, powerLib), req
+}
+
+
+// tests failure for SetupWithManager function
+func TestCstate_Reconcile_SetupFail(t *testing.T) {
+	powerLibMock := new(hostMock)
+	r := buildCStatesReconcilerObject([]runtime.Object{}, powerLibMock)
+	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
+		Scheme: scheme.Scheme,
+	})
+
+	err := (&CStatesReconciler{
+		Client: r.Client,
+		Scheme: r.Scheme,
+	}).SetupWithManager(mgr)
+	assert.Error(t, err)
+
 }
