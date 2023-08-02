@@ -25,7 +25,7 @@ type PodResourcesClient struct {
 // NewPodResourcesClient returns a new client to the Kubelet PodResources API server
 func NewPodResourcesClient() (*PodResourcesClient, error) {
 	podResourcesClient := &PodResourcesClient{}
-	client, err := getV1Client(socket, timeout, maxMessage)
+	client, _, err := getV1Client(socket, timeout, maxMessage)
 	if err != nil {
 		return podResourcesClient, errors.NewServiceUnavailable("failed to create podresouces client")
 	}
@@ -33,20 +33,24 @@ func NewPodResourcesClient() (*PodResourcesClient, error) {
 	return podResourcesClient, nil
 }
 
-// getV1Client returns a client for the PodResourcesLister grpc service
-func getV1Client(socket string, connectionTimeout time.Duration, maxMsgSize int) (podresourcesapi.PodResourcesListerClient, error) {
+// GetV1Client returns a client for the PodResourcesLister grpc service
+// https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/apis/podresources/client.go
+func getV1Client(socket string, connectionTimeout time.Duration, maxMsgSize int) (podresourcesapi.PodResourcesListerClient, *grpc.ClientConn, error) {
 	addr, dialer, err := util.GetAddressAndDialer(socket)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize)))
+	conn, err := grpc.DialContext(ctx, addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(dialer),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize)))
 	if err != nil {
-		return nil, errors.NewServiceUnavailable(fmt.Sprintf("error dialing socket %s: %v", socket, err))
+		return nil, nil, fmt.Errorf("error dialing socket %s: %v", socket, err)
 	}
-	return podresourcesapi.NewPodResourcesListerClient(conn), nil
+	return podresourcesapi.NewPodResourcesListerClient(conn), conn, nil
 }
 
 func (p *PodResourcesClient) listPodResources() (*podresourcesapi.ListPodResourcesResponse, error) {
