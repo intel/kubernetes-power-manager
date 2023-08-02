@@ -106,7 +106,11 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			// everything has already been removed. Finally, we remove the Extended Resources from the Node
 			// first we make sure the profile isn't the one used by the shared pool
 			if r.PowerLibrary.GetSharedPool().GetPowerProfile() != nil && req.Name == r.PowerLibrary.GetSharedPool().GetPowerProfile().Name() {
-				r.PowerLibrary.GetSharedPool().SetPowerProfile(nil)
+				err := r.PowerLibrary.GetSharedPool().SetPowerProfile(nil)
+				if err != nil {
+					logger.Error(err, "error setting nil profile")
+					return ctrl.Result{}, err
+				}
 				return ctrl.Result{}, nil
 			}
 			pool := r.PowerLibrary.GetExclusivePool(req.Name)
