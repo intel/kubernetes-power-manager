@@ -205,8 +205,12 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 	assert.NoError(t, err, "failed to create the reconciler object")
 
 	nodemk = new(hostMock)
+	reservedmk := new(poolMock)
 	nodemk.On("GetSharedPool").Return(poolmk)
 	poolmk.On("SetPowerProfile", nil).Return(nil)
+	nodemk.On("GetReservedPool").Return(reservedmk)
+	reservedmk.On("MoveCpus",mock.Anything).Return(nil)
+	poolmk.On("Cpus").Return(&power.CpuList{})
 	r.PowerLibrary = nodemk
 	req.Name = "shared"
 

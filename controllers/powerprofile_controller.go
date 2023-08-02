@@ -100,10 +100,15 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 	logger.V(5).Info("retrieving the power profile instances")
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// First we need to remove the profile from the power library, this will in turn remove the pool,
-			// which will also move the cores back to the shared/default pool and reconfigure them. We then
-			// need to remove the power workload from the cluster, which in this case will do nothing as
-			// everything has already been removed. Finally, we remove the extended resources from the node
+			// First we need to remove the profile from the Power library, this will in turn remove the pool,
+			// which will also move the cores back to the Shared/Default pool and reconfigure them. We then
+			// need to remove the Power Workload from the cluster, which in this case will do nothing as
+			// everything has already been removed. Finally, we remove the Extended Resources from the Node
+			// first we make sure the profile isn't the one used by the shared pool
+			if r.PowerLibrary.GetSharedPool().GetPowerProfile() != nil && req.Name == r.PowerLibrary.GetSharedPool().GetPowerProfile().Name() {
+				r.PowerLibrary.GetSharedPool().SetPowerProfile(nil)
+				return ctrl.Result{}, nil
+			}
 			pool := r.PowerLibrary.GetExclusivePool(req.Name)
 			if pool == nil {
 				logger.Info("attempted to remove the non existing pool", "pool", req.Name)

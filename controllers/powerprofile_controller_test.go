@@ -770,11 +770,15 @@ func TestPowerProfile_Reconcile_DeleteProfile(t *testing.T) {
 			t.Error(err)
 			t.Fatalf("%s - error creating the reconciler object", tc.testCase)
 		}
-
+		dummyShared := new(poolMock)
+		dummyProf := new(profMock)
 		pool := new(poolMock)
 		pool.On("Remove").Return(nil)
 		nodemk := new(hostMock)
 		nodemk.On("GetExclusivePool", tc.profileName).Return(pool)
+		nodemk.On("GetSharedPool").Return(dummyShared)
+		dummyShared.On("GetPowerProfile").Return(dummyProf)
+		dummyProf.On("Name").Return("shared")
 		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
@@ -1041,11 +1045,15 @@ func TestPowerProfile_Reconcile_PowerProfileReturnsErrors(t *testing.T) {
 			t.Error(err)
 			t.Fatalf("%s - error creating the reconciler object", tc.testCase)
 		}
-
+		dummyShared := new(poolMock)
+		dummyProf := new(profMock)
 		nodemk := new(hostMock)
 		pool := new(poolMock)
 		nodemk.On("GetExclusivePool", tc.profileName).Return(pool)
 		pool.On("Remove").Return(fmt.Errorf("test error"))
+		nodemk.On("GetSharedPool").Return(dummyShared)
+		dummyShared.On("GetPowerProfile").Return(dummyProf)
+		dummyProf.On("Name").Return("shared")
 		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
@@ -1219,7 +1227,12 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 			powerNodeName: "TestNode",
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
+				dummyShared := new(poolMock)
+				dummyProf := new(profMock)
 				nodemk.On("GetExclusivePool", mock.Anything).Return(nil)
+				nodemk.On("GetSharedPool").Return(dummyShared)
+				dummyShared.On("GetPowerProfile").Return(dummyProf)
+				dummyProf.On("Name").Return("shared")
 				return nodemk
 			},
 			validateErr: func(e error) bool {

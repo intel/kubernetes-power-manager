@@ -71,9 +71,9 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 			// and we need to remove it from the power library here. If the profile doesn't exist, then
 			// the power library will have deleted it for us
 			if req.NamespacedName.Name == sharedPowerWorkloadName {
-				err = r.PowerLibrary.GetSharedPool().SetPowerProfile(nil)
+				err = r.PowerLibrary.GetReservedPool().MoveCpus(*r.PowerLibrary.GetSharedPool().Cpus())
 				if err != nil {
-					logger.Error(err, "failed to remove the exclusive pool")
+					logger.Error(err, "failed to remove shared pool")
 					return ctrl.Result{}, err
 				}
 				sharedPowerWorkloadName = ""
