@@ -122,6 +122,8 @@ spec:
                         name:
                           description: The name of the Pod
                           type: string
+                        namespace:
+                          type: string
                         node:
                           description: The name of the Node the Pod is running on
                           type: string

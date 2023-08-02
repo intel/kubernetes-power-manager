@@ -56,12 +56,12 @@ func TestGetPodFromState(t *testing.T) {
 
 	//Test case -- Existing pod in the state
 	existingPodName := "pod1"
-	existingPod := state.GetPodFromState(existingPodName)
+	existingPod := state.GetPodFromState(existingPodName, "")
 	assert.Equal(t, existingPodName, existingPod.Name)
 
 	//Test case -- Non-Existing pod in the state
 	nonExistingPodName := "pod4"
-	nonExistingPod := state.GetPodFromState(nonExistingPodName)
+	nonExistingPod := state.GetPodFromState(nonExistingPodName, "")
 	if !reflect.DeepEqual(nonExistingPod, powerv1.GuaranteedPod{}) {
 		t.Errorf("Expected: empty pod. Actual: Got pod %+v", nonExistingPod)
 	}
@@ -97,7 +97,7 @@ func TestDeletePodFromState(t *testing.T) {
 
 	//Test case: Delteing an existing pod
 	podToDelete := "pod1"
-	err := state.DeletePodFromState(podToDelete)
+	err := state.DeletePodFromState(podToDelete, "")
 	assert.Nil(t, err)
 
 	for _, pod := range state.GuaranteedPods {
@@ -108,6 +108,6 @@ func TestDeletePodFromState(t *testing.T) {
 
 	//Test case -- Deleting a non-existing pod
 	nonExistingPodState := "pod3"
-	err = state.DeletePodFromState(nonExistingPodState)
+	err = state.DeletePodFromState(nonExistingPodState, "")
 	assert.Nil(t, err)
 }

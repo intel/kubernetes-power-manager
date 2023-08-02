@@ -100,7 +100,7 @@ autonumber stop
 
 == Power Manager additional functionality ==
 
-== P-State ==
+== Scaling Driver ==
 autonumber
 
 kubelet -> agent: Deploy Controller Manager
@@ -109,7 +109,7 @@ note right #Orange: <color #black>apply config/manager/manager.yaml</color>
 powerOperator -> library: Deploy the config
 note right #Orange: <color #black>examples/example-powerconfig.yaml</color>
 
-agent -> library: Set Shared Profile \nand configure the P-State governor
+agent -> library: Set Shared Profile \nand configure the scaling driver governor
 note right #Orange: <color #black>examples/example-shared-profile.yaml</color>
 
 agent -> library: Deploy th Workload

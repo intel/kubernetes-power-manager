@@ -168,19 +168,23 @@ type profMock struct {
 	power.Profile
 }
 
-func (m profMock) Name() string {
+func (m *profMock) Name() string {
 	return m.Called().String(0)
 }
-func (m profMock) Epp() string {
+
+func (m *profMock) Epp() string {
 	return m.Called().String(0)
 }
-func (m profMock) MaxFreq() uint {
+
+func (m *profMock) MaxFreq() uint {
 	return uint(m.Called().Int(0))
 }
-func (m profMock) MinFreq() uint {
+
+func (m *profMock) MinFreq() uint {
 	return uint(m.Called().Int(0))
 }
-func (m profMock) Governor() string {
+
+func (m *profMock) Governor() string {
 	return m.Called().String(0)
 }
 
@@ -558,13 +562,13 @@ type errClient struct {
 	mock.Mock
 }
 
-func (e errClient) Get(ctx context.Context, NamespacedName types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
+func (e *errClient) Get(ctx context.Context, NamespacedName types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
 	if len(opts) != 0 {
 		return e.Called(ctx, NamespacedName, obj, opts).Error(0)
 	}
 	return e.Called(ctx, NamespacedName, obj).Error(0)
 }
-func (e errClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+func (e *errClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	if len(opts) != 0 {
 		return e.Called(ctx, list, opts).Error(0)
 
@@ -572,42 +576,42 @@ func (e errClient) List(ctx context.Context, list client.ObjectList, opts ...cli
 	return e.Called(ctx, list).Error(0)
 }
 
-func (e errClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+func (e *errClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 	if len(opts) != 0 {
 		return e.Called(ctx, obj, opts).Error(0)
 	}
 	return e.Called(ctx, obj).Error(0)
 }
 
-func (e errClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+func (e *errClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 	if len(opts) != 0 {
 		return e.Called(ctx, obj, opts).Error(0)
 	}
 	return e.Called(ctx, obj).Error(0)
 }
 
-func (e errClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+func (e *errClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 	if len(opts) != 0 {
 		return e.Called(ctx, obj, opts).Error(0)
 	}
 	return e.Called(ctx, obj).Error(0)
 }
 
-func (e errClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
+func (e *errClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
 	if len(opts) != 0 {
 		return e.Called(ctx, obj, opts).Error(0)
 	}
 	return e.Called(ctx, obj).Error(0)
 }
 
-func (e errClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+func (e *errClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	if len(opts) != 0 {
 		return e.Called(ctx, obj, patch, opts).Error(0)
 	}
 	return e.Called(ctx, obj, patch).Error(0)
 }
 
-func (e errClient) Status() client.SubResourceWriter {
+func (e *errClient) Status() client.SubResourceWriter {
 	return e.Called().Get(0).(client.SubResourceWriter)
 }
 
@@ -616,7 +620,7 @@ type mockResourceWriter struct {
 	client.SubResourceWriter
 }
 
-func (m mockResourceWriter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+func (m *mockResourceWriter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 	if len(opts) != 0 {
 		return m.Called(ctx, obj, opts).Error(0)
 	}
@@ -628,46 +632,46 @@ type mgrMock struct {
 	manager.Manager
 }
 
-func (m mgrMock) Add(r manager.Runnable) error {
+func (m *mgrMock) Add(r manager.Runnable) error {
 	return m.Called(r).Error(0)
 }
 
-func (m mgrMock) Elected() <-chan struct{} {
+func (m *mgrMock) Elected() <-chan struct{} {
 	return m.Called().Get(0).(<-chan struct{})
 }
 
-func (m mgrMock) AddMetricsExtraHandler(path string, handler http.Handler) error {
+func (m *mgrMock) AddMetricsExtraHandler(path string, handler http.Handler) error {
 	return m.Called(path, handler).Get(0).(error)
 }
 
-func (m mgrMock) AddHealthzCheck(name string, check healthz.Checker) error {
+func (m *mgrMock) AddHealthzCheck(name string, check healthz.Checker) error {
 	return m.Called(name, check).Get(0).(error)
 }
 
-func (m mgrMock) AddReadyzCheck(name string, check healthz.Checker) error {
+func (m *mgrMock) AddReadyzCheck(name string, check healthz.Checker) error {
 	return m.Called(name, check).Get(0).(error)
 }
 
-func (m mgrMock) Start(ctx context.Context) error {
+func (m *mgrMock) Start(ctx context.Context) error {
 	return m.Called(ctx).Get(0).(error)
 }
 
-func (m mgrMock) GetWebhookServer() *webhook.Server {
+func (m *mgrMock) GetWebhookServer() *webhook.Server {
 	return m.Called().Get(0).(*webhook.Server)
 }
 
-func (m mgrMock) GetLogger() logr.Logger {
+func (m *mgrMock) GetLogger() logr.Logger {
 	return m.Called().Get(0).(logr.Logger)
 
 }
 
-func (m mgrMock) GetControllerOptions() v1alpha1.ControllerConfigurationSpec {
+func (m *mgrMock) GetControllerOptions() v1alpha1.ControllerConfigurationSpec {
 	return m.Called().Get(0).(v1alpha1.ControllerConfigurationSpec)
 }
 
-func (m mgrMock) GetScheme() *runtime.Scheme {
+func (m *mgrMock) GetScheme() *runtime.Scheme {
 	return m.Called().Get(0).(*runtime.Scheme)
 }
-func (m mgrMock) SetFields(i interface{}) error {
+func (m *mgrMock) SetFields(i interface{}) error {
 	return m.Called(i).Error(0)
 }

@@ -22,13 +22,13 @@ With each update or release an updated diagram will be available with the versio
 ## Creating Power Manager Diagrams
 
 - Running pm-sequenc.puml in this directory:
-    - java -jar ../../plantuml.jar pm-sequence.puml
+    - java -jar plantuml.jar pm-sequence.puml
     - output file is pm-sequence.png
 - Running the Power Manager overall architecture diagram
-    - java -jar ../../plantuml.jar power-arch.puml
+    - java -jar plantuml.jar power-arch.puml
     - output file is power-arch.png
 - Running the Power Manager components diagram
-    - java -jar ../../plantuml.jar power-com.puml
+    - java -jar plantuml.jar power-com.puml
     - output file is power-com.png
 
 ## Summary of elements in the K8s Cluster

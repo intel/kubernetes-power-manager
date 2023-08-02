@@ -756,7 +756,7 @@ spec:
           args:
             - --enable-leader-election
           imagePullPolicy: IfNotPresent
-          image: power-operator:v2.2.0
+          image: power-operator:v2.3.0
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
