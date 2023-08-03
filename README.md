@@ -181,6 +181,44 @@ syncFrequency: 0s
 volumeStatsAggPeriod: 0s
 ````
 
+## Deploying the Kubernetes Power Manager using Helm
+
+The Kubernetes Power Manager includes a helm chart for the latest releases, allowing the user to easily deploy 
+everything that is needed for the overarching operator and the node agent to run. The following versions are 
+supported with helm charts:
+
+* v2.0.0
+* v2.1.0
+* v2.2.0
+* v2.3.0
+
+When set up using the provided helm charts, the following will be deployed:
+
+* The intel-power namespace
+* The RBAC rules for the operator and node agent
+* The operator deployment itself
+* The operator's power config
+* A shared power profile
+
+To change any of the values the above are deployed with, edit the values.yaml file of the relevant helm chart.
+
+To deploy the Kubernetes Power Manager using Helm, you must have Helm installed. For more information on installing 
+Helm, see the installation guide here https://helm.sh/docs/intro/install/.
+
+The Kubernetes Power Manager has make targets for each version available. To deploy the latest version, use the following command:
+
+`make helm-install`
+
+To uninstall the latest version, use the following command:
+
+`make helm-uninstall`
+
+Or you can use the following commands to deploy a specific version of the Kubernetes Power Manager:
+
+`make helm-install-v2.2.0`
+`make helm-install-v2.1.0`
+`make helm-install-v2.0.0`
+
 ## Working environments
 
 The Kubernetes Power Manager has been tested in different environments.  
