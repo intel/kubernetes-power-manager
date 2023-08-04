@@ -65,21 +65,21 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
 		return ctrl.Result{}, nil
 	}
-	//logger.Info("Reconciling TimeOfDay")
-	timeRegex := regexp.MustCompile("([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]")
+	//enforces HH:MM:SS time format
+	timeRegex := regexp.MustCompile("(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?")
 
 	timeOfDayList := &powerv1.TimeOfDayList{}
-	logger.V(5).Info("Retrieving TimeOfDay objects from lists")
+	logger.V(5).Info("retrieving time-of-day objects from the lists")
 	err := r.Client.List(c, timeOfDayList)
 	if err != nil {
-		logger.Error(err, "Error retrieving TimeOfDayList")
+		logger.Error(err, "error retrieving the time-of-day list")
 		return ctrl.Result{}, err
 	}
 
-	logger.V(5).Info("Confirming that there can only be one TimeOfDay object")
+	logger.V(5).Info("confirming that there can only be one time-of-day object")
 	if len(timeOfDayList.Items) > 1 {
-		err := errors.NewServiceUnavailable("Cannot have more than one TimeOfDay")
-		logger.Error(err, "Error reconciling TimeOfDay")
+		err := errors.NewServiceUnavailable("cannot have more than one time-of-day")
+		logger.Error(err, "error reconciling time-of-day")
 		return ctrl.Result{}, err
 	}
 
@@ -87,69 +87,55 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	err = r.Client.Get(c, req.NamespacedName, timeOfDay)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			logger.V(5).Info("Deleting TimeOfDay Cronjobs from Cluster")
+			logger.V(5).Info("deleting time-of-day cron jobs from cluster")
 			err = r.Client.DeleteAllOf(c, &powerv1.TimeOfDayCronJob{}, client.InNamespace(IntelPowerNamespace))
 			if err != nil {
-				logger.Error(err, "Error deleting TimeOfDay CronJobs")
+				logger.Error(err, "error deleting the time-of-day cron jobs")
 				return ctrl.Result{}, err
 			}
 		}
-		logger.Error(err, "Error retrieving TimeOfDay")
+		logger.Error(err, "error retrieving time-of-day")
 		return ctrl.Result{}, err
 	}
 
-	// Validate incoming values from TimeOfDay manifest
+	// Validate incoming values from time-of-day manifest
 	timeZone := timeOfDay.Spec.TimeZone
-	logger.V(5).Info("Validated timezone for TimeOfDay, values are: %s", timeZone)
+	logger.V(5).Info("validated timezone for time-of-day, values are: %s", timeZone)
 
 	if timeZone != "" {
 		_, err := time.LoadLocation(timeZone)
 		logger.Info(fmt.Sprintf("timezone is %s\n", timeZone))
 		if err != nil {
-			err := errors.NewServiceUnavailable("Invalid timezone, refer to the IANA timezone database for a list of valid timezones")
-			logger.Error(err, "Error creating TimeOfDay")
+			err := errors.NewServiceUnavailable("invalid timezone, refer to the IANA timezone database for a list of valid timezones")
+			logger.Error(err, "error creating time-of-day")
 			return ctrl.Result{}, err
 		}
 	}
 
 	var cronJobNames []string
-	logger.V(5).Info("Creating TimeOfDay Cronjobs")
+	logger.V(5).Info("creating time-of-day Cronjobs")
 	for _, scheduleInfo := range timeOfDay.Spec.Schedule {
 		if !timeRegex.MatchString(scheduleInfo.Time) {
-			err := errors.NewServiceUnavailable("Time filed must be in format HH:MM and cannot be empty")
-			logger.Error(err, "Error creating TimeOfDay schedule")
+			err := errors.NewServiceUnavailable("the time filed must be in format HH:MM:SS or HH:MM and cannot be empty")
+			logger.Error(err, "error creating the time-of-day schedule")
 			return ctrl.Result{}, err
 		}
 
 		scheduledTime := strings.Split(scheduleInfo.Time, ":")
-		if len(scheduledTime) != 2 || len(scheduledTime[0]) != 2 || len(scheduledTime[1]) != 2 {
-			err := errors.NewServiceUnavailable("Time must be specified in the format hh:mm")
-			logger.Info(fmt.Sprintf("scheduledTime fromat is %s for 1 and %s for 2\n", scheduledTime[0], scheduledTime[1]))
-
-			logger.Error(err, "Error creating TimeOfDay schedule")
-			return ctrl.Result{}, err
+		if len(scheduledTime) == 2 {
+			scheduledTime = append(scheduledTime, "00")
 		}
 
 		hr, _ := strconv.Atoi(scheduledTime[0])
-		if hr > 23 {
-			err := errors.NewServiceUnavailable("Invalid scheduledTime")
-			logger.Error(err, "Error creating TimeOfDay schedule")
-			return ctrl.Result{}, err
-		}
-
 		min, _ := strconv.Atoi(scheduledTime[1])
-		if min > 59 {
-			err := errors.NewServiceUnavailable("Invalid scheduledTime")
-			logger.Error(err, "Error creating TimeOfDay schedule")
-			return ctrl.Result{}, err
-		}
+		sec, _ := strconv.Atoi(scheduledTime[2])
 		if scheduleInfo.PowerProfile != nil && timeOfDay.Spec.ReservedCPUs == nil {
 			err := errors.NewServiceUnavailable("profile detected with no reserved CPUs set")
-			logger.Error(err, "Error creating TimeOfDay schedule")
+			logger.Error(err, "error creating the time-of-day schedule")
 			return ctrl.Result{}, err
 		}
 
-		cronJobName := fmt.Sprintf("%s-%d-%d", timeOfDay.Name, hr, min)
+		cronJobName := fmt.Sprintf("%s-%d-%d-%d", timeOfDay.Name, hr, min, sec)
 
 		cronJob := &powerv1.TimeOfDayCronJob{}
 		err = r.Client.Get(c, client.ObjectKey{
@@ -157,7 +143,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 			Namespace: IntelPowerNamespace,
 		}, cronJob)
 		// if cronjob doesn't exist create one
-		logger.V(5).Info("Creating Cronjob if one doesn't exist")
+		logger.V(5).Info("creating the cron job if one doesn't exist")
 		if err != nil {
 
 			if errors.IsNotFound(err) {
@@ -165,6 +151,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 				cronJobSpec := &powerv1.TimeOfDayCronJobSpec{
 					Hour:         hr,
 					Minute:       min,
+					Second:       sec,
 					TimeZone:     &timeOfDay.Spec.TimeZone,
 					Profile:      scheduleInfo.PowerProfile,
 					Pods:         scheduleInfo.Pods,
@@ -181,14 +168,13 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 				// creating the new cronjob
 				cronJob.Spec = *cronJobSpec
 				err = r.Client.Create(c, cronJob)
-				//logger.Info(fmt.Sprintf("created cronjob %s\n",cronJob.Name))
 
 				if err != nil {
-					logger.Error(err, "Error creating TimeOfDay CronJob")
+					logger.Error(err, "error creating the time-of-day cron job")
 					return ctrl.Result{}, err
 				}
 
-				logger.Info(fmt.Sprintf("CronJob for %d:%d successfully created", hr, min))
+				logger.Info(fmt.Sprintf("cron job for %d:%d successfully created", hr, min))
 			}
 		}
 
@@ -198,13 +184,13 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	cronJobList := &powerv1.TimeOfDayCronJobList{}
 	err = r.Client.List(c, cronJobList, client.InNamespace(IntelPowerNamespace))
 	if err != nil {
-		logger.Error(err, "Error retrieving CronJobList")
+		logger.Error(err, "error retrieving the cron job list")
 		return ctrl.Result{}, err
 	}
 
 	err = r.cleanUpCronJobs(cronJobList.Items, cronJobNames)
 	if err != nil {
-		logger.Error(err, "Error reconciling TimeOfDay")
+		logger.Error(err, "error reconciling time-of-day")
 		return ctrl.Result{}, err
 	}
 

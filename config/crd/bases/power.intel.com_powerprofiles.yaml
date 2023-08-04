@@ -51,8 +51,9 @@ spec:
               name:
                 description: The name of the PowerProfile
                 type: string
+              shared:
+                type: boolean
             required:
-            - epp
             - name
             type: object
           status:

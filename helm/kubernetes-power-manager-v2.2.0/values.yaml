@@ -1,0 +1,96 @@
+# Default values for kubernetes-power-manager-v2.2.0.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Intel Power namespace
+namespace:
+  label: controller-manager
+  name: intel-power
+
+# Service Account for the overarching operator
+operatorserviceaccount:
+  name: intel-power-operator
+  namespace: intel-power
+
+# Service Account for the Power Node Agent
+agentserviceaccount:
+  name: intel-power-node-agent
+  namespace: intel-power
+
+# Role for the overarching operator
+operatorrole:
+  name: operator-custom-resource-definitions-role
+  namespace: intel-power
+
+# Role Binding for the overarching operator
+operatorrolebinding:
+  name: operator-custom-resource-definitions-role-binding
+  namespace: intel-power
+  serviceaccount:
+    name: intel-power-operator
+    namespace: intel-power
+  rolename: operator-custom-resource-definitions-role
+
+# Cluster Role for the overarching operator
+operatorclusterrole:
+  name: operator-nodes
+
+# Cluster Role Binding for the overarching operator
+operatorclusterrolebinding:
+  name: operator-nodes-binding
+  serviceaccount:
+    name: intel-power-operator
+    namespace: intel-power
+  clusterrolename: operator-nodes
+
+# Cluster Role for the Power Node Agent
+agentclusterrole:
+  name: node-agent-cluster-resources
+
+# Cluster Role Binding for the Power Node Agent
+agentclusterrolebinding:
+  name: node-agent-cluster-resources-binding
+  serviceaccount:
+    name: intel-power-node-agent
+    namespace: intel-power
+  clusterrolename: node-agent-cluster-resources
+
+# Deployment for the overarching operator
+operator:
+  name: controller-manager
+  namespace: intel-power
+  labels:
+    controlplane: controller-manager
+  replicas: 1
+  container:
+    serviceaccount:
+      name: intel-power-operator
+    command: /manager
+    args: --enable-leader-election
+    image: intel/power-operator:v2.2.0
+    name: manager
+    cpu:
+      limits: 100m
+      requests: 100m
+    memory:
+      limits: 30Mi
+      requests: 30Mi
+
+# Values for the PowerConfig
+powerconfig:
+  name: power-config
+  namespace: intel-power
+  nodeselector:
+    label: "feature.node.kubernetes.io/power-node"
+    value: "true"
+
+# Values for the Shared PowerProfile
+sharedprofile:
+  name: shared
+  namespace: intel-power
+  spec:
+    name: "shared"
+    max: 1000
+    min: 1000
+    epp: "power"
+    governor: "powersave"

@@ -18,12 +18,14 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"os"
+
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -33,6 +35,7 @@ import (
 	"github.com/intel/kubernetes-power-manager/controllers"
 	"github.com/intel/kubernetes-power-manager/pkg/podstate"
 	"github.com/intel/power-optimization-library/pkg/power"
+	corev1 "k8s.io/api/core/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -89,6 +92,10 @@ func main() {
 			"driver", feature.Driver(),
 			"error", feature.FeatureError(),
 			"available", power.IsFeatureSupported(id))
+		if id == power.FreqencyScalingFeature {
+			govs := power.GetAvailableGovernors()
+			setupLog.Info(fmt.Sprintf("available governors: %v", govs))
+		}
 	}
 
 	powerNodeState, err := podstate.NewState()
@@ -125,6 +132,8 @@ func main() {
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("PowerNode"),
 		Scheme:       mgr.GetScheme(),
+		State:        powerNodeState,
+		OrphanedPods: make(map[string]corev1.Pod),
 		PowerLibrary: powerLibrary,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerNode")
@@ -134,7 +143,7 @@ func main() {
 		Client:             mgr.GetClient(),
 		Log:                ctrl.Log.WithName("controllers").WithName("PowerPod"),
 		Scheme:             mgr.GetScheme(),
-		State:              *powerNodeState,
+		State:              powerNodeState,
 		PodResourcesClient: *podResourcesClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PowerPod")
@@ -161,6 +170,7 @@ func main() {
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName("controllers").WithName("TimeOfDayCronJob"),
 		Scheme:       mgr.GetScheme(),
+		State:        powerNodeState,
 		PowerLibrary: powerLibrary,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TimeOfDayCronJob")

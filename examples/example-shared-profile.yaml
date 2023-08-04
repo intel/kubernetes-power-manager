@@ -7,6 +7,6 @@ spec:
   name: "shared"
   max: 1000
   min: 1000
-  # A shared PowerProfile must have the EPP value of 'power'
   epp: "power"
+  shared: true
   governor: "powersave"

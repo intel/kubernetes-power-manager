@@ -27,6 +27,7 @@ type PowerProfileSpec struct {
 	// The name of the PowerProfile
 	Name string `json:"name"`
 
+	Shared bool `json:"shared,omitempty"`
 	// Max frequency cores can run at
 	Max int `json:"max,omitempty"`
 
@@ -34,7 +35,7 @@ type PowerProfileSpec struct {
 	Min int `json:"min,omitempty"`
 
 	// The priority value associated with this Power Profile
-	Epp string `json:"epp"`
+	Epp string `json:"epp,omitempty"`
 
 	// Governor to be used
 	//+kubebuilder:default=powersave

@@ -26,9 +26,9 @@ import (
 type ScheduleInfo struct {
 	Time string `json:"time"`
 
-	PowerProfile *string                       `json:"powerProfile,omitempty"`
-	Pods         *map[string]map[string]string `json:"pods,omitempty"`
-	CState       *CStatesSpec                  `json:"cState,omitempty"`
+	PowerProfile *string      `json:"powerProfile,omitempty"`
+	Pods         *[]PodInfo   `json:"pods,omitempty"`
+	CState       *CStatesSpec `json:"cState,omitempty"`
 }
 
 // TimeOfDaySpec defines the desired state of TimeOfDay

@@ -6,26 +6,40 @@ metadata:
 spec:
   timeZone: "Eire"
   schedule:
-    - time: "14:24"
+    - time: "10:04"
       # this sets the profile for the shared pool
-      powerProfile: balance-performance
-      # this transitions a pod with the given name from one profile to another
+      powerProfile: balance-power
+      # this transitions exclusive pods matching a given label from one profile to another
+      # please ensure that only pods to be used by power manager have this label
       pods:
-        four-pod-v2:
-          performance: balance-performance
-        four-pod-v4:
-          balance-power: performance
+        - labels:
+            matchLabels:
+              power: "true"
+          target: performance
+        - labels:
+            matchLabels:
+              special: "false"
+          target: balance-performance
       # this field simply takes a cstate spec
       cState:
         sharedPoolCStates:
           C1: false
           C6: true
-    - time: "14:26"
-      powerProfile: performance
+    - time: "14:48:00"
+      powerProfile: shared
       cState:
         sharedPoolCStates:
           C1: true
           C6: false
-    - time: "14:28"
+      pods:
+      - labels:
+          matchLabels:
+            power: "true"
+        target: performance
+      - labels:
+          matchLabels:
+            special: "false"
+        target: balance-power
+    - time: "14:35"
       powerProfile: balance-power
   reservedCPUs: [ 0,1 ]

@@ -1,6 +1,6 @@
 # Kubernetes Power Manager
 
-## What is the Kubernetes Power Manager?
+## Introduction
 
 Utilizing a container orchestration engine like Kubernetes, CPU resources are allocated from a pool of platforms
 entirely based on availability, without taking into account specific features like Intel Speed Select Technology (SST).
@@ -29,16 +29,17 @@ specifically Intel SST.
 
 ### Use Cases:
 
-- *High performance workload known at peak times.*
-  May want to pre-schedule nodes to move to a performance profile during peak times to minimize spin up.
-  At times not during peak, may want to move to a power saving profile.
+-  Users may want to pre-schedule nodes to move to a performance profile during peak times to minimize spin up.
+  At times not during peak, they may want to move to a power saving profile.
 - *Unpredictable machine use.*
-  May use machine learning through monitoring to determine profiles that predict a peak need for a compute, to spin up
+  Users may use machine learning through monitoring to determine profiles that predict a peak need for compute, to spin up
   ahead of time.
 - *Power Optimization over Performance.*
-  A cloud may be interested in fast response time, but not in maximal response time, so may choose to spin up cores on
+  A user may be interested in fast response time, but not in maximal response time, so may choose to spin up cores on
   demand and only those cores used but want to remain in power-saving mode the rest of the time.
 
+### Further Info:
+  Please see the _diagrams-docs_ directory for diagrams with a visual breakdown of the power manager and its components.
 ## Functionality of the Kubernetes Power Manager
 
 - **SST-BF - (Speed Select Technology - Base Frequency)**
@@ -76,18 +77,25 @@ specifically Intel SST.
   Time of Day is designed to allow the user to select a specific time of day that they can put all their unused CPUs
   into “sleep” state and then reverse the process and select another time to return to an “active” state.
 
-- **P-State**
-
-  Modern Intel CPUs automatically employ the Intel P_State CPU power scaling driver. This driver is integrated rather
-  than a module, giving it precedence over other drivers. For Sandy Bridge and newer CPUs, this driver is currently used
-  automatically. The BIOS P-State settings might be disregarded by Intel P-State.
-  The Intel P-State driver utilizes the "Performance" and "Powersave" governors.
-  ***Performance***
-  The CPUfreq governor "performance" sets the CPU statically to the highest frequency within the borders of
-  scaling_min_freq and scaling_max_freq.
-  ***Powersave***
-  The CPUfreq governor "powersave" sets the CPU statically to the lowest frequency within the borders of
-  scaling_min_freq and scaling_max_freq.
+-  **Scaling Drivers**
+    * **P-State**
+  
+      Modern Intel CPUs automatically employ the Intel P_State CPU power scaling driver. This driver is integrated rather
+      than a module, giving it precedence over other drivers. For Sandy Bridge and newer CPUs, this driver is currently used
+      automatically. The BIOS P-State settings might be disregarded by Intel P-State.
+      The Intel P-State driver utilizes the "Performance" and "Powersave" governors.
+      ***Performance***
+      The CPUfreq governor "performance" sets the CPU statically to the highest frequency within the borders of
+      scaling_min_freq and scaling_max_freq.
+      ***Powersave***
+      The CPUfreq governor "powersave" sets the CPU statically to the lowest frequency within the borders of
+      scaling_min_freq and scaling_max_freq.
+    * **acpi-cpufreq**
+      
+      The acpi-cpufreq driver setting operates much like the P-state driver but has a different set of available governors. For more information see [here](https://www.kernel.org/doc/html/v4.12/admin-guide/pm/cpufreq.html).
+      One thing to note is that acpi-cpufreq reports the base clock as the frequency hardware limits however the P-state driver uses turbo frequency limits.
+      Both drivers can make use of turbo frequency; however, acpi-cpufreq can exceed hardware frequency limits when using turbo frequency.
+      This is important to take into account when setting frequencies for profiles.
 
 - **Uncore**
   The largest part of modern CPUs is outside the actual cores. On Intel CPUs this is part is called the "Uncore" and has
@@ -121,7 +129,7 @@ specifically Intel SST.
   Note: NFD is recommended, but not essential. Node labels can also be applied manually. See
   the [NFD repo](https://github.com/kubernetes-sigs/node-feature-discovery#feature-labels) for a full list of features
   labels.
-* In the kubelet configuration file the cpuManagerPolicy has to set to "static", and the reservedSystemCPUs are set to
+* **Important**: In the kubelet configuration file the cpuManagerPolicy has to set to "static", and the reservedSystemCPUs must be set to
   the desired value:
 
 ````yaml
@@ -172,6 +180,44 @@ streamingConnectionIdleTimeout: 0s
 syncFrequency: 0s
 volumeStatsAggPeriod: 0s
 ````
+
+## Deploying the Kubernetes Power Manager using Helm
+
+The Kubernetes Power Manager includes a helm chart for the latest releases, allowing the user to easily deploy 
+everything that is needed for the overarching operator and the node agent to run. The following versions are 
+supported with helm charts:
+
+* v2.0.0
+* v2.1.0
+* v2.2.0
+* v2.3.0
+
+When set up using the provided helm charts, the following will be deployed:
+
+* The intel-power namespace
+* The RBAC rules for the operator and node agent
+* The operator deployment itself
+* The operator's power config
+* A shared power profile
+
+To change any of the values the above are deployed with, edit the values.yaml file of the relevant helm chart.
+
+To deploy the Kubernetes Power Manager using Helm, you must have Helm installed. For more information on installing 
+Helm, see the installation guide here https://helm.sh/docs/intro/install/.
+
+The Kubernetes Power Manager has make targets for each version available. To deploy the latest version, use the following command:
+
+`make helm-install`
+
+To uninstall the latest version, use the following command:
+
+`make helm-uninstall`
+
+Or you can use the following commands to deploy a specific version of the Kubernetes Power Manager:
+
+`make helm-install-v2.2.0`
+`make helm-install-v2.1.0`
+`make helm-install-v2.0.0`
 
 ## Working environments
 
@@ -538,49 +584,6 @@ spec:
       C1: true
       C6: false
 ````
-### Time Of Day
-The TIme Of Day feature allows users to change the configuration of their system at a given time each day. This is done through the use of a `timeofdaycronjob`
-which schedules itself for a specific time each day and gives users the option of tuning cstates, the shared pool profile as well as the profile used by individual pods.
-#### Example
-````yaml
-apiVersion: power.intel.com/v1
-kind: TimeOfDay
-metadata:
-  name: timeofday-sample
-  namespace: intel-power
-spec:
-  timeZone: "Eire"
-  schedule:
-    - time: "14:24"
-      # this sets the profile for the shared pool
-      powerProfile: balance-performance
-      # this transitions a pod with the given name from one profile to another
-      pods: 
-        four-pod-v2: 
-          performance: balance-performance
-        four-pod-v4:
-          balance-power: performance
-      # this field simply takes a cstate spec
-      cState: 
-        sharedPoolCStates:
-          C1: false
-          C6: true
-    - time: "14:26"
-      powerProfile: performance
-      cState: 
-        sharedPoolCStates:
-          C1: true
-          C6: false
-    - time: "14:28"
-      powerProfile: balance-power
-  reservedCPUs: [0,1]
-````
-When applying changes to the shared pool, users must specify the CPUs reserved by the system. Additionally the user must specify a timezone to schedule with.
-The configuration for Time Of Day consists of a schedule list. Each item in the list consists of a time and any desired changes to the system.
-The `profile` field specifies the desired profile for the shared pool.
-The `pods` field is used to change the profile associated with a specific pod.
-It should be noted that when changing the profile of an individual pod, the user must specify its name and current profile at the time as well as the desired new profile.
-Finally the `cState` field accepts the spec values from a CStates configuration and applies them to the system.
 
 ### intel-pstate CPU Performance Scaling Driver
   The intel_pstate is a part of the CPU performance scaling subsystem in the Linux kernel (CPUFreq).
@@ -597,6 +600,11 @@ Finally the `cState` field accepts the spec values from a CStates configuration 
   ##### Performance Governor
   The CPUfreq governor "performance" sets the CPU statically to the highest frequency within the borders of scaling_min_freq and scaling_max_freq.
 
+### acpi-cpufreq scaling driver
+  An alternative to the P-state driver is the acpi-cpufreq driver. 
+  It operates in a similar fashion to the P-state driver but offers a different set of governors which can be seen [here](https://www.kernel.org/doc/html/v4.12/admin-guide/pm/cpufreq.html).
+  One notable difference between the P-state and acpi-cpufreq driver is that the afformentioned scaling_max_freq value is limited to base clock frequencies rather than turbo frequencies.
+  When turbo is enabled the core frequency will still be capable of exceeding base clock frequencies and the value of scaling_max_freq.
 
 ### Time Of Day
 
@@ -616,29 +624,44 @@ metadata:
 spec:
   timeZone: "Eire"
   schedule:
-    - time: "14:24"
+    - time: "14:56"
       # this sets the profile for the shared pool
-      powerProfile: balance-performance
-      # this transitions a pod with the given name from one profile to another
+      powerProfile: balance-power
+      # this transitions exclusive pods matching a given label from one profile to another
+      # please ensure that only pods to be used by power manager have this label
       pods:
-        four-pod-v2:
-          performance: balance-performance
-        four-pod-v4:
-          balance-power: performance
+        - labels:
+            matchLabels:
+              power: "true"
+          target: balance-performance
+        - labels:
+            matchLabels:
+              special: "false"
+          target: balance-performance
       # this field simply takes a cstate spec
       cState:
         sharedPoolCStates:
           C1: false
           C6: true
-    - time: "14:26"
-      powerProfile: performance
+    - time: "23:57"
+      powerProfile: shared
       cState:
         sharedPoolCStates:
           C1: true
           C6: false
-    - time: "14:28"
+      pods:
+      - labels:
+          matchLabels:
+            power: "true"
+        target: performance
+      - labels:
+          matchLabels:
+            special: "false"
+        target: balance-power
+    - time: "14:35"
       powerProfile: balance-power
   reservedCPUs: [ 0,1 ]
+
 ```
 
 When applying changes to the shared pool, users must specify the CPUs reserved by the system. Additionally the user must
@@ -647,8 +670,8 @@ The configuration for Time Of Day consists of a schedule list. Each item in the 
 changes to the system.
 The `profile` field specifies the desired profile for the shared pool.
 The `pods` field is used to change the profile associated with a specific pod.
-It should be noted that when changing the profile of an individual pod, the user must specify its name and current
-profile at the time as well as the desired new profile.
+To change the profile of specific pods users must provide a set of labels and profiles. When a pod matching a label is found it will be placed in a workload that matches the requested profile.
+Please note that all pods matching a provided label must be configured for use with the power manager by requesting an intial profile and dedicated cores.
 Finally the `cState` field accepts the spec values from a CStates configuration and applies them to the system.
 
 ### Uncore Frequency
@@ -674,37 +697,6 @@ spec:
       min: 1500000
       max: 2400000
 ````
-
-### intel-pstate CPU Performance Scaling Driver
-
-The intel_pstate is a part of the CPU performance scaling subsystem in the Linux kernel (CPUFreq).
-
-In some situations it is desirable or even necessary to run the program as fast as possible and then there is no reason
-to use any P-states different from the highest one (i.e. the highest-performance frequency/voltage configuration
-available). In some other cases, however, it may not be necessary to execute instructions so quickly and maintaining the
-highest available CPU capacity for a relatively long time without utilizing it entirely may be regarded as wasteful. It
-also may not be physically possible to maintain maximum CPU capacity for too long for thermal or power supply capacity
-reasons or similar. To cover those cases, there are hardware interfaces allowing CPUs to be switched between different
-frequency/voltage configurations or (in the ACPI terminology) to be put into different P-states.
-
-#### P-State Governors
-
-In order to offer dynamic frequency scaling, the cpufreq core must be able to tell these drivers of a "target
-frequency". So these specific drivers will be transformed to offer a "->target/target_index/fast_switch()" call instead
-of the "->setpolicy()" call. For set_policy drivers, all stays the same, though.
-
-The cpufreq governors decide what frequency within the CPUfreq policy should be used. The P-state driver utilizes the "
-powersave" and "performance" governors.
-
-##### Powersave Governor
-
-The CPUfreq governor "powersave" sets the CPU statically to the lowest frequency within the borders of scaling_min_freq
-and scaling_max_freq.
-
-##### Performance Governor
-
-The CPUfreq governor "performance" sets the CPU statically to the highest frequency within the borders of
-scaling_min_freq and scaling_max_freq.
 
 ### In the Kubernetes API
 
@@ -802,7 +794,7 @@ spec:
           args:
             - --enable-leader-election
           imagePullPolicy: IfNotPresent
-          image: power-operator:v2.2.0
+          image: power-operator:v2.3.0
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

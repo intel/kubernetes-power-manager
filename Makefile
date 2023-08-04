@@ -37,12 +37,36 @@ build: generate manifests install
 
 # Build the Manager and Node Agent images
 images: generate manifests install
-	docker build -f build/Dockerfile -t intel/power-operator:v2.2.0 .
-	docker build -f build/Dockerfile.nodeagent -t intel/power-node-agent:v2.2.0 .
+	docker build -f build/Dockerfile -t intel/power-operator:v2.3.0 .
+	docker build -f build/Dockerfile.nodeagent -t intel/power-node-agent:v2.3.0 .
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
 	go run ./main.go
+
+helm-install: generate manifests install
+	helm install kubernetes-power-manager-v2.3.0 ./helm/kubernetes-power-manager-v2.3.0
+
+helm-uninstall:
+	helm uninstall kubernetes-power-manager-v2.3.0
+
+helm-install-v2.2.0: generate manifests install
+	helm install kubernetes-power-manager-v2.2.0 ./helm/kubernetes-power-manager-v2.2.0
+
+helm-uninstall-v2.2.0:
+	helm uninstall kubernetes-power-manager-v2.2.0
+
+helm-install-v2.1.0: generate manifests install
+	helm install kubernetes-power-manager-v2.1.0 ./helm/kubernetes-power-manager-v2.1.0
+
+helm-uninstall-v2.1.0:
+	helm uninstall kubernetes-power-manager-v2.1.0
+
+helm-install-v2.0.0: generate manifests install
+	helm install kubernetes-power-manager-v2.0.0 ./helm/kubernetes-power-manager-v2.0.0
+
+helm-uninstall-v2.0.0:
+	helm uninstall kubernetes-power-manager-v2.0.0
 
 # Install CRDs into a cluster
 install: manifests kustomize
@@ -119,3 +143,11 @@ bundle: manifests
 .PHONY: bundle-build
 bundle-build:
 	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+coverage:
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Average code coverage: $$(go tool cover -func coverage.out | awk 'END {print $$3}' | sed 's/\..*//')%" 
+	@if [ $$(go tool cover -func coverage.out | awk 'END {print $$3}' | sed 's/\..*//') -lt 85 ]; then \
+		echo "WARNING: Total unit test coverage below 85%"; false; \
+	fi

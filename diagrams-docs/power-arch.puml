@@ -37,7 +37,7 @@ agent "<b>etcd" as etcd
 agent "<b>Power Operator" as po #effbda
 agent "\t\t\t<b>API Server\t\t\t" as api 
 agent "<b>Scheduler" as sch 
-agent "<b>Controller Manger" as cm 
+agent "<b>Controller Manager" as cm 
 
 etcd -down-> api 
 po <--> api

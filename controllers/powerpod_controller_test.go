@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sort"
 	"testing"
@@ -12,15 +13,19 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	podresourcesapi "k8s.io/kubelet/pkg/apis/podresources/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 	"github.com/intel/kubernetes-power-manager/pkg/podresourcesclient"
 	"github.com/intel/kubernetes-power-manager/pkg/podstate"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	//"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
@@ -50,15 +55,15 @@ func createFakePodResourcesListerClient(fakePodResources []*podresourcesapi.PodR
 }
 
 func createPodReconcilerObject(objs []runtime.Object, podResourcesClient *podresourcesclient.PodResourcesClient) (*PowerPodReconciler, error) {
-	// Register operator types with the runtime scheme.
+	// register operator types with the runtime scheme.
 	s := scheme.Scheme
 
-	// Add route Openshift scheme
+	// add route Openshift scheme
 	if err := powerv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 
-	// Create a fake client to mock API calls.
+	// create a fake client to mock API calls.
 	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).Build()
 
 	state, err := podstate.NewState()
@@ -66,13 +71,52 @@ func createPodReconcilerObject(objs []runtime.Object, podResourcesClient *podres
 		return nil, err
 	}
 
-	// Create a ReconcileNode object with the scheme and fake client.
-	r := &PowerPodReconciler{cl, ctrl.Log.WithName("testing"), s, *state, *podResourcesClient}
+	// create a ReconcileNode object with the scheme and fake client.
+	r := &PowerPodReconciler{cl, ctrl.Log.WithName("testing"), s, state, *podResourcesClient}
 
 	return r, nil
 }
 
-func TestPodCreation(t *testing.T) {
+var defaultResources = corev1.ResourceRequirements{
+	Limits: map[corev1.ResourceName]resource.Quantity{
+		corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
+		corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
+		corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
+	},
+	Requests: map[corev1.ResourceName]resource.Quantity{
+		corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
+		corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
+		corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
+	},
+}
+
+var defaultProfile = &powerv1.PowerProfile{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "performance",
+		Namespace: IntelPowerNamespace,
+	},
+	Spec: powerv1.PowerProfileSpec{
+		Name: "performance",
+	},
+}
+
+var defaultWorkload = &powerv1.PowerWorkload{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "performance-TestNode",
+		Namespace: IntelPowerNamespace,
+	},
+	Spec: powerv1.PowerWorkloadSpec{
+		Name: "performance-TestNode",
+		Node: powerv1.WorkloadNode{
+			Name:       "TestNode",
+			Containers: []powerv1.Container{},
+			CpuIds:     []uint{},
+		},
+	},
+}
+
+// runs through some basic cases for the controller with no errors
+func TestPowerPod_Reconcile_Create(t *testing.T) {
 	tcases := []struct {
 		testCase       string
 		nodeName       string
@@ -93,7 +137,7 @@ func TestPodCreation(t *testing.T) {
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
-							CpuIds: []int64{1, 2, 3},
+							CpuIds: []int64{1, 5, 8},
 						},
 					},
 				},
@@ -104,15 +148,7 @@ func TestPodCreation(t *testing.T) {
 						Name: "TestNode",
 					},
 				},
-				&powerv1.PowerProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerProfileSpec{
-						Name: "performance",
-					},
-				},
+				defaultProfile,
 				&powerv1.PowerWorkload{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "performance-TestNode",
@@ -121,9 +157,14 @@ func TestPodCreation(t *testing.T) {
 					Spec: powerv1.PowerWorkloadSpec{
 						Name: "performance-TestNode",
 						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{},
+							Name: "TestNode",
+							Containers: []powerv1.Container{
+								{
+									Name:          "test-container-1",
+									ExclusiveCPUs: []uint{1, 5, 8},
+								},
+							},
+							CpuIds: []uint{1, 5, 8},
 						},
 					},
 				},
@@ -137,19 +178,8 @@ func TestPodCreation(t *testing.T) {
 						NodeName: "TestNode",
 						Containers: []corev1.Container{
 							{
-								Name: "test-container-1",
-								Resources: corev1.ResourceRequirements{
-									Limits: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-									Requests: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-								},
+								Name:      "test-container-1",
+								Resources: defaultResources,
 							},
 						},
 						EphemeralContainers: []corev1.EphemeralContainer{},
@@ -159,7 +189,7 @@ func TestPodCreation(t *testing.T) {
 						QOSClass: corev1.PodQOSGuaranteed,
 						ContainerStatuses: []corev1.ContainerStatus{
 							{
-								Name:        "example-container-1",
+								Name:        "test-container-1",
 								ContainerID: "docker://abcdefg",
 							},
 						},
@@ -167,7 +197,7 @@ func TestPodCreation(t *testing.T) {
 				},
 			},
 			workloadName:   "performance-TestNode",
-			expectedCpuIds: []uint{1, 2, 3},
+			expectedCpuIds: []uint{1, 5, 8},
 		},
 		{
 			testCase: "Test Case 2 - Two containers",
@@ -195,29 +225,8 @@ func TestPodCreation(t *testing.T) {
 						Name: "TestNode",
 					},
 				},
-				&powerv1.PowerProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerProfileSpec{
-						Name: "performance",
-					},
-				},
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{
-						Name: "performance-TestNode",
-						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{},
-						},
-					},
-				},
+				defaultProfile,
+				defaultWorkload,
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-2",
@@ -228,34 +237,12 @@ func TestPodCreation(t *testing.T) {
 						NodeName: "TestNode",
 						Containers: []corev1.Container{
 							{
-								Name: "test-container-1",
-								Resources: corev1.ResourceRequirements{
-									Limits: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-									Requests: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-								},
+								Name:      "test-container-1",
+								Resources: defaultResources,
 							},
 							{
-								Name: "test-container-2",
-								Resources: corev1.ResourceRequirements{
-									Limits: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-									Requests: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-								},
+								Name:      "test-container-2",
+								Resources: defaultResources,
 							},
 						},
 						EphemeralContainers: []corev1.EphemeralContainer{},
@@ -287,10 +274,7 @@ func TestPodCreation(t *testing.T) {
 		podResourcesClient := createFakePodResourcesListerClient(tc.podResources)
 
 		r, err := createPodReconcilerObject(tc.clientObjs, podResourcesClient)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error creating reconciler object", tc.testCase)
-		}
+		assert.Nil(t, err)
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
@@ -300,32 +284,118 @@ func TestPodCreation(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error reconciling object", tc.testCase)
-		}
+		assert.Nil(t, err)
 
 		workload := &powerv1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      tc.workloadName,
 			Namespace: IntelPowerNamespace,
 		}, workload)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error retrieving Power Workload Object", tc.testCase)
-		}
+		assert.Nil(t, err)
 
 		sortedCpuIds := workload.Spec.Node.CpuIds
 		sort.Slice(workload.Spec.Node.CpuIds, func(i, j int) bool {
 			return workload.Spec.Node.CpuIds[i] < workload.Spec.Node.CpuIds[j]
 		})
 		if !reflect.DeepEqual(tc.expectedCpuIds, sortedCpuIds) {
-			t.Errorf("%s Failed - expected Cpu Ids to be %v, got %v", tc.testCase, tc.expectedCpuIds, sortedCpuIds)
+			t.Errorf("%s failed: expected CPU Ids to be %v, got %v", tc.testCase, tc.expectedCpuIds, sortedCpuIds)
 		}
 	}
 }
 
-func TestPodControllerErrors(t *testing.T) {
+// tests where the workload associated with the profile requested does not exist
+func TestPowerPod_Reconcile_NonExistingWorkload(t *testing.T) {
+	tcases := []struct {
+		testCase       string
+		nodeName       string
+		podName        string
+		podResources   []*podresourcesapi.PodResources
+		clientObjs     []runtime.Object
+		workloadName   string
+		expectedCpuIds []uint
+	}{
+		{
+			testCase: "Test Case 1 - Workload does not exist",
+			nodeName: "TestNode",
+			podName:  "test-pod-1",
+			podResources: []*podresourcesapi.PodResources{
+				{
+					Name:      "test-pod-1",
+					Namespace: IntelPowerNamespace,
+					Containers: []*podresourcesapi.ContainerResources{
+						{
+							Name:   "test-container-1",
+							CpuIds: []int64{1, 5, 8},
+						},
+					},
+				},
+			},
+			clientObjs: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+				},
+				defaultProfile,
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pod-1",
+						Namespace: IntelPowerNamespace,
+						UID:       "abcdefg",
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "TestNode",
+						Containers: []corev1.Container{
+							{
+								Name:      "test-container-1",
+								Resources: defaultResources,
+							},
+						},
+						EphemeralContainers: []corev1.EphemeralContainer{},
+					},
+					Status: corev1.PodStatus{
+						Phase:    corev1.PodRunning,
+						QOSClass: corev1.PodQOSGuaranteed,
+						ContainerStatuses: []corev1.ContainerStatus{
+							{
+								Name:        "test-container-1",
+								ContainerID: "docker://abcdefg",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+
+		podResourcesClient := createFakePodResourcesListerClient(tc.podResources)
+
+		r, err := createPodReconcilerObject(tc.clientObjs, podResourcesClient)
+		assert.Nil(t, err)
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.podName,
+				Namespace: IntelPowerNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(context.TODO(), req)
+		assert.Nil(t, err)
+
+		workload := &powerv1.PowerWorkload{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name:      tc.workloadName,
+			Namespace: IntelPowerNamespace,
+		}, workload)
+		assert.ErrorContains(t, err, "not found")
+	}
+}
+
+// tests for error cases involving invalid pods
+func TestPowerPod_Reconcile_ControllerErrors(t *testing.T) {
 	tcases := []struct {
 		testCase      string
 		nodeName      string
@@ -356,29 +426,8 @@ func TestPodControllerErrors(t *testing.T) {
 						Name: "TestNode",
 					},
 				},
-				&powerv1.PowerProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerProfileSpec{
-						Name: "performance",
-					},
-				},
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{
-						Name: "performance-TestNode",
-						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{},
-						},
-					},
-				},
+				defaultProfile,
+				defaultWorkload,
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
@@ -389,19 +438,8 @@ func TestPodControllerErrors(t *testing.T) {
 						NodeName: "TestNode",
 						Containers: []corev1.Container{
 							{
-								Name: "test-container-1",
-								Resources: corev1.ResourceRequirements{
-									Limits: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-									Requests: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-								},
+								Name:      "test-container-1",
+								Resources: defaultResources,
 							},
 						},
 						EphemeralContainers: []corev1.EphemeralContainer{},
@@ -444,29 +482,8 @@ func TestPodControllerErrors(t *testing.T) {
 						Name: "TestNode",
 					},
 				},
-				&powerv1.PowerProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerProfileSpec{
-						Name: "performance",
-					},
-				},
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{
-						Name: "performance-TestNode",
-						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{},
-						},
-					},
-				},
+				defaultProfile,
+				defaultWorkload,
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
@@ -476,19 +493,8 @@ func TestPodControllerErrors(t *testing.T) {
 						NodeName: "TestNode",
 						Containers: []corev1.Container{
 							{
-								Name: "test-container-1",
-								Resources: corev1.ResourceRequirements{
-									Limits: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-									Requests: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-								},
+								Name:      "test-container-1",
+								Resources: defaultResources,
 							},
 						},
 						EphemeralContainers: []corev1.EphemeralContainer{},
@@ -531,29 +537,8 @@ func TestPodControllerErrors(t *testing.T) {
 						Name: "TestNode",
 					},
 				},
-				&powerv1.PowerProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerProfileSpec{
-						Name: "performance",
-					},
-				},
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{
-						Name: "performance-TestNode",
-						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{},
-						},
-					},
-				},
+				defaultProfile,
+				defaultWorkload,
 				&powerv1.PowerWorkload{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "balance-performance-TestNode",
@@ -578,19 +563,8 @@ func TestPodControllerErrors(t *testing.T) {
 						NodeName: "TestNode",
 						Containers: []corev1.Container{
 							{
-								Name: "test-container-1",
-								Resources: corev1.ResourceRequirements{
-									Limits: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-									Requests: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-								},
+								Name:      "test-container-1",
+								Resources: defaultResources,
 							},
 							{
 								Name: "test-container-2",
@@ -653,29 +627,8 @@ func TestPodControllerErrors(t *testing.T) {
 						Name: "TestNode",
 					},
 				},
-				&powerv1.PowerProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerProfileSpec{
-						Name: "performance",
-					},
-				},
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{
-						Name: "performance-TestNode",
-						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{},
-						},
-					},
-				},
+				defaultProfile,
+				defaultWorkload,
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
@@ -750,20 +703,7 @@ func TestPodControllerErrors(t *testing.T) {
 						Name: "balance-performance",
 					},
 				},
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{
-						Name: "performance-TestNode",
-						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{},
-						},
-					},
-				},
+				defaultWorkload,
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
@@ -774,19 +714,8 @@ func TestPodControllerErrors(t *testing.T) {
 						NodeName: "TestNode",
 						Containers: []corev1.Container{
 							{
-								Name: "test-container-1",
-								Resources: corev1.ResourceRequirements{
-									Limits: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(2, resource.DecimalSI),
-									},
-									Requests: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(2, resource.DecimalSI),
-									},
-								},
+								Name:      "test-container-1",
+								Resources: defaultResources,
 							},
 						},
 						EphemeralContainers: []corev1.EphemeralContainer{},
@@ -815,10 +744,7 @@ func TestPodControllerErrors(t *testing.T) {
 		podResourcesClient := createFakePodResourcesListerClient(tc.podResources)
 
 		r, err := createPodReconcilerObject(tc.clientObjs, podResourcesClient)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error creating reconciler object", tc.testCase)
-		}
+		assert.Nil(t, err)
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
@@ -829,7 +755,7 @@ func TestPodControllerErrors(t *testing.T) {
 
 		_, err = r.Reconcile(context.TODO(), req)
 		if err == nil {
-			t.Errorf("%s Failed - expected Pod controller to have failed", tc.testCase)
+			t.Errorf("%s failed: expected the pod controller to have failed", tc.testCase)
 		}
 
 		for _, workloadName := range tc.workloadNames {
@@ -838,19 +764,16 @@ func TestPodControllerErrors(t *testing.T) {
 				Name:      workloadName,
 				Namespace: IntelPowerNamespace,
 			}, workload)
-			if err != nil {
-				t.Error(err)
-				t.Fatalf("%s - error retrieving Power Workload Object", tc.testCase)
-			}
+			assert.Nil(t, err)
 
 			if len(workload.Spec.Node.CpuIds) > 0 {
-				t.Errorf("%s Failed - expected Cpu Ids to be empty, got %v", tc.testCase, workload.Spec.Node.CpuIds)
+				t.Errorf("%s failed: expected the CPU Ids to be empty, got %v", tc.testCase, workload.Spec.Node.CpuIds)
 			}
 		}
 	}
 }
 
-func TestPodControllerReturningNil(t *testing.T) {
+func TestPowerPod_Reconcile_ControllerReturningNil(t *testing.T) {
 	tcases := []struct {
 		testCase      string
 		nodeName      string
@@ -890,20 +813,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 						Name: "balance-performance",
 					},
 				},
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{
-						Name: "performance-TestNode",
-						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{},
-						},
-					},
-				},
+				defaultWorkload,
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
@@ -914,19 +824,8 @@ func TestPodControllerReturningNil(t *testing.T) {
 						NodeName: "IncorrectNode",
 						Containers: []corev1.Container{
 							{
-								Name: "test-container-1",
-								Resources: corev1.ResourceRequirements{
-									Limits: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(2, resource.DecimalSI),
-									},
-									Requests: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(2, resource.DecimalSI),
-									},
-								},
+								Name:      "test-container-1",
+								Resources: defaultResources,
 							},
 						},
 						EphemeralContainers: []corev1.EphemeralContainer{},
@@ -978,20 +877,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 						Name: "balance-performance",
 					},
 				},
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{
-						Name: "performance-TestNode",
-						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{},
-						},
-					},
-				},
+				defaultWorkload,
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
@@ -1002,19 +888,8 @@ func TestPodControllerReturningNil(t *testing.T) {
 						NodeName: "TestNode",
 						Containers: []corev1.Container{
 							{
-								Name: "test-container-1",
-								Resources: corev1.ResourceRequirements{
-									Limits: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(2, resource.DecimalSI),
-									},
-									Requests: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                         *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                      *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/performance"): *resource.NewQuantity(2, resource.DecimalSI),
-									},
-								},
+								Name:      "test-container-1",
+								Resources: defaultResources,
 							},
 						},
 						EphemeralContainers: []corev1.EphemeralContainer{},
@@ -1057,29 +932,8 @@ func TestPodControllerReturningNil(t *testing.T) {
 						Name: "TestNode",
 					},
 				},
-				&powerv1.PowerProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerProfileSpec{
-						Name: "performance",
-					},
-				},
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{
-						Name: "performance-TestNode",
-						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{},
-						},
-					},
-				},
+				defaultProfile,
+				defaultWorkload,
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod-1",
@@ -1130,10 +984,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 		podResourcesClient := createFakePodResourcesListerClient(tc.podResources)
 
 		r, err := createPodReconcilerObject(tc.clientObjs, podResourcesClient)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error creating reconciler object", tc.testCase)
-		}
+		assert.Nil(t, err)
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
@@ -1143,10 +994,7 @@ func TestPodControllerReturningNil(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Error(err)
-			t.Errorf("%s Failed - expected Pod controller to not have failed", tc.testCase)
-		}
+		assert.Nil(t, err)
 
 		for _, workloadName := range tc.workloadNames {
 			workload := &powerv1.PowerWorkload{}
@@ -1154,19 +1002,17 @@ func TestPodControllerReturningNil(t *testing.T) {
 				Name:      workloadName,
 				Namespace: IntelPowerNamespace,
 			}, workload)
-			if err != nil {
-				t.Error(err)
-				t.Fatalf("%s - error retrieving Power Workload Object", tc.testCase)
-			}
+			assert.Nil(t, err)
 
 			if len(workload.Spec.Node.CpuIds) > 0 {
-				t.Errorf("%s Failed - expected Cpu Ids to be empty, got %v", tc.testCase, workload.Spec.Node.CpuIds)
+				t.Errorf("%s failed: expected the CPU Ids to be empty, got %v", tc.testCase, workload.Spec.Node.CpuIds)
 			}
 		}
 	}
 }
 
-func TestPodDeletion(t *testing.T) {
+// ensures workloads remove cores upon pod deletion correctly
+func TestPowerPod_Reconcile_Delete(t *testing.T) {
 	tcases := []struct {
 		testCase      string
 		nodeName      string
@@ -1198,15 +1044,7 @@ func TestPodDeletion(t *testing.T) {
 						Name: "TestNode",
 					},
 				},
-				&powerv1.PowerProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "performance",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerProfileSpec{
-						Name: "performance",
-					},
-				},
+				defaultProfile,
 				&powerv1.PowerWorkload{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "performance-TestNode",
@@ -1215,9 +1053,14 @@ func TestPodDeletion(t *testing.T) {
 					Spec: powerv1.PowerWorkloadSpec{
 						Name: "performance-TestNode",
 						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{1, 2, 3},
+							Name: "TestNode",
+							Containers: []powerv1.Container{
+								{
+									Name:          "existing container",
+									ExclusiveCPUs: []uint{1, 2, 3},
+								},
+							},
+							CpuIds: []uint{1, 2, 3, 4},
 						},
 					},
 				},
@@ -1234,9 +1077,10 @@ func TestPodDeletion(t *testing.T) {
 				},
 			},
 			guaranteedPod: powerv1.GuaranteedPod{
-				Node: "TestNode",
-				Name: "test-pod-1",
-				UID:  "abcdefg",
+				Node:      "TestNode",
+				Name:      "test-pod-1",
+				Namespace: IntelPowerNamespace,
+				UID:       "abcdefg",
 				Containers: []powerv1.Container{
 					{
 						Name:          "test-container-1",
@@ -1258,16 +1102,10 @@ func TestPodDeletion(t *testing.T) {
 		podResourcesClient := createFakePodResourcesListerClient(tc.podResources)
 
 		r, err := createPodReconcilerObject(tc.clientObjs, podResourcesClient)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error creating reconciler object", tc.testCase)
-		}
+		assert.Nil(t, err)
 
 		err = r.State.UpdateStateGuaranteedPods(tc.guaranteedPod)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s Failed - error adding Pod's State", tc.testCase)
-		}
+		assert.Nil(t, err)
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
@@ -1277,23 +1115,217 @@ func TestPodDeletion(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Error(err)
-			t.Errorf("%s Failed - expected Pod controller to not have failed", tc.testCase)
-		}
+		assert.Nil(t, err)
 
 		workload := &powerv1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      tc.workloadName,
 			Namespace: IntelPowerNamespace,
 		}, workload)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error retrieving Power Workload Object", tc.testCase)
-		}
+		assert.Nil(t, err)
 
-		if len(workload.Spec.Node.CpuIds) > 0 {
-			t.Errorf("%s Failed - expected Cpu Ids to be empty, got %v", tc.testCase, workload.Spec.Node.CpuIds)
+		if len(workload.Spec.Node.CpuIds) != 1 {
+			t.Errorf("%s failed: expected one remaining core in the workload, got %v", tc.testCase, workload.Spec.Node.CpuIds)
 		}
 	}
+}
+
+// uses errclient to mock errors from the client
+func TestPowerPod_Reconcile_PodClientErrs(t *testing.T) {
+	var deletedPod = &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-pod-1",
+			Namespace:         IntelPowerNamespace,
+			UID:               "abcdefg",
+			DeletionTimestamp: &metav1.Time{Time: time.Date(9999, time.Month(1), 21, 1, 10, 30, 0, time.UTC)},
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "TestNode",
+		},
+	}
+	var defaultPod = &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-1",
+			Namespace: IntelPowerNamespace,
+			UID:       "abcdefg",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "TestNode",
+			Containers: []corev1.Container{
+				{
+					Name:      "test-container-1",
+					Resources: defaultResources,
+				},
+			},
+			EphemeralContainers: []corev1.EphemeralContainer{},
+		},
+		Status: corev1.PodStatus{
+			Phase:    corev1.PodRunning,
+			QOSClass: corev1.PodQOSGuaranteed,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name:        "test-container-1",
+					ContainerID: "docker://abcdefg",
+				},
+			},
+		},
+	}
+	tcases := []struct {
+		testCase      string
+		nodeName      string
+		podName       string
+		powerNodeName string
+		convertClient func(client.Client) client.Client
+		clientErr     string
+		podResources  []*podresourcesapi.PodResources
+		guaranteedPod powerv1.GuaranteedPod
+	}{
+		{
+			testCase: "Test Case 1 - Invalid Get requests",
+			nodeName: "TestNode",
+			podName:  "test-pod-1",
+			convertClient: func(c client.Client) client.Client {
+				mkcl := new(errClient)
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client get error"))
+				return mkcl
+			},
+			clientErr:    "client get error",
+			podResources: []*podresourcesapi.PodResources{},
+		},
+		{
+			testCase: "Test Case 2 - Invalid Update requests",
+			nodeName: "TestNode",
+			podName:  "test-pod-1",
+			convertClient: func(c client.Client) client.Client {
+				mkcl := new(errClient)
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.Pod")).Return(nil).Run(func(args mock.Arguments) {
+					pod := args.Get(2).(*corev1.Pod)
+					*pod = *deletedPod
+				})
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerWorkload")).Return(nil).Run(func(args mock.Arguments) {
+					wload := args.Get(2).(*powerv1.PowerWorkload)
+					*wload = *defaultWload
+				})
+				mkcl.On("Update", mock.Anything, mock.Anything).Return(fmt.Errorf("client update error"))
+				return mkcl
+			},
+			clientErr: "client update error",
+			podResources: []*podresourcesapi.PodResources{
+				{
+					Name:      "test-pod-1",
+					Namespace: IntelPowerNamespace,
+					Containers: []*podresourcesapi.ContainerResources{
+						{
+							Name:   "test-container-1",
+							CpuIds: []int64{1, 2, 3},
+						},
+					},
+				},
+			},
+			guaranteedPod: powerv1.GuaranteedPod{
+				Node:      "TestNode",
+				Name:      "test-pod-1",
+				Namespace: IntelPowerNamespace,
+				UID:       "abcdefg",
+				Containers: []powerv1.Container{
+					{
+						Name:          "test-container-1",
+						Id:            "abcdefg",
+						Pod:           "test-pod-1",
+						ExclusiveCPUs: []uint{1, 2, 3},
+						PowerProfile:  "performance",
+						Workload:      "performance-TestNode",
+					},
+				},
+			},
+		},
+		{
+			testCase: "Test Case 3 - Invalid List requests",
+			nodeName: "TestNode",
+			podName:  "test-pod-1",
+			convertClient: func(c client.Client) client.Client {
+				mkcl := new(errClient)
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.Pod")).Return(nil).Run(func(args mock.Arguments) {
+					node := args.Get(2).(*corev1.Pod)
+					*node = *defaultPod
+				})
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerWorkload")).Return(nil).Run(func(args mock.Arguments) {
+					wload := args.Get(2).(*powerv1.PowerWorkload)
+					*wload = *defaultWload
+				})
+				mkcl.On("List", mock.Anything, mock.Anything).Return(fmt.Errorf("client list error"))
+				return mkcl
+			},
+			clientErr: "client list error",
+			podResources: []*podresourcesapi.PodResources{
+				{
+					Name:      "test-pod-1",
+					Namespace: IntelPowerNamespace,
+					Containers: []*podresourcesapi.ContainerResources{
+						{
+							Name:   "test-container-1",
+							CpuIds: []int64{1, 5, 8},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+		podResourcesClient := createFakePodResourcesListerClient(tc.podResources)
+
+		r, err := createPodReconcilerObject([]runtime.Object{}, podResourcesClient)
+		assert.Nil(t, err)
+		err = r.State.UpdateStateGuaranteedPods(tc.guaranteedPod)
+		assert.Nil(t, err)
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.podName,
+				Namespace: IntelPowerNamespace,
+			},
+		}
+		r.Client = tc.convertClient(r.Client)
+		_, err = r.Reconcile(context.TODO(), req)
+		assert.ErrorContains(t, err, tc.clientErr)
+
+	}
+
+}
+
+// tests positive and negative cases for SetupWithManager function
+func TestPowerPod_Reconcile_SetupPass(t *testing.T) {
+	podResources := []*podresourcesapi.PodResources{}
+	podResourcesClient := createFakePodResourcesListerClient(podResources)
+	r, err := createPodReconcilerObject([]runtime.Object{}, podResourcesClient)
+	assert.Nil(t, err)
+	mgr := new(mgrMock)
+	mgr.On("GetControllerOptions").Return(v1alpha1.ControllerConfigurationSpec{})
+	mgr.On("GetScheme").Return(r.Scheme)
+	mgr.On("GetLogger").Return(r.Log)
+	mgr.On("SetFields", mock.Anything).Return(nil)
+	mgr.On("Add", mock.Anything).Return(nil)
+	err = (&PowerPodReconciler{
+		Client: r.Client,
+		Scheme: r.Scheme,
+	}).SetupWithManager(mgr)
+	assert.Nil(t, err)
+
+}
+
+func TestPowerPod_Reconcile_SetupFail(t *testing.T) {
+	podResources := []*podresourcesapi.PodResources{}
+	podResourcesClient := createFakePodResourcesListerClient(podResources)
+	r, err := createPodReconcilerObject([]runtime.Object{}, podResourcesClient)
+	assert.Nil(t, err)
+	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
+		Scheme: scheme.Scheme,
+	})
+
+	err = (&PowerPodReconciler{
+		Client: r.Client,
+		Scheme: r.Scheme,
+	}).SetupWithManager(mgr)
+	assert.Error(t, err)
+
 }
