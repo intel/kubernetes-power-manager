@@ -19,8 +19,9 @@ COPY pkg/ pkg/
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
-FROM clearlinux@sha256:d3dd73575d2eb9c6ffb635c82b266fa9266591db844ac9f41014c0af415992c9
+FROM redhat/ubi9-minimal@sha256:35c99977ee5baa359bdc80f9ccc360644d2dbccb7462ca0fd97a23170a00cfd1
 WORKDIR /
+COPY LICENSE /licenses/LICENSE
 COPY --from=builder /workspace/manager .
 COPY build/manifests/ /power-manifests/
 USER 10001
