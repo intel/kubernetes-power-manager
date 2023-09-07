@@ -24,11 +24,15 @@ spec:
             - --zap-log-level
             - "3"
           imagePullPolicy: IfNotPresent
-          image: intel/power-operator:v2.3.0
+          image: intel/power-operator:v2.3.1
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ "ALL" ]
+            runAsNonRoot: true
+            runAsUser: 10001
+            seccompProfile:
+              type: RuntimeDefault
           name: manager
           resources:
             limits:
@@ -38,7 +42,7 @@ spec:
               cpu: 100m
               memory: 64Mi
           volumeMounts:
-            - mountPath: /sys/fs
+            - mountPath: /sys/fs/cgroup
               name: cgroup
               mountPropagation: HostToContainer
               readOnly: true
@@ -46,4 +50,4 @@ spec:
       volumes:
         - name: cgroup
           hostPath:
-            path: /sys/fs
+            path: /sys/fs/cgroup

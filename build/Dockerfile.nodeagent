@@ -10,7 +10,7 @@ COPY go.sum go.sum
 
 RUN go mod download
 
-ENV USER_ID=1001 \
+ENV USER_ID=10001 \
     USER_NAME=power-node-agent
 
 # Copy the go source
@@ -28,5 +28,6 @@ WORKDIR /
 COPY --from=builder /workspace/nodeagent .
 COPY build/bin bin/
 RUN bin/user_setup
+USER 10001
 
 ENTRYPOINT ["/nodeagent"]

@@ -15,10 +15,11 @@ spec:
     spec:
       serviceAccountName: intel-power-node-agent
       containers:
-        - image: intel/power-node-agent:v2.3.0
+        - image: intel/power-node-agent:v2.3.1
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
+            runAsUser: 0
           name: power-node-agent
           args: [ "--zap-log-level","3" ]
           env:
@@ -36,7 +37,7 @@ spec:
           volumeMounts:
             - mountPath: /sys/devices/system/cpu
               name: cpusetup
-            - mountPath: /sys/fs
+            - mountPath: /sys/fs/cgroup
               name: cgroup
               readOnly: true
             - mountPath: /var/lib/kubelet/pod-resources/
@@ -48,7 +49,7 @@ spec:
             path: /sys/devices/system/cpu
         - name: cgroup
           hostPath:
-            path: /sys/fs
+            path: /sys/fs/cgroup
         - name: kubesock
           hostPath:
             path: /var/lib/kubelet/pod-resources

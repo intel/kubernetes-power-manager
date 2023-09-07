@@ -23,6 +23,6 @@ FROM clearlinux@sha256:d3dd73575d2eb9c6ffb635c82b266fa9266591db844ac9f41014c0af4
 WORKDIR /
 COPY --from=builder /workspace/manager .
 COPY build/manifests/ /power-manifests/
-USER 1001
+USER 10001
 
 ENTRYPOINT ["/manager"]
