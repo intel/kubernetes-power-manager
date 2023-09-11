@@ -423,8 +423,8 @@ spec:
 
 The Shared PowerProfile must be created by the user and does not require a Base PowerProfile. This allows the user to
 have a Shared PowerProfile per Node in their cluster, giving more room for different configurations. The Power
-controller determines that a PowerProfile is being designated as ‘Shared’ through the use of the ‘power’ EPP value.
-
+controller determines that a PowerProfile is being designated as ‘Shared’ through the use of the ‘shared’ parameter.
+This flag must be enabled when using a shared pool.
 #### Example
 
 ````yaml
@@ -436,7 +436,9 @@ spec:
   name: "shared-example-node1"
   max: 1500
   min: 1000
+  shared: true
   epp: "power"
+  governor: "powersave"
 ````
 
 ````yaml
@@ -448,7 +450,9 @@ spec:
   name: "shared-example-node2"
   max: 2000
   min: 1500
-  epp: "power"
+  shared: true
+  governor: "powersave"
+
 ````
 
 ### PowerNode Controller
@@ -854,16 +858,17 @@ create the PowerProfiles that were requested on each Node.
 The example Shared PowerProfile in examples/example-shared-profile.yaml contains the following PowerProfile spec:
 
 ````yaml
-apiVersion: "power.intel.com/v1"
+apiVersion: power.intel.com/v1
 kind: PowerProfile
 metadata:
   name: shared
+  namespace: intel-power
 spec:
   name: "shared"
-  max: 1500
+  max: 1000
   min: 1000
-  # A shared PowerProfile must have the EPP value of 'power'
   epp: "power"
+  shared: true
   governor: "powersave"
 ````
 

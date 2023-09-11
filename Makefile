@@ -37,17 +37,23 @@ build: generate manifests install
 
 # Build the Manager and Node Agent images
 images: generate manifests install
-	docker build -f build/Dockerfile -t intel/power-operator:v2.3.0 .
-	docker build -f build/Dockerfile.nodeagent -t intel/power-node-agent:v2.3.0 .
+	docker build -f build/Dockerfile -t intel/power-operator:v2.3.1 .
+	docker build -f build/Dockerfile.nodeagent -t intel/power-node-agent:v2.3.1 .
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
 	go run ./main.go
 
 helm-install: generate manifests install
-	helm install kubernetes-power-manager-v2.3.0 ./helm/kubernetes-power-manager-v2.3.0
+	helm install kubernetes-power-manager-v2.3.1 ./helm/kubernetes-power-manager-v2.3.1
 
 helm-uninstall:
+	helm uninstall kubernetes-power-manager-v2.3.1
+
+helm-install-v2.3.0: generate manifests install
+	helm install kubernetes-power-manager-v2.3.0 ./helm/kubernetes-power-manager-v2.3.0
+
+helm-uninstall-v2.3.0:
 	helm uninstall kubernetes-power-manager-v2.3.0
 
 helm-install-v2.2.0: generate manifests install
