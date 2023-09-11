@@ -424,7 +424,7 @@ spec:
 The Shared PowerProfile must be created by the user and does not require a Base PowerProfile. This allows the user to
 have a Shared PowerProfile per Node in their cluster, giving more room for different configurations. The Power
 controller determines that a PowerProfile is being designated as ‘Shared’ through the use of the ‘shared’ parameter.
-Creating a shared pool using a profile without this flag will result in undefined behavior.
+This flag must be enabled when using a shared pool.
 #### Example
 
 ````yaml
