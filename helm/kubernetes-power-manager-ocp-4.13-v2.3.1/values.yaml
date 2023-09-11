@@ -67,7 +67,7 @@ operator:
       name: intel-power-operator
     command: /manager
     args: --enable-leader-election
-    image: silpixa00401508d.ir.intel.com:5000/power-operator_ocp-4.13:v2.3.1
+    image: intel/power-operator_ocp-4.13:v2.3.1
     name: manager
     cpu:
       limits: 100m
