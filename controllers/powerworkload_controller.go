@@ -102,7 +102,7 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 
 		err = r.Client.List(context.TODO(), labelledNodeList, client.MatchingLabels(listOption))
 		if err != nil {
-			logger.Error(err, "error retrieving the node with the power node selector", listOption)
+			logger.Error(err, "error retrieving the node with the power node selector", "selector", listOption)
 			return ctrl.Result{}, err
 		}
 

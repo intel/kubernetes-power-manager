@@ -94,7 +94,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 
 				for _, profile := range powerProfiles.Items {
 					err = r.Client.Delete(context.TODO(), &profile)
-					logger.V(5).Info("deleting power profile %s", profile.Name)
+					logger.V(5).Info(fmt.Sprintf("deleting power profile %s", profile.Name))
 					if err != nil {
 						logger.Error(err, fmt.Sprintf("error deleting power profile '%s' from cluster", profile.Name))
 						return ctrl.Result{}, err
@@ -111,7 +111,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 				}
 
 				for _, workload := range powerWorkloads.Items {
-					logger.V(5).Info("deleting power workload %s", workload.Name)
+					logger.V(5).Info(fmt.Sprintf("deleting power workload %s", workload.Name))
 					err = r.Client.Delete(context.TODO(), &workload)
 					if err != nil {
 						logger.Error(err, fmt.Sprintf("error deleting power workload '%s' from cluster", workload.Name))
@@ -128,7 +128,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 				}
 
 				for _, node := range powerNodes.Items {
-					logger.V(5).Info("deleting power nodes %s", node.Name)
+					logger.V(5).Info(fmt.Sprintf("deleting power nodes %s", node.Name))
 					err = r.Client.Delete(context.TODO(), &node)
 					if err != nil {
 						logger.Error(err, fmt.Sprintf("error deleting power node '%s' from cluster", node.Name))
@@ -205,7 +205,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 			Name:      node.Name,
 		}, powerNode)
 
-		logger.V(5).Info("creating the power node CRD %s", node.Name)
+		logger.V(5).Info(fmt.Sprintf("creating the power node CRD %s", node.Name))
 		if err != nil {
 			if errors.IsNotFound(err) {
 				powerNode = &powerv1.PowerNode{
@@ -242,7 +242,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 	// Create the power profiles that were requested in the power config if it doesn't exist
 	// Delete any power profiles that are not being requested but exist
 	for _, profile := range config.Spec.PowerProfiles {
-		logger.V(5).Info("checking if the power profile exists %s", profile)
+		logger.V(5).Info(fmt.Sprintf("checking if the power profile exists %s", profile))
 		profileFromCluster := &powerv1.PowerProfile{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      profile,
@@ -251,7 +251,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 		if err != nil {
 			if errors.IsNotFound(err) {
 				// Power profile does not exist, so we need to create it
-				logger.V(5).Info("creating power profile %s", profile)
+				logger.V(5).Info(fmt.Sprintf("creating power profile %s", profile))
 				epp := strings.Replace(profile, "-", "_", 1)
 				powerProfileSpec := &powerv1.PowerProfileSpec{
 					Name: profile,

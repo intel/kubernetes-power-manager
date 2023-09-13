@@ -10,16 +10,17 @@ import (
 	"github.com/intel/kubernetes-power-manager/pkg/podstate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -104,7 +105,14 @@ var defaultSharedWork = &powerv1.PowerWorkload{
 }
 
 // WIP timeofdaycronjob controller unit tests
-func createTODCronReconcilerObject(objs []runtime.Object) (*TimeOfDayCronJobReconciler, error) {
+func createTODCronReconcilerObject(objs []client.Object) (*TimeOfDayCronJobReconciler, error) {
+	log.SetLogger(zap.New(
+		zap.UseDevMode(true),
+		func(opts *zap.Options) {
+			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
+		},
+		),
+	)
 	// Register operator types with the runtime scheme.
 	s := scheme.Scheme
 
@@ -118,8 +126,7 @@ func createTODCronReconcilerObject(objs []runtime.Object) (*TimeOfDayCronJobReco
 		return nil, err
 	}
 	// Create a fake client to mock API calls.
-	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).WithScheme(s).Build()
-
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(objs...).WithStatusSubresource(objs...).Build()
 	// Create a ReconcileNode object with the scheme and fake client.
 	r := &TimeOfDayCronJobReconciler{cl, ctrl.Log.WithName("testing"), s, state, nil}
 
@@ -167,7 +174,7 @@ func TestTimeOfDayCronJob_Reconcile_CronProfile(t *testing.T) {
 	loc, err := time.LoadLocation(zone)
 	assert.NoError(t, err)
 	hour, minute, second := addSeconds(queueTime, loc)
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -272,7 +279,7 @@ func TestTimeOfDayCronJob_Reconcile_CronPods(t *testing.T) {
 	loc, err := time.LoadLocation(zone)
 	assert.NoError(t, err)
 	hour, minute, second := addSeconds(queueTime, loc)
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -356,6 +363,7 @@ func TestTimeOfDayCronJob_Reconcile_CronPods(t *testing.T) {
 				Name:      "timeofday-test",
 				Namespace: "intel-power",
 			},
+			Status: powerv1.TimeOfDayCronJobStatus{},
 			Spec: powerv1.TimeOfDayCronJobSpec{
 				Hour:     hour,
 				Minute:   minute,
@@ -451,7 +459,7 @@ func TestTimeOfDayCronJob_Reconcile_Cstates(t *testing.T) {
 		SharedPoolCStates:    cMapShared,
 		ExclusivePoolCStates: cMapExclusiveOuter,
 	}
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -537,7 +545,7 @@ func TestTimeOfDayCronJob_Reconcile_ExistingCstates(t *testing.T) {
 		SharedPoolCStates:    cMapShared,
 		ExclusivePoolCStates: cMapExclusiveOuter,
 	}
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: nodename,
@@ -615,7 +623,7 @@ func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload(t *testing.T) {
 	loc, err := time.LoadLocation(zone)
 	assert.NoError(t, err)
 	hour, minute, second := addSeconds(queueTime, loc)
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -706,7 +714,7 @@ func TestTimeOfDayCronJob_Reconcile_MissedDeadline(t *testing.T) {
 	loc, err := time.LoadLocation(zone)
 	assert.NoError(t, err)
 	hour, minute, second := addSeconds(queueTime*-1, loc)
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -783,7 +791,7 @@ func TestTimeOfDayCronJob_Reconcile_ErrsSharedPoolExists(t *testing.T) {
 			},
 		},
 	}
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -972,7 +980,7 @@ func TestTimeOfDayCronJob_Reconcile_ErrsPodTuning(t *testing.T) {
 
 		Status: podStaus,
 	}
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -1121,7 +1129,7 @@ func TestTimeOfDayCronJob_Reconcile_ErrsPodTuning(t *testing.T) {
 
 func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
 	// incorrect namespace
-	r, err := createTODCronReconcilerObject([]runtime.Object{})
+	r, err := createTODCronReconcilerObject([]client.Object{})
 	assert.Nil(t, err)
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
@@ -1154,7 +1162,7 @@ func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
 		Profile:      &profile,
 		ReservedCPUs: &[]uint{0},
 	}
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -1253,14 +1261,15 @@ func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
 
 // tests positive and negative cases for SetupWithManager function
 func TestTimeOfDayCronJob_Reconcile_SetupPass(t *testing.T) {
-	r, err := createTODCronReconcilerObject([]runtime.Object{})
+	r, err := createTODCronReconcilerObject([]client.Object{})
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
-	mgr.On("GetControllerOptions").Return(v1alpha1.ControllerConfigurationSpec{})
+	mgr.On("GetControllerOptions").Return(config.Controller{})
 	mgr.On("GetScheme").Return(r.Scheme)
 	mgr.On("GetLogger").Return(r.Log)
 	mgr.On("SetFields", mock.Anything).Return(nil)
 	mgr.On("Add", mock.Anything).Return(nil)
+	mgr.On("GetCache").Return(new(cacheMk))
 	err = (&TimeOfDayCronJobReconciler{
 		Client: r.Client,
 		Scheme: r.Scheme,
@@ -1268,13 +1277,14 @@ func TestTimeOfDayCronJob_Reconcile_SetupPass(t *testing.T) {
 	assert.Nil(t, err)
 
 }
-
-func TestTimeOfDayCronJob_Reconcile_SetupFail(t *testing.T) {
-	r, err := createTODCronReconcilerObject([]runtime.Object{})
+func TestCronReconcileSetupFail(t *testing.T) {
+	r, err := createTODCronReconcilerObject([]client.Object{})
 	assert.Nil(t, err)
-	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
-		Scheme: scheme.Scheme,
-	})
+	mgr := new(mgrMock)
+	mgr.On("GetControllerOptions").Return(config.Controller{})
+	mgr.On("GetScheme").Return(r.Scheme)
+	mgr.On("GetLogger").Return(r.Log)
+	mgr.On("Add", mock.Anything).Return(fmt.Errorf("setup fail"))
 
 	err = (&TimeOfDayCronJobReconciler{
 		Client: r.Client,

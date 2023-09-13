@@ -100,7 +100,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 
 	// Validate incoming values from time-of-day manifest
 	timeZone := timeOfDay.Spec.TimeZone
-	logger.V(5).Info("validated timezone for time-of-day, values are: %s", timeZone)
+	logger.V(5).Info(fmt.Sprintf("validated timezone for time-of-day, values are: %s", timeZone))
 
 	if timeZone != "" {
 		_, err := time.LoadLocation(timeZone)

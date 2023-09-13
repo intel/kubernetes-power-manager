@@ -112,7 +112,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 			}
 		}
 		for workloadName, cpus := range workloadToCPUsRemoved {
-			logger.V(5).Info("retrieving the workload instance %s", workloadName)
+			logger.V(5).Info(fmt.Sprintf("retrieving the workload instance %s", workloadName))
 			workload := &powerv1.PowerWorkload{}
 			err = r.Get(context.TODO(), client.ObjectKey{
 				Namespace: IntelPowerNamespace,

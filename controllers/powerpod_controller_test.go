@@ -9,16 +9,18 @@ import (
 	"time"
 
 	//"k8s.io/apimachinery/pkg/api/errors"
+	"go.uber.org/zap/zapcore"
 	grpc "google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	podresourcesapi "k8s.io/kubelet/pkg/apis/podresources/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
@@ -44,6 +46,10 @@ func (f *fakePodResourcesClient) GetAllocatableResources(ctx context.Context, in
 	return &podresourcesapi.AllocatableResourcesResponse{}, nil
 }
 
+func (f *fakePodResourcesClient) Get(ctx context.Context, in *podresourcesapi.GetPodResourcesRequest, opts ...grpc.CallOption) (*podresourcesapi.GetPodResourcesResponse, error) {
+	return &podresourcesapi.GetPodResourcesResponse{}, nil
+}
+
 func createFakePodResourcesListerClient(fakePodResources []*podresourcesapi.PodResources) *podresourcesclient.PodResourcesClient {
 	fakeListResponse := &podresourcesapi.ListPodResourcesResponse{
 		PodResources: fakePodResources,
@@ -55,6 +61,13 @@ func createFakePodResourcesListerClient(fakePodResources []*podresourcesapi.PodR
 }
 
 func createPodReconcilerObject(objs []runtime.Object, podResourcesClient *podresourcesclient.PodResourcesClient) (*PowerPodReconciler, error) {
+	log.SetLogger(zap.New(
+		zap.UseDevMode(true),
+		func(opts *zap.Options) {
+			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
+		},
+		),
+	)
 	// register operator types with the runtime scheme.
 	s := scheme.Scheme
 
@@ -1070,6 +1083,7 @@ func TestPowerPod_Reconcile_Delete(t *testing.T) {
 						Namespace:         IntelPowerNamespace,
 						UID:               "abcdefg",
 						DeletionTimestamp: &metav1.Time{Time: time.Date(9999, time.Month(1), 21, 1, 10, 30, 0, time.UTC)},
+						Finalizers:        []string{"intel.com/finalizer"},
 					},
 					Spec: corev1.PodSpec{
 						NodeName: "TestNode",
@@ -1138,6 +1152,7 @@ func TestPowerPod_Reconcile_PodClientErrs(t *testing.T) {
 			Namespace:         IntelPowerNamespace,
 			UID:               "abcdefg",
 			DeletionTimestamp: &metav1.Time{Time: time.Date(9999, time.Month(1), 21, 1, 10, 30, 0, time.UTC)},
+			Finalizers:        []string{"intel.com/finalizer"},
 		},
 		Spec: corev1.PodSpec{
 			NodeName: "TestNode",
@@ -1300,11 +1315,12 @@ func TestPowerPod_Reconcile_SetupPass(t *testing.T) {
 	r, err := createPodReconcilerObject([]runtime.Object{}, podResourcesClient)
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
-	mgr.On("GetControllerOptions").Return(v1alpha1.ControllerConfigurationSpec{})
+	mgr.On("GetControllerOptions").Return(config.Controller{})
 	mgr.On("GetScheme").Return(r.Scheme)
 	mgr.On("GetLogger").Return(r.Log)
 	mgr.On("SetFields", mock.Anything).Return(nil)
 	mgr.On("Add", mock.Anything).Return(nil)
+	mgr.On("GetCache").Return(new(cacheMk))
 	err = (&PowerPodReconciler{
 		Client: r.Client,
 		Scheme: r.Scheme,
@@ -1318,10 +1334,11 @@ func TestPowerPod_Reconcile_SetupFail(t *testing.T) {
 	podResourcesClient := createFakePodResourcesListerClient(podResources)
 	r, err := createPodReconcilerObject([]runtime.Object{}, podResourcesClient)
 	assert.Nil(t, err)
-	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
-		Scheme: scheme.Scheme,
-	})
-
+	mgr := new(mgrMock)
+	mgr.On("GetControllerOptions").Return(config.Controller{})
+	mgr.On("GetScheme").Return(r.Scheme)
+	mgr.On("GetLogger").Return(r.Log)
+	mgr.On("Add", mock.Anything).Return(fmt.Errorf("setup fail"))
 	err = (&PowerPodReconciler{
 		Client: r.Client,
 		Scheme: r.Scheme,

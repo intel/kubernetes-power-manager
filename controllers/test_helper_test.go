@@ -15,8 +15,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -656,8 +657,8 @@ func (m *mgrMock) Start(ctx context.Context) error {
 	return m.Called(ctx).Get(0).(error)
 }
 
-func (m *mgrMock) GetWebhookServer() *webhook.Server {
-	return m.Called().Get(0).(*webhook.Server)
+func (m *mgrMock) GetWebhookServer() webhook.Server {
+	return m.Called().Get(0).(webhook.Server)
 }
 
 func (m *mgrMock) GetLogger() logr.Logger {
@@ -665,8 +666,8 @@ func (m *mgrMock) GetLogger() logr.Logger {
 
 }
 
-func (m *mgrMock) GetControllerOptions() v1alpha1.ControllerConfigurationSpec {
-	return m.Called().Get(0).(v1alpha1.ControllerConfigurationSpec)
+func (m *mgrMock) GetControllerOptions() config.Controller {
+	return m.Called().Get(0).(config.Controller)
 }
 
 func (m *mgrMock) GetScheme() *runtime.Scheme {
@@ -674,4 +675,13 @@ func (m *mgrMock) GetScheme() *runtime.Scheme {
 }
 func (m *mgrMock) SetFields(i interface{}) error {
 	return m.Called(i).Error(0)
+}
+
+func (m *mgrMock) GetCache() cache.Cache {
+	return m.Called().Get(0).(cache.Cache)
+}
+
+type cacheMk struct {
+	cache.Cache
+	mock.Mock
 }

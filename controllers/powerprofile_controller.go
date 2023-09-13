@@ -215,7 +215,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			return ctrl.Result{}, nil
 		}
 
-		logger.V(5).Info("shared power profile successfully created: name - %s max - %d min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp)
+		logger.V(5).Info(fmt.Sprintf("shared power profile successfully created: name - %s max - %d min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp))
 		return ctrl.Result{}, nil
 	} else {
 		var profileMaxFreq int
@@ -229,7 +229,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		}
 		if profileMaxFreq == 0 || profileMinFreq == 0 {
 			cannotBeZeroError := errors.NewServiceUnavailable("max or min frequency cannot be zero")
-			logger.Error(cannotBeZeroError, "error creating the profile '%s'", profile.Spec.Name)
+			logger.Error(cannotBeZeroError, fmt.Sprintf("error creating the profile '%s'", profile.Spec.Name))
 			return ctrl.Result{}, nil
 		}
 
@@ -270,18 +270,18 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 			}
 		} else {
 			err = r.PowerLibrary.GetExclusivePool(profile.Spec.Name).SetPowerProfile(powerProfile)
-			logger.V(5).Info("updating the power profile '%s' to the power library for node '%s'", profile.Spec.Name, nodeName)
+			logger.V(5).Info(fmt.Sprintf("updating the power profile '%s' to the power library for node '%s'", profile.Spec.Name, nodeName))
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("error updating the profile '%s' to the power library for node '%s'", profile.Spec.Name, nodeName))
 				return ctrl.Result{}, err
 			}
 		}
 
-		logger.V(5).Info("power profile successfully created: name - %s max - %d min - %d EPP - %s", profile.Spec.Name, profileMaxFreq, profileMinFreq, profile.Spec.Epp)
+		logger.V(5).Info(fmt.Sprintf("power profile successfully created: name - %s max - %d min - %d EPP - %s", profile.Spec.Name, profileMaxFreq, profileMinFreq, profile.Spec.Epp))
 	}
 
 	workloadName := fmt.Sprintf("%s-%s", profile.Spec.Name, nodeName)
-	logger.V(5).Info("configuring the workload name: %s", workloadName)
+	logger.V(5).Info(fmt.Sprintf("configuring the workload name: %s", workloadName))
 	workload := &powerv1.PowerWorkload{}
 	err = r.Client.Get(context.TODO(), client.ObjectKey{
 		Name:      workloadName,

@@ -21,6 +21,9 @@ func (f *fakePodResourcesClient) GetAllocatableResources(ctx context.Context, in
 	return &podresourcesapi.AllocatableResourcesResponse{}, nil
 }
 
+func (f *fakePodResourcesClient) Get(ctx context.Context, in *podresourcesapi.GetPodResourcesRequest, opts ...grpc.CallOption) (*podresourcesapi.GetPodResourcesResponse, error) {
+	return &podresourcesapi.GetPodResourcesResponse{}, nil
+}
 func createFakePodResourcesListerClient(fakePodResources []*podresourcesapi.PodResources) *PodResourcesClient {
 	fakeListResponse := &podresourcesapi.ListPodResourcesResponse{
 		PodResources: fakePodResources,

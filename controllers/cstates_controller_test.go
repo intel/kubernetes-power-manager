@@ -9,6 +9,7 @@ import (
 	"github.com/intel/power-optimization-library/pkg/power"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,11 +18,20 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	// "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 func buildCStatesReconcilerObject(objs []runtime.Object, powerLibMock power.Host) *CStatesReconciler {
+	log.SetLogger(zap.New(
+		zap.UseDevMode(true),
+		func(opts *zap.Options) {
+			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
+		},
+		),
+	)
 	schm := runtime.NewScheme()
 	err := powerv1.AddToScheme(schm)
 	if err != nil {
@@ -255,6 +265,32 @@ func setupFuzz(t *testing.T, nodeName string, namespace string, extraNode bool, 
 	objs := []runtime.Object{cStatesObj, powerProfilesObj, powerNodesObj}
 
 	return buildCStatesReconcilerObject(objs, powerLib), req
+}
+
+
+func TestCstate_Reconcile_SetupPass(t *testing.T) {
+	schm := runtime.NewScheme()
+	err := powerv1.AddToScheme(schm)
+	assert.Nil(t, err)
+	client := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects([]client.Object{}...).WithStatusSubresource([]client.Object{}...).Build()
+	r := &CStatesReconciler{
+		Client:       client,
+		Log:          ctrl.Log.WithName("testing"),
+		Scheme:       schm,
+		PowerLibrary: new(hostMock),
+	}
+	mgr := new(mgrMock)
+	mgr.On("GetControllerOptions").Return(config.Controller{})
+	mgr.On("GetScheme").Return(r.Scheme)
+	mgr.On("GetLogger").Return(r.Log)
+	mgr.On("SetFields", mock.Anything).Return(nil)
+	mgr.On("Add", mock.Anything).Return(nil)
+	mgr.On("GetCache").Return(new(cacheMk))
+	err = (&CStatesReconciler{
+		Client: r.Client,
+		Scheme: r.Scheme,
+	}).SetupWithManager(mgr)
+	assert.Nil(t, err)
 }
 
 

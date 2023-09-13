@@ -4,16 +4,17 @@ import (
 	"context"
 	"testing"
 
+	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 	"github.com/intel/kubernetes-power-manager/pkg/state"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +24,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func createConfigReconcilerObject(objs []runtime.Object) (*PowerConfigReconciler, error) {
+func createConfigReconcilerObject(objs []client.Object) (*PowerConfigReconciler, error) {
+	log.SetLogger(zap.New(
+		zap.UseDevMode(true),
+		func(opts *zap.Options) {
+			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
+		},
+		),
+	)
 	// Register operator types with the runtime scheme.
 	s := scheme.Scheme
 
@@ -32,7 +40,7 @@ func createConfigReconcilerObject(objs []runtime.Object) (*PowerConfigReconciler
 		return nil, err
 	}
 	// Create a fake client to mock API calls.
-	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).Build()
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(objs...).WithStatusSubresource(objs...).Build()
 
 	state := state.NewPowerNodeData()
 
@@ -46,7 +54,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 		testCase                 string
 		nodeName                 string
 		configName               string
-		clientObjs               []runtime.Object
+		clientObjs               []client.Object
 		profileNames             []string
 		expectedNumberOfProfiles int
 	}{
@@ -54,7 +62,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 			testCase:   "Test Case 1 - profiles: performance",
 			nodeName:   "TestNode",
 			configName: "test-config",
-			clientObjs: []runtime.Object{
+			clientObjs: []client.Object{
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
@@ -68,7 +76,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 							"performance",
 						},
 					},
-				},
+				},	
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "TestNode",
@@ -92,7 +100,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 			testCase:   "Test Case 2 - profiles: performance, balance-performance",
 			nodeName:   "TestNode",
 			configName: "test-config",
-			clientObjs: []runtime.Object{
+			clientObjs: []client.Object{
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
@@ -111,6 +119,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "TestNode",
+						Namespace: IntelPowerNamespace,
 						Labels: map[string]string{
 							"feature.node.kubernetes.io/power-node": "true",
 						},
@@ -132,7 +141,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 			testCase:   "Test Case 3 - profiles: performance, balance-performance, balance-power",
 			nodeName:   "TestNode",
 			configName: "test-config",
-			clientObjs: []runtime.Object{
+			clientObjs: []client.Object{
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
@@ -152,6 +161,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "TestNode",
+						Namespace: IntelPowerNamespace,
 						Labels: map[string]string{
 							"feature.node.kubernetes.io/power-node": "true",
 						},
@@ -232,7 +242,7 @@ func TestPowerConfig_Reconcile_Exists(t *testing.T) {
 		testCase                 string
 		nodeName                 string
 		configName               string
-		clientObjs               []runtime.Object
+		clientObjs               []client.Object
 		expectedNumberOfProfiles int
 		expectedNumberOfConfigs  int
 	}{
@@ -240,7 +250,7 @@ func TestPowerConfig_Reconcile_Exists(t *testing.T) {
 			testCase:   "Test Case 1 - profiles: performance",
 			nodeName:   "TestNode",
 			configName: "test-config",
-			clientObjs: []runtime.Object{
+			clientObjs: []client.Object{
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
@@ -335,7 +345,7 @@ func TestPowerConfig_Reconcile_ProfilesNoLongerRequested(t *testing.T) {
 		testCase                 string
 		nodeName                 string
 		configName               string
-		clientObjs               []runtime.Object
+		clientObjs               []client.Object
 		profilesDeleted          []string
 		profileNames             []string
 		expectedNumberOfProfiles int
@@ -344,7 +354,7 @@ func TestPowerConfig_Reconcile_ProfilesNoLongerRequested(t *testing.T) {
 			testCase:   "Test Case 1 - profiles to remove: performance",
 			nodeName:   "TestNode",
 			configName: "test-config",
-			clientObjs: []runtime.Object{
+			clientObjs: []client.Object{
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
@@ -397,7 +407,7 @@ func TestPowerConfig_Reconcile_ProfilesNoLongerRequested(t *testing.T) {
 			testCase:   "Test Case 2 - profiles to remove: balance-performance",
 			nodeName:   "TestNode",
 			configName: "test-config",
-			clientObjs: []runtime.Object{
+			clientObjs: []client.Object{
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
@@ -450,7 +460,7 @@ func TestPowerConfig_Reconcile_ProfilesNoLongerRequested(t *testing.T) {
 			testCase:   "Test Case 2 - profiles to remove: balance-performance",
 			nodeName:   "TestNode",
 			configName: "test-config",
-			clientObjs: []runtime.Object{
+			clientObjs: []client.Object{
 				&powerv1.PowerConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-config",
@@ -576,14 +586,14 @@ func TestPowerConfig_Reconcile_Deletion(t *testing.T) {
 		testCase                string
 		nodeName                string
 		configName              string
-		clientObjs              []runtime.Object
+		clientObjs              []client.Object
 		expectedNumberOfObjects int
 	}{
 		{
 			testCase:   "Test Case 1",
 			nodeName:   "TestNode",
 			configName: "test-config",
-			clientObjs: []runtime.Object{
+			clientObjs: []client.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "TestNode",
@@ -702,14 +712,15 @@ func TestPowerConfig_Reconcile_Deletion(t *testing.T) {
 
 // tests positive and negative cases for SetupWithManager function
 func TestPowerConfig_Reconcile_SetupPass(t *testing.T) {
-	r, err := createConfigReconcilerObject([]runtime.Object{})
+	r, err := createConfigReconcilerObject([]client.Object{})
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
-	mgr.On("GetControllerOptions").Return(v1alpha1.ControllerConfigurationSpec{})
+	mgr.On("GetControllerOptions").Return(config.Controller{})
 	mgr.On("GetScheme").Return(r.Scheme)
 	mgr.On("GetLogger").Return(r.Log)
 	mgr.On("SetFields", mock.Anything).Return(nil)
 	mgr.On("Add", mock.Anything).Return(nil)
+	mgr.On("GetCache").Return(new(cacheMk))
 	err = (&PowerConfigReconciler{
 		Client: r.Client,
 		Scheme: r.Scheme,
@@ -718,7 +729,7 @@ func TestPowerConfig_Reconcile_SetupPass(t *testing.T) {
 
 }
 func TesPowerConfig_Reconcile_SetupFail(t *testing.T) {
-	r, err := createConfigReconcilerObject([]runtime.Object{})
+	r, err := createConfigReconcilerObject([]client.Object{})
 	assert.Nil(t, err)
 	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
 		Scheme: scheme.Scheme,

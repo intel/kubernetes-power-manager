@@ -12,23 +12,27 @@ import (
 	"github.com/intel/power-optimization-library/pkg/power"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap/zapcore"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-
-	// "k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
-
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	// f "k8s.io/client-go/kubernetes/typed/core/v1/fake"
-
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 func createUncoreReconcilerObject(objs []runtime.Object) (*UncoreReconciler, error) {
+	log.SetLogger(zap.New(
+		zap.UseDevMode(true),
+		func(opts *zap.Options) {
+			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
+		},
+		),
+	)
 	// Register operator types with the runtime scheme.
 	s := scheme.Scheme
 
@@ -522,11 +526,12 @@ func TestUncore_Reconcile_SetupPass(t *testing.T) {
 	r, err := createUncoreReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
-	mgr.On("GetControllerOptions").Return(v1alpha1.ControllerConfigurationSpec{})
+	mgr.On("GetControllerOptions").Return(config.Controller{})
 	mgr.On("GetScheme").Return(r.Scheme)
 	mgr.On("GetLogger").Return(r.Log)
 	mgr.On("SetFields", mock.Anything).Return(nil)
 	mgr.On("Add", mock.Anything).Return(nil)
+	mgr.On("GetCache").Return(new(cacheMk))
 	err = (&UncoreReconciler{
 		Client: r.Client,
 		Scheme: r.Scheme,
@@ -538,9 +543,11 @@ func TestUncore_Reconcile_SetupPass(t *testing.T) {
 func TestUncore_Reconcile_SetupFail(t *testing.T) {
 	r, err := createUncoreReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
-	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
-		Scheme: scheme.Scheme,
-	})
+	mgr := new(mgrMock)
+	mgr.On("GetControllerOptions").Return(config.Controller{})
+	mgr.On("GetScheme").Return(r.Scheme)
+	mgr.On("GetLogger").Return(r.Log)
+	mgr.On("Add", mock.Anything).Return(fmt.Errorf("setup fail"))
 
 	err = (&UncoreReconciler{
 		Client: r.Client,
