@@ -94,7 +94,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 
 		powerPodState := r.State.GetPodFromState(pod.GetName(), pod.GetNamespace())
 
-		logger.V(5).Info("removing the pod from the internal state")
+		logger.V(5).Info("Removing Pod from internal state", "Pod Name", pod.GetName(), "UID", pod.GetUID())
 		if err = r.State.DeletePodFromState(pod.GetName(), pod.GetNamespace()); err != nil {
 			logger.Error(err, "error removing the pod from the internal state")
 			return ctrl.Result{}, err
@@ -105,6 +105,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 		for _, container := range powerPodState.Containers {
 			workload := container.Workload
 			cpus := container.ExclusiveCPUs
+			logger.V(5).Info("Removing", "Workload", workload, "CPUs", cpus)
 			if _, exists := workloadToCPUsRemoved[workload]; exists {
 				workloadToCPUsRemoved[workload] = append(workloadToCPUsRemoved[workload], cpus...)
 			} else {
@@ -112,7 +113,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 			}
 		}
 		for workloadName, cpus := range workloadToCPUsRemoved {
-			logger.V(5).Info(fmt.Sprintf("retrieving the workload instance %s", workloadName))
+			logger.V(5).Info("retrieving the workload instance", "Workload Name", workloadName)
 			workload := &powerv1.PowerWorkload{}
 			err = r.Get(context.TODO(), client.ObjectKey{
 				Namespace: IntelPowerNamespace,
@@ -209,6 +210,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 
 			workloadContainer := container
 			workloadContainer.Pod = pod.Name
+			workloadContainer.Workload = workloadName
 			containerList = append(containerList, workloadContainer)
 		}
 		for i, newContainer := range containerList {
@@ -280,9 +282,11 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 		containerID := getContainerID(pod, container.Name)
 		coreIDs, err := r.PodResourcesClient.GetContainerCPUs(pod.GetName(), container.Name)
 		if err != nil {
+			logger.V(5).Info("Error getting CoreIDs.", "ContainerID", containerID)
 			return map[string][]uint{}, []powerv1.Container{}, err
 		}
 		cleanCoreList := getCleanCoreList(coreIDs)
+		logger.V(5).Info("Reserving cores to container.", "ContainerID", containerID, "Cores", cleanCoreList)
 
 		logger.V(5).Info("creating the power container")
 		powerContainer := &powerv1.Container{}
@@ -347,7 +351,7 @@ func getNewWorkloadContainerList(nodeContainers []powerv1.Container, podStateCon
 
 	logger.V(5).Info("checking if there are new containers for the workload")
 	for _, container := range nodeContainers {
-		if !isContainerInList(container.Name, podStateContainers, logger) {
+		if !isContainerInList(container.Name, container.Id, podStateContainers, logger) {
 			newNodeContainers = append(newNodeContainers, container)
 		}
 	}
@@ -356,9 +360,9 @@ func getNewWorkloadContainerList(nodeContainers []powerv1.Container, podStateCon
 }
 
 // Helper function - if container is in a list of containers
-func isContainerInList(name string, containers []powerv1.Container, logger *logr.Logger) bool {
+func isContainerInList(name string, uid string, containers []powerv1.Container, logger *logr.Logger) bool {
 	for _, container := range containers {
-		if container.Name == name {
+		if container.Name == name && container.Id == uid {
 			return true
 		}
 	}

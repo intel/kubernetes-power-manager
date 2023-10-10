@@ -30,7 +30,7 @@ func buildCStatesReconcilerObject(objs []runtime.Object, powerLibMock power.Host
 		func(opts *zap.Options) {
 			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
 		},
-		),
+	),
 	)
 	schm := runtime.NewScheme()
 	err := powerv1.AddToScheme(schm)
@@ -267,7 +267,6 @@ func setupFuzz(t *testing.T, nodeName string, namespace string, extraNode bool, 
 	return buildCStatesReconcilerObject(objs, powerLib), req
 }
 
-
 func TestCstate_Reconcile_SetupPass(t *testing.T) {
 	schm := runtime.NewScheme()
 	err := powerv1.AddToScheme(schm)
@@ -292,7 +291,6 @@ func TestCstate_Reconcile_SetupPass(t *testing.T) {
 	}).SetupWithManager(mgr)
 	assert.Nil(t, err)
 }
-
 
 // tests failure for SetupWithManager function
 func TestCstate_Reconcile_SetupFail(t *testing.T) {

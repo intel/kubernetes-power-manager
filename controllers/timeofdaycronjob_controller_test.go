@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var queueTime = (10 * time.Second)
+var queueTime = 10 * time.Second
 
 var podSpec = corev1.PodSpec{
 	NodeName: "IncorrectNode",
@@ -111,7 +111,7 @@ func createTODCronReconcilerObject(objs []client.Object) (*TimeOfDayCronJobRecon
 		func(opts *zap.Options) {
 			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
 		},
-		),
+	),
 	)
 	// Register operator types with the runtime scheme.
 	s := scheme.Scheme

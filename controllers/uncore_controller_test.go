@@ -31,7 +31,7 @@ func createUncoreReconcilerObject(objs []runtime.Object) (*UncoreReconciler, err
 		func(opts *zap.Options) {
 			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
 		},
-		),
+	),
 	)
 	// Register operator types with the runtime scheme.
 	s := scheme.Scheme

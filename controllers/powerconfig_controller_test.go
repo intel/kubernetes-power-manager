@@ -4,24 +4,24 @@ import (
 	"context"
 	"testing"
 
+	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+	"github.com/intel/kubernetes-power-manager/pkg/state"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap/zapcore"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
-	"github.com/intel/kubernetes-power-manager/pkg/state"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func createConfigReconcilerObject(objs []client.Object) (*PowerConfigReconciler, error) {
@@ -30,7 +30,7 @@ func createConfigReconcilerObject(objs []client.Object) (*PowerConfigReconciler,
 		func(opts *zap.Options) {
 			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
 		},
-		),
+	),
 	)
 	// Register operator types with the runtime scheme.
 	s := scheme.Scheme
@@ -76,7 +76,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 							"performance",
 						},
 					},
-				},	
+				},
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "TestNode",
@@ -118,7 +118,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 				},
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "TestNode",
+						Name:      "TestNode",
 						Namespace: IntelPowerNamespace,
 						Labels: map[string]string{
 							"feature.node.kubernetes.io/power-node": "true",
@@ -160,7 +160,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 				},
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "TestNode",
+						Name:      "TestNode",
 						Namespace: IntelPowerNamespace,
 						Labels: map[string]string{
 							"feature.node.kubernetes.io/power-node": "true",

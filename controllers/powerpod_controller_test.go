@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"github.com/go-logr/logr"
 	"reflect"
 	"sort"
 	"testing"
@@ -66,7 +67,7 @@ func createPodReconcilerObject(objs []runtime.Object, podResourcesClient *podres
 		func(opts *zap.Options) {
 			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
 		},
-		),
+	),
 	)
 	// register operator types with the runtime scheme.
 	s := scheme.Scheme
@@ -1345,4 +1346,44 @@ func TestPowerPod_Reconcile_SetupFail(t *testing.T) {
 	}).SetupWithManager(mgr)
 	assert.Error(t, err)
 
+}
+
+func TestPowerPod_getNewWorkloadContainerList(t *testing.T) {
+	log := logr.Discard()
+
+	commonContainer := powerv1.Container{
+		Name: "common",
+		Id:   "common",
+	}
+	nodeOnlyContainer := powerv1.Container{
+		Name: "node-only",
+		Id:   "node-only",
+	}
+	podStateOnlyContainer := powerv1.Container{
+		Name: "podstate-only",
+		Id:   "podstate-only",
+	}
+
+	nodeContainers := []powerv1.Container{nodeOnlyContainer, commonContainer}
+	podstateContainers := []powerv1.Container{podStateOnlyContainer, commonContainer}
+
+	newNodeContainers := getNewWorkloadContainerList(nodeContainers, podstateContainers, &log)
+
+	assert.ElementsMatch(t, newNodeContainers, []powerv1.Container{nodeOnlyContainer})
+}
+
+func TestPowerPodisContainerInList(t *testing.T) {
+	logger := logr.Discard()
+
+	// positive test
+	containers := []powerv1.Container{
+		{
+			Name: "test1",
+			Id:   "12-34",
+		},
+	}
+	assert.True(t, isContainerInList("test1", "12-34", containers, &logger))
+
+	// negative test
+	assert.False(t, isContainerInList("not-in-list", "not-in-list", containers, &logger))
 }
