@@ -57,8 +57,9 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
-		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
-		return ctrl.Result{}, nil
+		err := fmt.Errorf("incorrect namespace")
+		logger.Error(err, "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{Requeue: false}, err
 	}
 	nodeName := os.Getenv("NODE_NAME")
 
@@ -123,7 +124,7 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 
 			sharedPowerWorkloadAlreadyExists := errors.NewServiceUnavailable("a shared power workload already exists for this node")
 			logger.Error(sharedPowerWorkloadAlreadyExists, "error creating the shared power workload")
-			return ctrl.Result{}, nil
+			return ctrl.Result{Requeue: false}, sharedPowerWorkloadAlreadyExists
 		}
 
 		// add cores to shared pool by selecting which cores should be reserved,
@@ -145,7 +146,7 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 		if poolFromLibrary == nil {
 			poolDoesNotExistError := errors.NewServiceUnavailable(fmt.Sprintf("pool '%s' does not exist in the power library", workload.Spec.PowerProfile))
 			logger.Error(poolDoesNotExistError, "error retrieving the pool from the power library")
-			return ctrl.Result{}, nil
+			return ctrl.Result{Requeue: false}, poolDoesNotExistError
 		}
 
 		logger.V(5).Info("updating the CPU list in the power library")

@@ -261,7 +261,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	r, err := createTimeOfDayReconcilerObject(clientObjs)
 	assert.NoError(t, err)
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.Nil(t, err)
+	assert.ErrorContains(t, err, "incorrect namespace")
 	// ensure object was not created
 	dummyObject := powerv1.TimeOfDay{}
 	err = r.Client.Get(context.TODO(), req.NamespacedName, &dummyObject)

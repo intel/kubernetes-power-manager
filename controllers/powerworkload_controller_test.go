@@ -114,7 +114,7 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 	}
 
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.NoError(t, err)
+	assert.ErrorContains(t, err, "does not exist in the power library")
 	nodemk.AssertExpectations(t)
 	// workload created - pool does exist in library
 	// using dummy file system because nested function calls are hard to mock
@@ -246,7 +246,7 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 	sharedPowerWorkloadName = "shared"
 	req.Name = workloadName
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.Nil(t, err)
+	assert.ErrorContains(t, err, "a shared power workload already exists")
 	assert.Error(t, r.Client.Get(context.TODO(), req.NamespacedName, &powerv1.PowerWorkload{}))
 
 	// error adding shared pool
@@ -319,7 +319,7 @@ func TestPowerWorkload_Reconcile_WrongNamespace(t *testing.T) {
 		},
 	}
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.NoError(t, err)
+	assert.ErrorContains(t, err, "incorrect namespace")
 }
 
 func TestPowerWorkload_Reconcile_ClientErrs(t *testing.T) {

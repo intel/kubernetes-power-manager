@@ -62,8 +62,9 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 	_ = context.Background()
 	logger := r.Log.WithValues("timeofdaycronjob", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
-		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
-		return ctrl.Result{}, nil
+		err := fmt.Errorf("incorrect namespace")
+		logger.Error(err, "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{Requeue: false}, err
 	}
 	logger.Info("reconciling time-of-day cron job")
 
@@ -72,7 +73,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 
 	if err != nil {
 		logger.Error(err, "error retrieving the time-of-day cron job")
-		return ctrl.Result{}, nil
+		return ctrl.Result{Requeue: false}, err
 	}
 
 	// setting up the location
@@ -182,7 +183,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 				var absoluteMaximumFrequency, absoluteMinimumFrequency int
 				if absoluteMaximumFrequency, absoluteMinimumFrequency, err = getMaxMinFrequencyValues(); err != nil {
 					logger.Error(err, "error retrieving the frequency values from the node")
-					return ctrl.Result{}, nil
+					return ctrl.Result{Requeue: false}, err
 				}
 				if prof.Spec.Epp != "" && prof.Spec.Max == 0 && prof.Spec.Min == 0 {
 					profileMaxFreq = int(float64(absoluteMaximumFrequency) - (float64((absoluteMaximumFrequency - absoluteMinimumFrequency)) * profilePercentages[prof.Spec.Epp]["difference"]))
@@ -194,12 +195,12 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 				powerProfile, err := power.NewPowerProfile(prof.Spec.Name, uint(profileMinFreq), uint(profileMaxFreq), prof.Spec.Governor, prof.Spec.Epp)
 				if err != nil {
 					logger.Error(err, "could not set the power profile for the shared pool")
-					return ctrl.Result{}, nil
+					return ctrl.Result{Requeue: false}, err
 				}
 				err = r.PowerLibrary.GetSharedPool().SetPowerProfile(powerProfile)
 				if err != nil {
 					logger.Error(err, "could not set the power profile for the shared pool")
-					return ctrl.Result{}, nil
+					return ctrl.Result{Requeue: false}, err
 				}
 				if err := r.Client.Update(c, workloadMatch); err != nil {
 					logger.Error(err, "cannot update the workload")
@@ -275,7 +276,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 						podState := r.State.GetPodFromState(pod.Name, pod.Namespace)
 						if podState.Name != pod.Name {
 							logger.Error(err, fmt.Sprintf("mismatch between the pod name and the internal state name: %s and %s", podState.Name, pod.Name))
-							return ctrl.Result{}, nil
+							return ctrl.Result{Requeue: false}, err
 						}
 						var from string
 						for i, container := range podState.Containers {

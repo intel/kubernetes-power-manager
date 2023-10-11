@@ -448,7 +448,7 @@ func TestUncore_Reconcile_InvalidRequests(t *testing.T) {
 		},
 	}
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.Nil(t, err)
+	assert.ErrorContains(t, err, "incorrect namespace")
 	// incorrect node
 	req = reconcile.Request{
 		NamespacedName: client.ObjectKey{

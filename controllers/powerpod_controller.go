@@ -67,10 +67,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Delete the Pod from the internal state in case it was never deleted
-			if err := r.State.DeletePodFromState(req.NamespacedName.Name, req.NamespacedName.Namespace); err != nil {
-				return ctrl.Result{}, err
-			}
-
+			r.State.DeletePodFromState(req.NamespacedName.Name, req.NamespacedName.Namespace)
 			return ctrl.Result{}, nil
 		}
 
@@ -94,11 +91,8 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 
 		powerPodState := r.State.GetPodFromState(pod.GetName(), pod.GetNamespace())
 
-		logger.V(5).Info("Removing Pod from internal state", "Pod Name", pod.GetName(), "UID", pod.GetUID())
-		if err = r.State.DeletePodFromState(pod.GetName(), pod.GetNamespace()); err != nil {
-			logger.Error(err, "error removing the pod from the internal state")
-			return ctrl.Result{}, err
-		}
+		logger.V(5).Info("removing the pod from the internal state")
+		r.State.DeletePodFromState(pod.GetName(), pod.GetNamespace())
 		workloadToCPUsRemoved := make(map[string][]uint)
 
 		logger.V(5).Info("removing pods CPUs from the internal state")
@@ -120,10 +114,10 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 				Name:      workloadName,
 			}, workload)
 			if err != nil {
-				if errors.IsNotFound(err) {
-					return ctrl.Result{}, nil
-				}
 				logger.Error(err, "error while trying to retrieve the power workload")
+				if errors.IsNotFound(err) {
+					return ctrl.Result{Requeue: false}, err
+				}
 				return ctrl.Result{}, err
 			}
 

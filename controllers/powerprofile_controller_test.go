@@ -459,12 +459,16 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 		testCase    string
 		nodeName    string
 		profileName string
+		validateErr   func(e error) bool
 		clientObjs  []runtime.Object
 	}{
 		{
 			testCase:    "Test Case 1 - Max value zero",
 			nodeName:    "TestNode",
 			profileName: "user-created",
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "max frequency value cannot be lower than the minimum frequency value")
+			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
@@ -484,6 +488,9 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 			testCase:    "Test Case 2 - Min value zero",
 			nodeName:    "TestNode",
 			profileName: "user-created",
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "max or min frequency cannot be zero")
+			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
@@ -503,6 +510,9 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 			testCase:    "Test Case 3 - Max/Min value zero",
 			nodeName:    "TestNode",
 			profileName: "user-created",
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "max or min frequency cannot be zero")
+			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
@@ -539,10 +549,7 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error reconciling object", tc.testCase)
-		}
+		tc.validateErr(err)
 
 		workloads := &powerv1.PowerWorkloadList{}
 		err = r.Client.List(context.TODO(), workloads)
@@ -678,10 +685,7 @@ func TestPowerProfile_Reconcile_SharedProfileDoesNotExistInLibrary(t *testing.T)
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error reconciling object", tc.testCase)
-		}
+		assert.ErrorContains(t, err, "maximum or minimum frequency value cannot be below 1000")
 
 		workloads := &powerv1.PowerWorkloadList{}
 		err = r.Client.List(context.TODO(), workloads)
@@ -885,9 +889,7 @@ func TestPowerProfile_Reconcile_MaxValueLowerThanMinValue(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Errorf("%s failed: expected the reconciler to not have failed", tc.testCase)
-		}
+		assert.ErrorContains(t, err, "max frequency value cannot be lower than the minimum frequency value")
 	}
 }
 
@@ -949,9 +951,7 @@ func TestPowerProfile_Reconcile_SharedFrequencyValuesLessThanAbsoluteValue(t *te
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Errorf("%s failed: expected the reconciler to not have failed", tc.testCase)
-		}
+		assert.ErrorContains(t, err, "maximum or minimum frequency value cannot be")
 	}
 }
 
@@ -1013,9 +1013,7 @@ func TestPowerProfile_Reconcile_MaxValueZeroMinValueGreaterThanZero(t *testing.T
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Errorf("%s failed: expected the reconciler to not have failed", tc.testCase)
-		}
+		assert.ErrorContains(t, err, "max frequency value cannot be lower than the minimum frequency value")
 	}
 }
 
@@ -1260,7 +1258,7 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 				return nodemk
 			},
 			validateErr: func(e error) bool {
-				return assert.Nil(t, e)
+				return assert.ErrorContains(t, e, "unit test set profile error")
 			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerWorkload{
@@ -1369,6 +1367,25 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 						},
 					},
 				},
+			},
+		},
+		{
+			testCase:    "Test Case 5 - reset shared profile error",
+			profileName: "shared",
+			getNodemk: func() *hostMock {
+				nodemk := new(hostMock)
+				poolmk := new(poolMock)
+				profmk := new(profMock)
+				nodemk.On("GetSharedPool").Return(poolmk)
+				poolmk.On("GetPowerProfile").Return(profmk)
+				profmk.On("Name").Return("shared")
+				poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("Set profile err"))
+				return nodemk
+			},
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "Set profile err")
+			},
+			clientObjs: []runtime.Object{
 			},
 		},
 	}
@@ -1507,7 +1524,7 @@ func TestPowerProfile_Reconcile_FeatureNotSupportedErr(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.Nil(t, err)
+		assert.ErrorContains(t, err, "Frequency-Scaling - failed to determine driver")
 	}
 
 }
@@ -1709,6 +1726,20 @@ func TestPowerProfile_Reconcile_UnsupportedGovernor(t *testing.T) {
 		assert.ErrorContains(t, err, "not supported")
 	}
 
+}
+
+func TestPowerProfile_Wrong_Namespace(t *testing.T){
+	r, err := createProfileReconcilerObject([]runtime.Object{})
+	assert.Nil(t, err)
+	req := reconcile.Request{
+		NamespacedName: client.ObjectKey{
+			Name:      "shared",
+			Namespace: "wrong-namespace",
+		},
+	}
+
+	_, err = r.Reconcile(context.TODO(), req)
+	assert.ErrorContains(t, err, "incorrect namespace")
 }
 
 // tests positive and negative cases for SetupWithManager function

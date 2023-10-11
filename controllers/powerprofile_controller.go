@@ -87,8 +87,9 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 	_ = context.Background()
 	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
-		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
-		return ctrl.Result{}, nil
+		err := fmt.Errorf("incorrect namespace")
+		logger.Error(err, "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{Requeue: false}, err
 	}
 	logger.Info("reconciling the power profile")
 
@@ -176,14 +177,14 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 	if profile.Spec.Max < profile.Spec.Min {
 		maxLowerThanMaxError := errors.NewServiceUnavailable("max frequency value cannot be lower than the minimum frequency value")
 		logger.Error(maxLowerThanMaxError, fmt.Sprintf("error creating the profile '%s'", profile.Spec.Name))
-		return ctrl.Result{}, nil
+		return ctrl.Result{Requeue: false}, maxLowerThanMaxError
 	}
 
 	absoluteMaximumFrequency, absoluteMinimumFrequency, err := getMaxMinFrequencyValues()
 	logger.V(5).Info("retrieving the maximum possible frequency and minimum possible frequency from the system")
 	if err != nil {
 		logger.Error(err, "error retrieving the frequency values from the node")
-		return ctrl.Result{}, nil
+		return ctrl.Result{Requeue: false}, err
 	}
 
 	// If the profile is shared then the associated pool will not be created in the power library
@@ -191,7 +192,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		if profile.Spec.Max < absoluteMinimumFrequency || profile.Spec.Min < absoluteMinimumFrequency {
 			frequencyTooLowError := errors.NewServiceUnavailable(fmt.Sprintf("maximum or minimum frequency value cannot be below %d", absoluteMinimumFrequency))
 			logger.Error(frequencyTooLowError, "error creating the shared power profile")
-			return ctrl.Result{}, nil
+			return ctrl.Result{Requeue: false}, frequencyTooLowError
 		}
 		actualEpp := profile.Spec.Epp
 		if !power.IsFeatureSupported(power.EPPFeature) && actualEpp != "" {
@@ -207,12 +208,12 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		powerProfile, err := power.NewPowerProfile(profile.Spec.Name, uint(profile.Spec.Min), uint(profile.Spec.Max), profile.Spec.Governor, actualEpp)
 		if err != nil {
 			logger.Error(err, "could not set the power profile for the shared pool")
-			return ctrl.Result{}, nil
+			return ctrl.Result{Requeue: false}, err
 		}
 		err = r.PowerLibrary.GetSharedPool().SetPowerProfile(powerProfile)
 		if err != nil {
 			logger.Error(err, "could not set the power profile for the shared pool")
-			return ctrl.Result{}, nil
+			return ctrl.Result{Requeue: false}, err
 		}
 
 		logger.V(5).Info(fmt.Sprintf("shared power profile successfully created: name - %s max - %d min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp))
@@ -230,7 +231,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		if profileMaxFreq == 0 || profileMinFreq == 0 {
 			cannotBeZeroError := errors.NewServiceUnavailable("max or min frequency cannot be zero")
 			logger.Error(cannotBeZeroError, fmt.Sprintf("error creating the profile '%s'", profile.Spec.Name))
-			return ctrl.Result{}, nil
+			return ctrl.Result{Requeue: false}, cannotBeZeroError
 		}
 
 		profileFromLibrary := r.PowerLibrary.GetExclusivePool(profile.Spec.Name)
@@ -247,8 +248,8 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		}
 		powerProfile, err := power.NewPowerProfile(profile.Spec.Name, uint(profileMinFreq), uint(profileMaxFreq), profile.Spec.Governor, actualEpp)
 		if err != nil {
-			logger.Error(err, "could not set the power profile")
-			return ctrl.Result{}, nil
+			logger.Error(err, "could not create the power profile")
+			return ctrl.Result{Requeue: false}, err
 		}
 		if profileFromLibrary == nil {
 			pool, err := r.PowerLibrary.AddExclusivePool(profile.Spec.Name)

@@ -615,7 +615,7 @@ func TestTimeOfDayCronJob_Reconcile_ExistingCstates(t *testing.T) {
 }
 
 // tests setting workload when one exists
-func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload(t *testing.T) {
+func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload_Lib_Err(t *testing.T) {
 	nodename := "TestNode"
 	t.Setenv("NODE_NAME", nodename)
 	zone := "Eire"
@@ -682,6 +682,9 @@ func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload(t *testing.T) {
 			Namespace: "intel-power",
 		},
 	}
+	_, teardown, err := fullDummySystem()
+	assert.Nil(t, err)
+	defer teardown()
 	nodemk := new(hostMock)
 	poolmk := new(poolMock)
 	nodemk.On("GetSharedPool").Return(poolmk)
@@ -696,7 +699,7 @@ func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload(t *testing.T) {
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.NoError(t, err)
+	assert.ErrorContains(t, err, "forced library err")
 	// ensure the workload profile has been created
 	workload := powerv1.PowerWorkload{}
 	err = r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
@@ -837,16 +840,13 @@ func TestTimeOfDayCronJob_Reconcile_ErrsSharedPoolExists(t *testing.T) {
 				return c
 			},
 			validateErr: func(e error) bool {
-				return assert.Nil(t, e)
+				return assert.ErrorContains(t, e, "forced library err")
 			},
 		},
 		{
 			testCase: "Test Case 2: client list err",
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
-				poolmk := new(poolMock)
-				nodemk.On("GetSharedPool").Return(poolmk)
-				poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("forced library err"))
 				return nodemk
 			},
 			convertClient: func(c client.Client, cron powerv1.TimeOfDayCronJob) client.Client {
@@ -868,9 +868,6 @@ func TestTimeOfDayCronJob_Reconcile_ErrsSharedPoolExists(t *testing.T) {
 			testCase: "Test Case 3: client get err",
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
-				poolmk := new(poolMock)
-				nodemk.On("GetSharedPool").Return(poolmk)
-				poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("forced library err"))
 				return nodemk
 			},
 			convertClient: func(c client.Client, cron powerv1.TimeOfDayCronJob) client.Client {
@@ -1128,6 +1125,9 @@ func TestTimeOfDayCronJob_Reconcile_ErrsPodTuning(t *testing.T) {
 }
 
 func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
+	_, teardown, err := fullDummySystem()
+	assert.Nil(t, err)
+	defer teardown()
 	// incorrect namespace
 	r, err := createTODCronReconcilerObject([]client.Object{})
 	assert.Nil(t, err)
@@ -1138,7 +1138,7 @@ func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
 		},
 	}
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.Nil(t, err)
+	assert.ErrorContains(t, err, "incorrect namespace")
 	// incorrect node
 	req = reconcile.Request{
 		NamespacedName: client.ObjectKey{
@@ -1147,7 +1147,7 @@ func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
 		},
 	}
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.Nil(t, err)
+	assert.ErrorContains(t, err, "wrong-node")
 	// incorrect timezones
 	nodename := "TestNode"
 	t.Setenv("NODE_NAME", nodename)

@@ -792,6 +792,7 @@ func TestPowerPod_Reconcile_ControllerReturningNil(t *testing.T) {
 		testCase      string
 		nodeName      string
 		podName       string
+		namespace 	  string
 		podResources  []*podresourcesapi.PodResources
 		clientObjs    []runtime.Object
 		workloadNames []string
@@ -800,6 +801,7 @@ func TestPowerPod_Reconcile_ControllerReturningNil(t *testing.T) {
 			testCase: "Test Case 1 - Incorrect Node error",
 			nodeName: "TestNode",
 			podName:  "test-pod-1",
+			namespace: IntelPowerNamespace,
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
@@ -864,10 +866,11 @@ func TestPowerPod_Reconcile_ControllerReturningNil(t *testing.T) {
 			testCase: "Test Case 2 - Kube-System Namespace error",
 			nodeName: "TestNode",
 			podName:  "test-pod-1",
+			namespace: "kube-system",
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
-					Namespace: IntelPowerNamespace,
+					Namespace: "kube-system",
 					Containers: []*podresourcesapi.ContainerResources{
 						{
 							Name:   "test-container-1",
@@ -928,6 +931,7 @@ func TestPowerPod_Reconcile_ControllerReturningNil(t *testing.T) {
 			testCase: "Test Case 3 - Not Exclusive Pod error",
 			nodeName: "TestNode",
 			podName:  "test-pod-1",
+			namespace: IntelPowerNamespace,
 			podResources: []*podresourcesapi.PodResources{
 				{
 					Name:      "test-pod-1",
@@ -1003,7 +1007,7 @@ func TestPowerPod_Reconcile_ControllerReturningNil(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
 				Name:      tc.podName,
-				Namespace: IntelPowerNamespace,
+				Namespace: tc.namespace,
 			},
 		}
 
