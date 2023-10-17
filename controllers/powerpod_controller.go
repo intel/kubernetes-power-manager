@@ -67,7 +67,8 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Delete the Pod from the internal state in case it was never deleted
-			r.State.DeletePodFromState(req.NamespacedName.Name, req.NamespacedName.Namespace)
+			// aAdded the check due to golangcilint errcheck
+			_ = r.State.DeletePodFromState(req.NamespacedName.Name, req.NamespacedName.Namespace)
 			return ctrl.Result{}, nil
 		}
 
@@ -92,7 +93,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 		powerPodState := r.State.GetPodFromState(pod.GetName(), pod.GetNamespace())
 
 		logger.V(5).Info("removing the pod from the internal state")
-		r.State.DeletePodFromState(pod.GetName(), pod.GetNamespace())
+		_ = r.State.DeletePodFromState(pod.GetName(), pod.GetNamespace())
 		workloadToCPUsRemoved := make(map[string][]uint)
 
 		logger.V(5).Info("removing pods CPUs from the internal state")
