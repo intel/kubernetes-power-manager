@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	rt "runtime"
 	"strconv"
 	"strings"
@@ -41,6 +42,7 @@ import (
 const (
 	MaxFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"
 	MinFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"
+	basePath         = "/sys/devices/system/cpu"
 )
 
 // performance          ===>  priority level 0
@@ -331,8 +333,8 @@ func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profil
 		return err
 	}
 
-	numCPUsOnNode := float64(rt.NumCPU())
-	logger.V(5).Info("configuring based on the percentage associated to the specific power profile")
+	numCPUsOnNode := float64(getNumberOfCpus(logger))
+	logger.V(5).Info("Configuring based on the percentage associated to the specific power profile", "CPUS", numCPUsOnNode)
 	numExtendedResources := int64(numCPUsOnNode * profilePercentages[eppValue]["resource"])
 	profilesAvailable := resource.NewQuantity(numExtendedResources, resource.DecimalSI)
 	extendedResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, profileName))
@@ -418,4 +420,46 @@ func checkGovs(profileGovernor string) bool {
 		}
 	}
 	return false
+}
+
+func getNumberOfCpus(logger *logr.Logger) uint {
+	// First, try to get CPUs from sysfs. If the sysfs isn't available
+	// return Number of CPUs from runtime
+	cpusAvailable, err := readStringFromFile(path.Join(basePath, "online"))
+	if err != nil {
+		logger.V(5).Info("Error during online cpus file reading. Returning runtime.", "Runtime CPUS", rt.NumCPU())
+		return uint(rt.NumCPU())
+	}
+
+	// Delete \n character and split the string to get
+	// first and last element
+	cpusAvailable = strings.Replace(cpusAvailable, "\n", "", -1)
+	cpuSlice := strings.Split(cpusAvailable, "-")
+	if len(cpuSlice) < 2 {
+		logger.V(3).Info("Error during CPU slicing. Returning runtime.", "Runtime CPUS", rt.NumCPU())
+		return uint(rt.NumCPU())
+	}
+
+	// Calculate number of CPUs, if an error occurs
+	// return the number of CPUs from runtime
+	firstElement, err := strconv.Atoi(cpuSlice[0])
+	if err != nil {
+		logger.V(3).Info("Error during first element convertion.  Returning runtime.", "Runtime CPUS", rt.NumCPU())
+		return uint(rt.NumCPU())
+	}
+	secondElement, err := strconv.Atoi(cpuSlice[1])
+	if err != nil {
+		logger.V(3).Info("Error during second element convertion.  Returning runtime.", "Runtime CPUS", rt.NumCPU())
+		return uint(rt.NumCPU())
+	}
+	logger.V(3).Info("Success in accounting online CPUS.", "Online CPUS", uint((secondElement-firstElement)+1))
+	return uint((secondElement - firstElement) + 1)
+}
+
+func readStringFromFile(filePath string) (string, error) {
+	valueByte, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	return string(valueByte), nil
 }
