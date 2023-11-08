@@ -1,0 +1,38 @@
+kind: Pod
+apiVersion: v1
+spec:
+  containers:
+  - name: ubuntu-env
+    image: amr-registry.caas.intel.com/owr/ubuntu:20.04
+    tty: true
+    imagePullPolicy: IfNotPresent
+    command: ["cat"]
+  - name: abi-env
+    image: amr-registry.caas.intel.com/owr/abi_lnx:latest
+    tty: true
+    imagePullPolicy: Always
+    command: ["cat"]
+  - name: trivy-env
+    image: aquasec/trivy
+    tty: true
+    imagePullPolicy: IfNotPresent
+    command: ["cat"]
+  - name: kubesec-env
+    image: kubesec/kubesec
+    tty: true
+    imagePullPolicy: Always
+  - name: alpine-env
+    image: alpine
+    tty: true
+    imagePullPolicy: IfNotPresent
+    command: ["cat"]
+  - name: hadolint-env
+    image: hadolint/hadolint:latest-debian
+    tty: true
+    imagePullPolicy: Always
+    command: ["cat"]
+  - name: shellcheck-env
+    image: koalaman/shellcheck-alpine
+    tty: true
+    imagePullPolicy: Always
+    command: ["cat"]
