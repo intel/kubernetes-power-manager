@@ -459,7 +459,7 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 		testCase    string
 		nodeName    string
 		profileName string
-		validateErr   func(e error) bool
+		validateErr func(e error) bool
 		clientObjs  []runtime.Object
 	}{
 		{
@@ -1385,8 +1385,7 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 			validateErr: func(e error) bool {
 				return assert.ErrorContains(t, e, "Set profile err")
 			},
-			clientObjs: []runtime.Object{
-			},
+			clientObjs: []runtime.Object{},
 		},
 	}
 	_, teardown, err := fullDummySystem()
@@ -1728,7 +1727,7 @@ func TestPowerProfile_Reconcile_UnsupportedGovernor(t *testing.T) {
 
 }
 
-func TestPowerProfile_Wrong_Namespace(t *testing.T){
+func TestPowerProfile_Wrong_Namespace(t *testing.T) {
 	r, err := createProfileReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	req := reconcile.Request{

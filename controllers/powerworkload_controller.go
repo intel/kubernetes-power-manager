@@ -188,7 +188,7 @@ func detectCoresRemoved(originalCoreList []uint, updatedCoreList []uint, logger 
 
 func detectCoresAdded(originalCoreList []uint, updatedCoreList []uint, logger *logr.Logger) []uint {
 	var coresAdded []uint
-	logger.V(5).Info("creating the shared pool in the power library")
+	logger.V(5).Info("detecting if cores are added to the cores list")
 	for _, core := range updatedCoreList {
 		if !validateCoreIsInCoreList(core, originalCoreList) {
 			coresAdded = append(coresAdded, core)

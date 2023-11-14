@@ -120,11 +120,14 @@ var defaultWorkload = &powerv1.PowerWorkload{
 		Namespace: IntelPowerNamespace,
 	},
 	Spec: powerv1.PowerWorkloadSpec{
-		Name: "performance-TestNode",
+		Name:         "performance-TestNode",
+		PowerProfile: "performance",
 		Node: powerv1.WorkloadNode{
-			Name:       "TestNode",
-			Containers: []powerv1.Container{},
-			CpuIds:     []uint{},
+			Name: "TestNode",
+			Containers: []powerv1.Container{
+				{PowerProfile: "performance"},
+			},
+			CpuIds: []uint{},
 		},
 	},
 }
@@ -132,13 +135,12 @@ var defaultWorkload = &powerv1.PowerWorkload{
 // runs through some basic cases for the controller with no errors
 func TestPowerPod_Reconcile_Create(t *testing.T) {
 	tcases := []struct {
-		testCase       string
-		nodeName       string
-		podName        string
-		podResources   []*podresourcesapi.PodResources
-		clientObjs     []runtime.Object
-		workloadName   string
-		expectedCpuIds []uint
+		testCase        string
+		nodeName        string
+		podName         string
+		podResources    []*podresourcesapi.PodResources
+		clientObjs      []runtime.Object
+		workloadToCores map[string][]uint
 	}{
 		{
 			testCase: "Test Case 1 - Single container",
@@ -169,13 +171,15 @@ func TestPowerPod_Reconcile_Create(t *testing.T) {
 						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerWorkloadSpec{
-						Name: "performance-TestNode",
+						Name:         "performance-TestNode",
+						PowerProfile: "performance",
 						Node: powerv1.WorkloadNode{
 							Name: "TestNode",
 							Containers: []powerv1.Container{
 								{
 									Name:          "test-container-1",
 									ExclusiveCPUs: []uint{1, 5, 8},
+									PowerProfile:  "performance",
 								},
 							},
 							CpuIds: []uint{1, 5, 8},
@@ -210,8 +214,7 @@ func TestPowerPod_Reconcile_Create(t *testing.T) {
 					},
 				},
 			},
-			workloadName:   "performance-TestNode",
-			expectedCpuIds: []uint{1, 5, 8},
+			workloadToCores: map[string][]uint{"performance-TestNode": {1, 5, 8}},
 		},
 		{
 			testCase: "Test Case 2 - Two containers",
@@ -277,8 +280,108 @@ func TestPowerPod_Reconcile_Create(t *testing.T) {
 					},
 				},
 			},
-			workloadName:   "performance-TestNode",
-			expectedCpuIds: []uint{1, 2, 3, 4, 5, 6},
+			workloadToCores: map[string][]uint{"performance-TestNode": {1, 2, 3, 4, 5, 6}},
+		},
+		{
+			testCase: "Test Case 3 - More Than One Profile",
+			nodeName: "TestNode",
+			podName:  "test-pod-1",
+			podResources: []*podresourcesapi.PodResources{
+				{
+					Name:      "test-pod-1",
+					Namespace: IntelPowerNamespace,
+					Containers: []*podresourcesapi.ContainerResources{
+						{
+							Name:   "test-container-1",
+							CpuIds: []int64{1, 2, 3},
+						},
+						{
+							Name:   "test-container-2",
+							CpuIds: []int64{4, 5, 6},
+						},
+					},
+				},
+			},
+			clientObjs: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "TestNode",
+					},
+				},
+				defaultProfile,
+				defaultWorkload,
+				&powerv1.PowerProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "balance-performance",
+						Namespace: IntelPowerNamespace,
+					},
+					Spec: powerv1.PowerProfileSpec{
+						Name: "balance-performance",
+					},
+				},
+				&powerv1.PowerWorkload{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "balance-performance-TestNode",
+						Namespace: IntelPowerNamespace,
+					},
+					Spec: powerv1.PowerWorkloadSpec{
+						Name:         "balance-performance-TestNode",
+						PowerProfile: "balance-performance",
+						Node: powerv1.WorkloadNode{
+							Name:       "TestNode",
+							Containers: []powerv1.Container{},
+							CpuIds:     []uint{},
+						},
+					},
+				},
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pod-1",
+						Namespace: IntelPowerNamespace,
+						UID:       "abcdefg",
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "TestNode",
+						Containers: []corev1.Container{
+							{
+								Name:      "test-container-1",
+								Resources: defaultResources,
+							},
+							{
+								Name: "test-container-2",
+								Resources: corev1.ResourceRequirements{
+									Limits: map[corev1.ResourceName]resource.Quantity{
+										corev1.ResourceName("cpu"):                                 *resource.NewQuantity(3, resource.DecimalSI),
+										corev1.ResourceName("memory"):                              *resource.NewQuantity(200, resource.DecimalSI),
+										corev1.ResourceName("power.intel.com/balance-performance"): *resource.NewQuantity(3, resource.DecimalSI),
+									},
+									Requests: map[corev1.ResourceName]resource.Quantity{
+										corev1.ResourceName("cpu"):                                 *resource.NewQuantity(3, resource.DecimalSI),
+										corev1.ResourceName("memory"):                              *resource.NewQuantity(200, resource.DecimalSI),
+										corev1.ResourceName("power.intel.com/balance-performance"): *resource.NewQuantity(3, resource.DecimalSI),
+									},
+								},
+							},
+						},
+						EphemeralContainers: []corev1.EphemeralContainer{},
+					},
+					Status: corev1.PodStatus{
+						Phase:    corev1.PodRunning,
+						QOSClass: corev1.PodQOSGuaranteed,
+						ContainerStatuses: []corev1.ContainerStatus{
+							{
+								Name:        "example-container-1",
+								ContainerID: "docker://abcdefg",
+							},
+							{
+								Name:        "example-container-2",
+								ContainerID: "docker://abcdefg",
+							},
+						},
+					},
+				},
+			},
+			workloadToCores: map[string][]uint{"performance-TestNode": {1, 2, 3}, "balance-performance-TestNode": {4, 5, 6}},
 		},
 	}
 
@@ -299,20 +402,21 @@ func TestPowerPod_Reconcile_Create(t *testing.T) {
 
 		_, err = r.Reconcile(context.TODO(), req)
 		assert.Nil(t, err)
+		for test_workload, cores := range tc.workloadToCores {
+			workload := &powerv1.PowerWorkload{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name:      test_workload,
+				Namespace: IntelPowerNamespace,
+			}, workload)
+			assert.Nil(t, err)
 
-		workload := &powerv1.PowerWorkload{}
-		err = r.Client.Get(context.TODO(), client.ObjectKey{
-			Name:      tc.workloadName,
-			Namespace: IntelPowerNamespace,
-		}, workload)
-		assert.Nil(t, err)
-
-		sortedCpuIds := workload.Spec.Node.CpuIds
-		sort.Slice(workload.Spec.Node.CpuIds, func(i, j int) bool {
-			return workload.Spec.Node.CpuIds[i] < workload.Spec.Node.CpuIds[j]
-		})
-		if !reflect.DeepEqual(tc.expectedCpuIds, sortedCpuIds) {
-			t.Errorf("%s failed: expected CPU Ids to be %v, got %v", tc.testCase, tc.expectedCpuIds, sortedCpuIds)
+			sortedCpuIds := workload.Spec.Node.CpuIds
+			sort.Slice(workload.Spec.Node.CpuIds, func(i, j int) bool {
+				return workload.Spec.Node.CpuIds[i] < workload.Spec.Node.CpuIds[j]
+			})
+			if !reflect.DeepEqual(cores, sortedCpuIds) {
+				t.Errorf("%s failed: expected CPU Ids to be %v, got %v", tc.testCase, cores, sortedCpuIds)
+			}
 		}
 	}
 }
@@ -397,7 +501,7 @@ func TestPowerPod_Reconcile_NonExistingWorkload(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.Nil(t, err)
+		assert.ErrorContains(t, err, "recoverable")
 
 		workload := &powerv1.PowerWorkload{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
@@ -530,97 +634,7 @@ func TestPowerPod_Reconcile_ControllerErrors(t *testing.T) {
 			},
 		},
 		{
-			testCase: "Test Case 3 - More Than One Profile error",
-			nodeName: "TestNode",
-			podName:  "test-pod-1",
-			podResources: []*podresourcesapi.PodResources{
-				{
-					Name:      "test-pod-1",
-					Namespace: IntelPowerNamespace,
-					Containers: []*podresourcesapi.ContainerResources{
-						{
-							Name:   "test-container-1",
-							CpuIds: []int64{1, 2, 3},
-						},
-					},
-				},
-			},
-			clientObjs: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "TestNode",
-					},
-				},
-				defaultProfile,
-				defaultWorkload,
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "balance-performance-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{
-						Name: "balance-performance-TestNode",
-						Node: powerv1.WorkloadNode{
-							Name:       "TestNode",
-							Containers: []powerv1.Container{},
-							CpuIds:     []uint{},
-						},
-					},
-				},
-				&corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-pod-1",
-						Namespace: IntelPowerNamespace,
-						UID:       "abcdefg",
-					},
-					Spec: corev1.PodSpec{
-						NodeName: "TestNode",
-						Containers: []corev1.Container{
-							{
-								Name:      "test-container-1",
-								Resources: defaultResources,
-							},
-							{
-								Name: "test-container-2",
-								Resources: corev1.ResourceRequirements{
-									Limits: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                                 *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                              *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/balance-performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-									Requests: map[corev1.ResourceName]resource.Quantity{
-										corev1.ResourceName("cpu"):                                 *resource.NewQuantity(3, resource.DecimalSI),
-										corev1.ResourceName("memory"):                              *resource.NewQuantity(200, resource.DecimalSI),
-										corev1.ResourceName("power.intel.com/balance-performance"): *resource.NewQuantity(3, resource.DecimalSI),
-									},
-								},
-							},
-						},
-						EphemeralContainers: []corev1.EphemeralContainer{},
-					},
-					Status: corev1.PodStatus{
-						Phase:    corev1.PodRunning,
-						QOSClass: corev1.PodQOSGuaranteed,
-						ContainerStatuses: []corev1.ContainerStatus{
-							{
-								Name:        "example-container-1",
-								ContainerID: "docker://abcdefg",
-							},
-							{
-								Name:        "example-container-2",
-								ContainerID: "docker://abcdefg",
-							},
-						},
-					},
-				},
-			},
-			workloadNames: []string{
-				"performance-TestNode",
-				"balance-performance-TestNode",
-			},
-		},
-		{
-			testCase: "Test Case 4 - Resource Mismatch error",
+			testCase: "Test Case 3 - Resource Mismatch error",
 			nodeName: "TestNode",
 			podName:  "test-pod-1",
 			podResources: []*podresourcesapi.PodResources{
@@ -687,7 +701,7 @@ func TestPowerPod_Reconcile_ControllerErrors(t *testing.T) {
 			},
 		},
 		{
-			testCase: "Test Case 5 - Profile CR Does Not Exist error",
+			testCase: "Test Case 4 - Profile CR Does Not Exist error",
 			nodeName: "TestNode",
 			podName:  "test-pod-1",
 			podResources: []*podresourcesapi.PodResources{
@@ -792,15 +806,15 @@ func TestPowerPod_Reconcile_ControllerReturningNil(t *testing.T) {
 		testCase      string
 		nodeName      string
 		podName       string
-		namespace 	  string
+		namespace     string
 		podResources  []*podresourcesapi.PodResources
 		clientObjs    []runtime.Object
 		workloadNames []string
 	}{
 		{
-			testCase: "Test Case 1 - Incorrect Node error",
-			nodeName: "TestNode",
-			podName:  "test-pod-1",
+			testCase:  "Test Case 1 - Incorrect Node error",
+			nodeName:  "TestNode",
+			podName:   "test-pod-1",
 			namespace: IntelPowerNamespace,
 			podResources: []*podresourcesapi.PodResources{
 				{
@@ -863,9 +877,9 @@ func TestPowerPod_Reconcile_ControllerReturningNil(t *testing.T) {
 			},
 		},
 		{
-			testCase: "Test Case 2 - Kube-System Namespace error",
-			nodeName: "TestNode",
-			podName:  "test-pod-1",
+			testCase:  "Test Case 2 - Kube-System Namespace error",
+			nodeName:  "TestNode",
+			podName:   "test-pod-1",
 			namespace: "kube-system",
 			podResources: []*podresourcesapi.PodResources{
 				{
@@ -928,9 +942,9 @@ func TestPowerPod_Reconcile_ControllerReturningNil(t *testing.T) {
 			},
 		},
 		{
-			testCase: "Test Case 3 - Not Exclusive Pod error",
-			nodeName: "TestNode",
-			podName:  "test-pod-1",
+			testCase:  "Test Case 3 - Not Exclusive Pod error",
+			nodeName:  "TestNode",
+			podName:   "test-pod-1",
 			namespace: IntelPowerNamespace,
 			podResources: []*podresourcesapi.PodResources{
 				{
@@ -1069,13 +1083,15 @@ func TestPowerPod_Reconcile_Delete(t *testing.T) {
 						Namespace: IntelPowerNamespace,
 					},
 					Spec: powerv1.PowerWorkloadSpec{
-						Name: "performance-TestNode",
+						Name:         "performance-TestNode",
+						PowerProfile: "performance",
 						Node: powerv1.WorkloadNode{
 							Name: "TestNode",
 							Containers: []powerv1.Container{
 								{
 									Name:          "existing container",
 									ExclusiveCPUs: []uint{1, 2, 3},
+									PowerProfile:  "performance",
 								},
 							},
 							CpuIds: []uint{1, 2, 3, 4},
