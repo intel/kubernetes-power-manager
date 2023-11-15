@@ -19,7 +19,7 @@ COPY pkg/ pkg/
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
-FROM clearlinux@sha256:d3dd73575d2eb9c6ffb635c82b266fa9266591db844ac9f41014c0af415992c9
+FROM clearlinux@sha256:41c996dd143d65e23f81441cad5305798c16f89ea74728714a9419beb25b3314
 WORKDIR /
 COPY --from=builder /workspace/manager .
 COPY build/manifests/ /power-manifests/
