@@ -35,6 +35,12 @@ spec:
           spec:
             description: PowerNodeSpec defines the desired state of PowerNode
             properties:
+              customDevices:
+                description: The CustomDevices include alternative devices that represent
+                  other resources
+                items:
+                  type: string
+                type: array
               nodeName:
                 description: The name of the node
                 type: string

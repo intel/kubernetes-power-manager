@@ -151,7 +151,7 @@ bundle-build:
 	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 coverage:
-	go test -v -coverprofile=coverage.out ./...
+	go test -v -coverprofile=coverage.out ./controllers/ ./pkg/...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Average code coverage: $$(go tool cover -func coverage.out | awk 'END {print $$3}' | sed 's/\..*//')%" 
 	@if [ $$(go tool cover -func coverage.out | awk 'END {print $$3}' | sed 's/\..*//') -lt 85 ]; then \

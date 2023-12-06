@@ -78,6 +78,11 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 		}
 		return ctrl.Result{RequeueAfter: queuetime}, err
 	}
+
+	if len(powerNode.Spec.CustomDevices) > 0 {
+		logger.V(5).Info("the power node contains the following custom devices.", "Custom Devices", powerNode.Spec.CustomDevices)
+	}
+
 	powerProfiles := &powerv1.PowerProfileList{}
 	logger.V(5).Info("retrieving the power profile list")
 	err = r.Client.List(context.TODO(), powerProfiles)

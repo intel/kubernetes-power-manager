@@ -59,7 +59,9 @@ var defaultNode = &powerv1.PowerNode{
 		Name:      "TestNode",
 		Namespace: IntelPowerNamespace,
 	},
-	Spec: powerv1.PowerNodeSpec{},
+	Spec: powerv1.PowerNodeSpec{
+		CustomDevices: []string{"device-plugin"},
+	},
 }
 var defaultProf = &powerv1.PowerProfile{
 	ObjectMeta: metav1.ObjectMeta{

@@ -75,6 +75,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 						PowerProfiles: []string{
 							"performance",
 						},
+						CustomDevices: []string{"device-plugin"},
 					},
 				},
 				&corev1.Node{
