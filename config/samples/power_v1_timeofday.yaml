@@ -1,0 +1,51 @@
+apiVersion: power.intel.com/v1
+kind: TimeOfDay
+metadata:
+  labels:
+      app.kubernetes.io/name: TimeOfDay
+      app.kubernetes.io/instance: timeofday-sample
+      app.kubernetes.io/part-of: kubernetes-power-manager
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/created-by: kubernetes-power-manager
+  name: timeofday-sample
+  namespace: intel-power
+spec:
+  timeZone: "Eire"
+  schedule:
+    - time: "10:04"
+      # this sets the profile for the shared pool
+      powerProfile: balance-power
+      # this transitions exclusive pods matching a given label from one profile to another
+      # please ensure that only pods to be used by power manager have this label
+      pods:
+        - labels:
+            matchLabels:
+              power: "true"
+          target: performance
+        - labels:
+            matchLabels:
+              special: "false"
+          target: balance-performance
+      # this field simply takes a cstate spec
+      cState:
+        sharedPoolCStates:
+          C1: false
+          C6: true
+    - time: "14:48:00"
+      powerProfile: shared
+      cState:
+        sharedPoolCStates:
+          C1: true
+          C6: false
+      pods:
+      - labels:
+          matchLabels:
+            power: "true"
+        target: performance
+      - labels:
+          matchLabels:
+            special: "false"
+        target: balance-power
+    - time: "14:35"
+      powerProfile: balance-power
+  reservedCPUs: [ 0,1 ]

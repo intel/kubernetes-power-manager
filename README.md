@@ -882,11 +882,11 @@ The example Shared PowerWorkload in examples/example-shared-workload.yaml contai
 apiVersion: "power.intel.com/v1"
 kind: PowerWorkload
 metadata:
-  # Replace <NODE_NAME> with the Node you intend this PowerWorkload to be associated with
+  # Replace <NODE_NAME> with the Node associated with PowerWorkload 
   name: shared-<NODE_NAME>-workload
   namespace: intel-power
 spec:
-  # Replace <NODE_NAME> with the Node you intend this PowerWorkload to be associated with
+  # Replace <NODE_NAME> with the Node associated with PowerWorkload 
   name: "shared-<NODE_NAME>-workload"
   allCores: true
   reservedCPUs:

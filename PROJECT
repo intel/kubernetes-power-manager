@@ -3,7 +3,7 @@ layout:
 - go.kubebuilder.io/v2
 plugins:
   go.sdk.operatorframework.io/v2-alpha: {}
-projectName: kubernetes-power-manager
+projectName: intel-kubernetes-power-manager
 repo: github.com/intel/kubernetes-power-manager
 resources:
 - domain: intel.com

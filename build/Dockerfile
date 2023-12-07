@@ -1,3 +1,4 @@
+ARG IMAGE=clearlinux@sha256:d3dd73575d2eb9c6ffb635c82b266fa9266591db844ac9f41014c0af415992c9
 # Build the manager binary
 FROM golang@sha256:403f48633fb5ebd49f9a2b6ad6719f912df23dae44974a0c9445be331e72ff5e as builder
 
@@ -19,8 +20,9 @@ COPY pkg/ pkg/
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
-FROM clearlinux@sha256:41c996dd143d65e23f81441cad5305798c16f89ea74728714a9419beb25b3314
+FROM ${IMAGE}
 WORKDIR /
+COPY LICENSE /licenses/LICENSE
 COPY --from=builder /workspace/manager .
 COPY build/manifests/ /power-manifests/
 USER 10001

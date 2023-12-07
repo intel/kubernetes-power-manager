@@ -1,6 +1,12 @@
 apiVersion: power.intel.com/v1
 kind: PowerWorkload
 metadata:
+  labels:
+    app.kubernetes.io/name: PowerWorkload
+    app.kubernetes.io/instance: shared-<NODE_NAME>-workload
+    app.kubernetes.io/part-of: kubernetes-power-manager
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: kubernetes-power-manager
   # Replace <NODE_NAME> with the Node associated with PowerWorkload 
   name: shared-<NODE_NAME>-workload
   namespace: intel-power

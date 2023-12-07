@@ -1,7 +1,12 @@
+export APP_NAME=intel-kubernetes-power-manager
 # Current Operator version
-VERSION ?= 0.0.1
+VERSION ?= 2.3.1
 # Default bundle image tag
-BUNDLE_IMG ?= controller-bundle:$(VERSION)
+BUNDLE_IMG ?= intel-kubernetes-power-manager-bundle:$(VERSION)
+# version of ocp being supported
+OCP_VERSION=4.13
+# image used for building the dockerfile for ocp
+OCP_IMAGE=redhat/ubi9-minimal@sha256:35c99977ee5baa359bdc80f9ccc360644d2dbccb7462ca0fd97a23170a00cfd1
 # Options for 'bundle-build'
 ifneq ($(origin CHANNELS), undefined)
 BUNDLE_CHANNELS := --channels=$(CHANNELS)
@@ -10,18 +15,40 @@ ifneq ($(origin DEFAULT_CHANNEL), undefined)
 BUNDLE_DEFAULT_CHANNEL := --default-channel=$(DEFAULT_CHANNEL)
 endif
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
+IMGTOOL ?= docker
+CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:v$(VERSION)
+
+ifneq (, $(IMAGE_REGISTRY))
+IMAGE_TAG_BASE = $(IMAGE_REGISTRY)/$(APP_NAME)
+else
+IMAGE_TAG_BASE = $(APP_NAME)
+endif
+
+TLS_VERIFY ?= false
+
+# The image tag given to the resulting catalog image (e.g. make catalog-build CATALOG_IMG=example.com/operator-catalog:v0.2.0).
+CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:v$(VERSION)
+
+# Set CATALOG_BASE_IMG to an existing catalog image tag to add $BUNDLE_IMGS to that image.
+ifneq ($(origin CATALOG_BASE_IMG), undefined)
+FROM_INDEX_OPT := --from-index $(CATALOG_BASE_IMG)
+endif
+
+BUNDLE_IMGS ?= $(BUNDLE_IMG)
+
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:crdVersions=v1"
-
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
 else
 GOBIN=$(shell go env GOBIN)
 endif
+
+.PHONY: all test build images images-ocp run
 
 all: manifests generate install
 
@@ -37,18 +64,26 @@ build: generate manifests install
 
 # Build the Manager and Node Agent images
 images: generate manifests install
-	docker build -f build/Dockerfile -t intel/power-operator:v2.3.1 .
-	docker build -f build/Dockerfile.nodeagent -t intel/power-node-agent:v2.3.1 .
+	 $(IMGTOOL) build -f build/Dockerfile -t intel/power-operator:v$(VERSION) .
+	 $(IMGTOOL) build -f build/Dockerfile.nodeagent -t intel/power-node-agent:v$(VERSION) .
 
+images-ocp: generate manifests install
+	 $(IMGTOOL) build --build-arg="IMAGE=$(OCP_IMAGE)" -f build/Dockerfile -t intel/power-operator_ocp-$(OCP_VERSION):v$(VERSION) .
+	 $(IMGTOOL) build --build-arg="IMAGE=$(OCP_IMAGE)" -f build/Dockerfile.nodeagent -t intel/power-node-agent_ocp-$(OCP_VERSION):v$(VERSION) .
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
 	go run ./main.go
 
-helm-install: generate manifests install
+.PHONY: helm-install helm-uninstall helm-install-v2.3.0 helm-uninstall-v2.3.0 helm-install-ocp helm-uninstall-ocp
+helm-install:
 	helm install kubernetes-power-manager-v2.3.1 ./helm/kubernetes-power-manager-v2.3.1
-
 helm-uninstall:
 	helm uninstall kubernetes-power-manager-v2.3.1
+helm-install-ocp: generate manifests install
+	helm install kubernetes-power-manager-ocp-4.13-v2.3.1 ./helm/kubernetes-power-manager-ocp-4.13-v$(VERSION)
+
+helm-uninstall-ocp:
+	helm uninstall kubernetes-power-manager-ocp-4.13-v2.3.1
 
 helm-install-v2.3.0: generate manifests install
 	helm install kubernetes-power-manager-v2.3.0 ./helm/kubernetes-power-manager-v2.3.0
@@ -56,6 +91,7 @@ helm-install-v2.3.0: generate manifests install
 helm-uninstall-v2.3.0:
 	helm uninstall kubernetes-power-manager-v2.3.0
 
+.PHONY: helm-install-v2.2.0 helm-uninstall-v2.2.0 helm-install-v2.1.0 helm-uninstall-v2.1.0 helm-install-v2.0.0 helm-uninstall-v2.0.0
 helm-install-v2.2.0: generate manifests install
 	helm install kubernetes-power-manager-v2.2.0 ./helm/kubernetes-power-manager-v2.2.0
 
@@ -74,6 +110,7 @@ helm-install-v2.0.0: generate manifests install
 helm-uninstall-v2.0.0:
 	helm uninstall kubernetes-power-manager-v2.0.0
 
+.PHONY: install uninstall deploy manifests fmt vet tls
 # Install CRDs into a cluster
 install: manifests kustomize
 	$(KUSTOMIZE) build config/crd | kubectl apply -f -
@@ -89,7 +126,14 @@ deploy: manifests kustomize
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+ifeq (, $(OCP))
+	sed -i 's/- .*\/rbac\.yaml/- \.\/rbac.yaml/' config/rbac/kustomization.yaml
+	sed -i 's/- .*\/role\.yaml/- \.\/role.yaml/' config/rbac/kustomization.yaml
+else
+	sed -i 's/- .*\/rbac\.yaml/- \.\/ocp\/rbac.yaml/' config/rbac/kustomization.yaml
+	sed -i 's/- .*\/role\.yaml/- \.\/ocp\/role.yaml/' config/rbac/kustomization.yaml
+endif
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook crd paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
 fmt:
@@ -103,21 +147,29 @@ vet:
 tls:
 	./build/gen_test_certs.sh
 
+.PHONY: generate build-controller build-agent build-controller-ocp build-agent-ocp
 # Generate code
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 # Build the Manager's image
 build-controller:
-	docker build -f build/Dockerfile -t intel-power-operator .
+	$(IMGTOOL) build -f build/Dockerfile -t intel-power-operator .
 
 # Build the Node Agent's image
 build-agent:
-	docker build -f build/Dockerfile.nodeagent -t intel-power-node-agent .
+	$(IMGTOOL) build -f build/Dockerfile.nodeagent -t intel-power-node-agent .
 
-# Push the docker image
-docker-push:
-	docker push ${IMG}
+build-controller-ocp:
+	$(IMGTOOL) build --build-arg="IMAGE=$(OCP_IMAGE)" -f build/Dockerfile -t intel/power-operator_ocp-$(OCP_VERSION):v$(VERSION) .
+
+build-agent-ocp:
+	$(IMGTOOL) build --build-arg="IMAGE=$(OCP_IMAGE)" -f build/Dockerfile.nodeagent -t intel/power-node-agent_ocp-$(OCP_VERSION):v$(VERSION) .
+
+.PHONY: docker-push controller-gen kustomize bundle bundle-build bundle-push
+# Push the image
+push:
+	$(IMGTOOL) push ${IMG}
 
 # find or download controller-gen
 # download controller-gen if necessary
@@ -138,17 +190,52 @@ KUSTOMIZE=$(shell which kustomize)
 endif
 
 # Generate bundle manifests and metadata, then validate generated files.
-.PHONY: bundle
-bundle: manifests
+bundle: update manifests kustomize
+# directory used to get image name for bundle
+ifeq (, $(OCP))
+	sed -i 's/\.\.\/manager.*$$/\.\.\/manager/' config/default/kustomization.yaml
+else
+	sed -i 's/\.\.\/manager.*$$/\.\.\/manager\/ocp/' config/default/kustomization.yaml
+	sed -i 's/- .*rbac\.yaml/- \.\/ocp\/rbac.yaml/' config/rbac/kustomization.yaml
+	sed -i 's/- .*role\.yaml/- \.\/ocp\/role.yaml/' config/rbac/kustomization.yaml
+endif
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --use-image-digests --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS) 
 	operator-sdk bundle validate ./bundle
 
 # Build the bundle image.
-.PHONY: bundle-build
 bundle-build:
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	$(IMGTOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+# Push bundle image
+bundle-push:
+	$(IMGTOOL) push $(BUNDLE_IMG)
+.PHONY: opm catalog-build catalog-push coverage update
+OPM_VERSION = v1.26.2
+OPM = ./bin/opm
+opm: ## Download opm locally if necessary.
+ifeq (,$(wildcard $(OPM)))
+ifeq (,$(shell which opm 2>/dev/null))
+	@{ \
+	set -e ;\
+	mkdir -p $(dir $(OPM)) ;\
+	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
+	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/${OPM_VERSION}/$${OS}-$${ARCH}-opm ;\
+	chmod +x $(OPM) ;\
+	}
+else
+OPM = $(shell which opm)
+endif
+endif
+
+.PHONY: catalog-build
+catalog-build: opm ## Build a catalog image.
+	$(OPM) index add --container-tool $(IMGTOOL) --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(if ifeq $(TLS_VERIFY) false, --skip-tls) $(FROM_INDEX_OPT)
+
+# Push the catalog image.
+.PHONY: catalog-push
+catalog-push: ## Push a catalog image.
+	 $(IMGTOOL) push ${CATALOG_IMG}
 
 coverage:
 	go test -v -coverprofile=coverage.out ./controllers/ ./pkg/...
@@ -157,3 +244,9 @@ coverage:
 	@if [ $$(go tool cover -func coverage.out | awk 'END {print $$3}' | sed 's/\..*//') -lt 85 ]; then \
 		echo "WARNING: Total unit test coverage below 85%"; false; \
 	fi
+
+update:
+	sed -i 's/intel\/power-operator.*$$/intel\/power-operator:v$(VERSION)/' config/manager/manager.yaml
+	sed -i 's/intel\/power-operator.*$$/intel\/power-operator_ocp-$(OCP_VERSION):v$(VERSION)/' config/manager/ocp/manager.yaml
+	sed -i 's/intel\/power-node-agent.*$$/intel\/power-node-agent:v$(VERSION)/' build/manifests/power-node-agent-ds.yaml
+	sed -i 's/intel\/power-node-agent.*$$/intel\/power-node-agent_ocp-$(OCP_VERSION):v$(VERSION)/' build/manifests/ocp/power-node-agent-ds.yaml
