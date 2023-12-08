@@ -44,7 +44,7 @@ type PowerWorkloadSpec struct {
 
 	// Reserved CPUs are the CPUs that have been reserved by Kubelet for use by the Kubernetes admin process
 	// This list must match the list in the user's Kubelet configuration
-	ReservedCPUs []uint `json:"reservedCPUs,omitempty"`
+	ReservedCPUs []ReservedSpec `json:"reservedCPUs,omitempty"`
 
 	// The labels signifying the nodes the user wants to use
 	PowerNodeSelector map[string]string `json:"powerNodeSelector,omitempty"`
@@ -58,6 +58,10 @@ type PowerWorkloadSpec struct {
 	PowerProfile string `json:"powerProfile,omitempty"`
 }
 
+type ReservedSpec struct {
+	Cores [] uint `json:"cores"`
+	PowerProfile string `json:"powerProfile,omitempty"`
+}
 // PowerWorkloadStatus defines the observed state of PowerWorkload
 type PowerWorkloadStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster

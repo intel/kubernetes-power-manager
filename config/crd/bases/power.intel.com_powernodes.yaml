@@ -79,6 +79,10 @@ spec:
                 items:
                   type: string
                 type: array
+              reservedPools:
+                items:
+                  type: string
+                type: array
               sharedPool:
                 type: string
               unaffectedCores:

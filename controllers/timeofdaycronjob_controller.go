@@ -159,7 +159,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 						Spec: powerv1.PowerWorkloadSpec{
 							Name:         workloadName,
 							AllCores:     true,
-							ReservedCPUs: *cronJob.Spec.ReservedCPUs,
+							ReservedCPUs: []powerv1.ReservedSpec{{Cores: *cronJob.Spec.ReservedCPUs}},
 							Node: powerv1.WorkloadNode{
 								Name: nodeName,
 							},

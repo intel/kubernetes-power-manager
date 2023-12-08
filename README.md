@@ -367,8 +367,8 @@ spec:
   name: "shared-example-node-workload"
   allCores: true
   reservedCPUs:
-    - 0
-    - 1
+    - cores: [0, 1]
+      profile: "performance"
   powerNodeSelector:
     # Labels other than hostname can be used
     - “kubernetes.io/hostname”: “example-node”
@@ -879,7 +879,7 @@ Apply the Profile:
 The example Shared PowerWorkload in examples/example-shared-workload.yaml contains the following PowerWorkload spec:
 
 ````yaml
-apiVersion: "power.intel.com/v1"
+apiVersion: power.intel.com/v1
 kind: PowerWorkload
 metadata:
   # Replace <NODE_NAME> with the Node associated with PowerWorkload 
@@ -891,20 +891,24 @@ spec:
   allCores: true
   reservedCPUs:
     # IMPORTANT: The CPUs in reservedCPUs should match the value of the reserved system CPUs in your Kubelet config file
-    - 0
-    - 1
+    - cores: [0, 1]
   powerNodeSelector:
     # The label must be as below, as this workload will be specific to the Node
     kubernetes.io/hostname: <NODE_NAME>
   # Replace this value with the intended shared PowerProfile
   powerProfile: "shared"
+
 ````
 
 Replace the necessary values with those that correspond to your cluster and apply the Workload:
 `kubectl apply -f examples/example-shared-workload.yaml`
 
-Once created the workload controller will see its creation and create the corresponding Pool in all of the cores on the
-system except for the reservedCPUs will be brought down to this lower frequency level.
+Once created the workload controller will see its creation and create the corresponding Pool. All of the cores on the
+system except the reservedCPUs will then be brought down to this lower frequency level. 
+The reservedCPUs will be kept at the system default min and max frequency by default. If the user specifies a profile along with a set of reserved 
+cores then a separate pool will be created for those cores and that profile. If an invalid profile is supplied the cores will instead be placed in
+the default reserved pool with system defaults. It should be noted that in most instances leaving these cores at system defaults is the best approach 
+to prevent important k8s or kernel related processes from becoming starved.
 
 - **Performance Pod**
 

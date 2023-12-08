@@ -56,7 +56,16 @@ spec:
                   Kubelet for use by the Kubernetes admin process This list must match
                   the list in the user's Kubelet configuration
                 items:
-                  type: integer
+                  properties:
+                    cores:
+                      items:
+                        type: integer
+                      type: array
+                    powerProfile:
+                      type: string
+                  required:
+                  - cores
+                  type: object
                 type: array
               workloadNodes:
                 properties:

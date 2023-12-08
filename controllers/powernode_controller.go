@@ -22,6 +22,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -171,12 +172,18 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 		cores := prettifyCoreList(sharedCores)
 		powerNode.Spec.SharedPool = fmt.Sprintf("%s || %v || %v || %s", sharedProfile.Name(), sharedProfile.MaxFreq(), sharedProfile.MinFreq(), cores)
 	}
-
-	if len(reservedSystemCpus) > 0 {
-		logger.V(5).Info("configurating the cores to the reserved pool")
-		cores := prettifyCoreList(reservedSystemCpus)
-		powerNode.Spec.UneffectedCores = cores
+	// look for any special reserved pools
+	pools := r.PowerLibrary.GetAllExclusivePools()
+	powerNode.Spec.ReservedPools = []string{}
+	for _, pool := range *pools {
+		if strings.Contains(pool.Name(), nodeName+"-reserved-") {
+			cores := prettifyCoreList(pool.Cpus().IDs())
+			powerNode.Spec.ReservedPools = append(powerNode.Spec.ReservedPools, fmt.Sprintf("%v || %v || %s", pool.GetPowerProfile().MaxFreq(), pool.GetPowerProfile().MinFreq(), cores))
+		}
 	}
+	logger.V(5).Info("configurating the cores to the reserved pool")
+	cores := prettifyCoreList(reservedSystemCpus)
+	powerNode.Spec.UnaffectedCores = cores
 	err = r.Client.Update(context.TODO(), powerNode)
 	if err != nil {
 		return ctrl.Result{RequeueAfter: queuetime}, err

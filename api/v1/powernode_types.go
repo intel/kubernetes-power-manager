@@ -37,7 +37,9 @@ type PowerNodeSpec struct {
 
 	SharedPool string `json:"sharedPool,omitempty"`
 
-	UneffectedCores string `json:"unaffectedCores,omitempty"`
+	UnaffectedCores string `json:"unaffectedCores,omitempty"`
+
+	ReservedPools []string `json:"reservedPools,omitempty"`
 
 	// Information about the containers in the cluster utilizing some PowerWorkload
 	PowerContainers []Container `json:"powerContainers,omitempty"`
