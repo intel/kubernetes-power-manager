@@ -1,0 +1,1239 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: cstates.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: CStates
+    listKind: CStatesList
+    plural: cstates
+    singular: cstates
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: CStates is the Schema for the cstates API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: CStatesSpec defines the desired state of CStates
+            properties:
+              exclusivePoolCStates:
+                additionalProperties:
+                  additionalProperties:
+                    type: boolean
+                  type: object
+                type: object
+              individualCoreCStates:
+                additionalProperties:
+                  additionalProperties:
+                    type: boolean
+                  type: object
+                type: object
+              sharedPoolCStates:
+                additionalProperties:
+                  type: boolean
+                type: object
+            type: object
+          status:
+            description: CStatesStatus defines the observed state of CStates
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: powerconfigs.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: PowerConfig
+    listKind: PowerConfigList
+    plural: powerconfigs
+    singular: powerconfig
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: PowerConfig is the Schema for the powerconfigs API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PowerConfigSpec defines the desired state of PowerConfig
+            properties:
+              customDevices:
+                description: The CustomDevices include alternative devices that represent
+                  other resources
+                items:
+                  type: string
+                type: array
+              powerNodeSelector:
+                additionalProperties:
+                  type: string
+                description: The label on the Nodes you the Operator will look for
+                  to deploy the Node Agent
+                type: object
+              powerProfiles:
+                description: The PowerProfiles that will be created by the Operator
+                items:
+                  type: string
+                type: array
+            type: object
+          status:
+            description: PowerConfigStatus defines the observed state of PowerConfig
+            properties:
+              nodes:
+                description: The Nodes that the Node Agent has been deployed to
+                items:
+                  type: string
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: powernodes.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: PowerNode
+    listKind: PowerNodeList
+    plural: powernodes
+    singular: powernode
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: PowerNode is the Schema for the powernodes API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PowerNodeSpec defines the desired state of PowerNode
+            properties:
+              customDevices:
+                description: The CustomDevices include alternative devices that represent
+                  other resources
+                items:
+                  type: string
+                type: array
+              nodeName:
+                description: The name of the node
+                type: string
+              powerContainers:
+                description: Information about the containers in the cluster utilizing
+                  some PowerWorkload
+                items:
+                  properties:
+                    exclusiveCpus:
+                      description: The exclusive CPUs given to this Container
+                      items:
+                        type: integer
+                      type: array
+                    id:
+                      description: The ID of the Container
+                      type: string
+                    name:
+                      description: The name of the Container
+                      type: string
+                    pod:
+                      description: The name of the Pod the Container is running on
+                      type: string
+                    powerProfile:
+                      description: The PowerProfile that the Container is utilizing
+                      type: string
+                    workload:
+                      description: The PowerWorkload that the Container is utilizing
+                      type: string
+                  type: object
+                type: array
+              powerProfiles:
+                items:
+                  type: string
+                type: array
+              powerWorkloads:
+                items:
+                  type: string
+                type: array
+              sharedPool:
+                type: string
+              unaffectedCores:
+                type: string
+            type: object
+          status:
+            description: PowerNodeStatus defines the observed state of PowerNode
+            properties:
+              powerNodeCPUState:
+                description: The state of the Guaranteed Pods and Shared Pool in a
+                  cluster
+                properties:
+                  guaranteedPods:
+                    description: Pods that are requesting CPUs in the Guaranteed QoS
+                      class
+                    items:
+                      properties:
+                        containers:
+                          description: The Containers that are running in the Pod
+                          items:
+                            properties:
+                              exclusiveCpus:
+                                description: The exclusive CPUs given to this Container
+                                items:
+                                  type: integer
+                                type: array
+                              id:
+                                description: The ID of the Container
+                                type: string
+                              name:
+                                description: The name of the Container
+                                type: string
+                              pod:
+                                description: The name of the Pod the Container is
+                                  running on
+                                type: string
+                              powerProfile:
+                                description: The PowerProfile that the Container is
+                                  utilizing
+                                type: string
+                              workload:
+                                description: The PowerWorkload that the Container
+                                  is utilizing
+                                type: string
+                            type: object
+                          type: array
+                        name:
+                          description: The name of the Pod
+                          type: string
+                        namespace:
+                          type: string
+                        node:
+                          description: The name of the Node the Pod is running on
+                          type: string
+                        uid:
+                          description: The UID of the Pod
+                          type: string
+                      type: object
+                    type: array
+                  sharedPool:
+                    description: The CPUs that are currently part of the Shared pool
+                      on a Node
+                    items:
+                      type: integer
+                    type: array
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: powerpods.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: PowerPod
+    listKind: PowerPodList
+    plural: powerpods
+    singular: powerpod
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: PowerPod is the Schema for the powerpods API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PowerPodSpec defines the desired state of PowerPod
+            type: object
+          status:
+            description: PowerPodStatus defines the observed state of PowerPod
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: powerprofiles.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: PowerProfile
+    listKind: PowerProfileList
+    plural: powerprofiles
+    singular: powerprofile
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: PowerProfile is the Schema for the powerprofiles API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PowerProfileSpec defines the desired state of PowerProfile
+            properties:
+              epp:
+                description: The priority value associated with this Power Profile
+                type: string
+              governor:
+                default: powersave
+                description: Governor to be used
+                type: string
+              max:
+                description: Max frequency cores can run at
+                type: integer
+              min:
+                description: Min frequency cores can run at
+                type: integer
+              name:
+                description: The name of the PowerProfile
+                type: string
+              shared:
+                type: boolean
+            required:
+            - name
+            type: object
+          status:
+            description: PowerProfileStatus defines the observed state of PowerProfile
+            properties:
+              id:
+                description: The ID given to the power profile
+                type: integer
+            required:
+            - id
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+{{- if  eq (semver "2.3.1" | (semver .Chart.Version).Compare) 1}}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: powerworkloads.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: PowerWorkload
+    listKind: PowerWorkloadList
+    plural: powerworkloads
+    singular: powerworkload
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: PowerWorkload is the Schema for the powerworkloads API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PowerWorkloadSpec defines the desired state of PowerWorkload
+            properties:
+              allCores:
+                description: AllCores determines if the Workload is to be applied
+                  to all cores (i.e. use the Default Workload)
+                type: boolean
+              name:
+                description: The name of the workload
+                type: string
+              powerNodeSelector:
+                additionalProperties:
+                  type: string
+                description: The labels signifying the nodes the user wants to use
+                type: object
+              powerProfile:
+                description: PowerProfile is the Profile that this PowerWorkload is
+                  based on
+                type: string
+              reservedCPUs:
+                description: Reserved CPUs are the CPUs that have been reserved by
+                  Kubelet for use by the Kubernetes admin process This list must match
+                  the list in the user's Kubelet configuration
+                items:
+                  properties:
+                    cores:
+                      items:
+                        type: integer
+                      type: array
+                    powerProfile:
+                      type: string
+                  required:
+                  - cores
+                  type: object
+                type: array
+              workloadNodes:
+                properties:
+                  containers:
+                    items:
+                      properties:
+                        exclusiveCpus:
+                          description: The exclusive CPUs given to this Container
+                          items:
+                            type: integer
+                          type: array
+                        id:
+                          description: The ID of the Container
+                          type: string
+                        name:
+                          description: The name of the Container
+                          type: string
+                        pod:
+                          description: The name of the Pod the Container is running
+                            on
+                          type: string
+                        powerProfile:
+                          description: The PowerProfile that the Container is utilizing
+                          type: string
+                        workload:
+                          description: The PowerWorkload that the Container is utilizing
+                          type: string
+                      type: object
+                    type: array
+                  cpuIds:
+                    items:
+                      type: integer
+                    type: array
+                  name:
+                    type: string
+                type: object
+            required:
+            - name
+            type: object
+          status:
+            description: PowerWorkloadStatus defines the observed state of PowerWorkload
+            properties:
+              'node:':
+                description: The Node that this Shared PowerWorkload is associated
+                  with
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+{{- else }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: powerworkloads.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: PowerWorkload
+    listKind: PowerWorkloadList
+    plural: powerworkloads
+    singular: powerworkload
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: PowerWorkload is the Schema for the powerworkloads API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PowerWorkloadSpec defines the desired state of PowerWorkload
+            properties:
+              allCores:
+                description: AllCores determines if the Workload is to be applied
+                  to all cores (i.e. use the Default Workload)
+                type: boolean
+              name:
+                description: The name of the workload
+                type: string
+              powerNodeSelector:
+                additionalProperties:
+                  type: string
+                description: The labels signifying the nodes the user wants to use
+                type: object
+              powerProfile:
+                description: PowerProfile is the Profile that this PowerWorkload is
+                  based on
+                type: string
+              reservedCPUs:
+                description: Reserved CPUs are the CPUs that have been reserved by
+                  Kubelet for use by the Kubernetes admin process This list must match
+                  the list in the user's Kubelet configuration
+                items:
+                  type: integer
+                type: array
+              workloadNodes:
+                properties:
+                  containers:
+                    items:
+                      properties:
+                        exclusiveCpus:
+                          description: The exclusive CPUs given to this Container
+                          items:
+                            type: integer
+                          type: array
+                        id:
+                          description: The ID of the Container
+                          type: string
+                        name:
+                          description: The name of the Container
+                          type: string
+                        pod:
+                          description: The name of the Pod the Container is running
+                            on
+                          type: string
+                        powerProfile:
+                          description: The PowerProfile that the Container is utilizing
+                          type: string
+                        workload:
+                          description: The PowerWorkload that the Container is utilizing
+                          type: string
+                      type: object
+                    type: array
+                  cpuIds:
+                    items:
+                      type: integer
+                    type: array
+                  name:
+                    type: string
+                type: object
+            required:
+            - name
+            type: object
+          status:
+            description: PowerWorkloadStatus defines the observed state of PowerWorkload
+            properties:
+              'node:':
+                description: The Node that this Shared PowerWorkload is associated
+                  with
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+{{- end }}
+---
+{{- if  eq (semver "2.2.0" | (semver .Chart.Version).Compare) 1}}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: timeofdaycronjobs.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: TimeOfDayCronJob
+    listKind: TimeOfDayCronJobList
+    plural: timeofdaycronjobs
+    singular: timeofdaycronjob
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: TimeOfDayCronJob is the Schema for the timeofdaycronjobs API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TimeOfDayCronJobSpec defines the desired state of TimeOfDayCronJob
+            properties:
+              cState:
+                description: CStatesSpec defines the desired state of CStates
+                properties:
+                  exclusivePoolCStates:
+                    additionalProperties:
+                      additionalProperties:
+                        type: boolean
+                      type: object
+                    type: object
+                  individualCoreCStates:
+                    additionalProperties:
+                      additionalProperties:
+                        type: boolean
+                      type: object
+                    type: object
+                  sharedPoolCStates:
+                    additionalProperties:
+                      type: boolean
+                    type: object
+                type: object
+              hour:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file'
+                type: integer
+              minute:
+                type: integer
+              pods:
+                items:
+                  properties:
+                    labels:
+                      description: A label selector is a label query over a set of
+                        resources. The result of matchLabels and matchExpressions
+                        are ANDed. An empty label selector matches all objects. A
+                        null label selector matches no objects.
+                      properties:
+                        matchExpressions:
+                          description: matchExpressions is a list of label selector
+                            requirements. The requirements are ANDed.
+                          items:
+                            description: A label selector requirement is a selector
+                              that contains values, a key, and an operator that relates
+                              the key and values.
+                            properties:
+                              key:
+                                description: key is the label key that the selector
+                                  applies to.
+                                type: string
+                              operator:
+                                description: operator represents a key's relationship
+                                  to a set of values. Valid operators are In, NotIn,
+                                  Exists and DoesNotExist.
+                                type: string
+                              values:
+                                description: values is an array of string values.
+                                  If the operator is In or NotIn, the values array
+                                  must be non-empty. If the operator is Exists or
+                                  DoesNotExist, the values array must be empty. This
+                                  array is replaced during a strategic merge patch.
+                                items:
+                                  type: string
+                                type: array
+                            required:
+                            - key
+                            - operator
+                            type: object
+                          type: array
+                        matchLabels:
+                          additionalProperties:
+                            type: string
+                          description: matchLabels is a map of {key,value} pairs.
+                            A single {key,value} in the matchLabels map is equivalent
+                            to an element of matchExpressions, whose key field is
+                            "key", the operator is "In", and the values array contains
+                            only "value". The requirements are ANDed.
+                          type: object
+                      type: object
+                    target:
+                      type: string
+                  required:
+                  - labels
+                  - target
+                  type: object
+                type: array
+              profile:
+                type: string
+              reservedCPUs:
+                items:
+                  type: integer
+                type: array
+              second:
+                type: integer
+              timeZone:
+                type: string
+            required:
+            - hour
+            - minute
+            - profile
+            - timeZone
+            type: object
+          status:
+            properties:
+              active:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                items:
+                  description: "ObjectReference contains enough information to let
+                    you inspect or modify the referred object. --- New uses of this
+                    type are discouraged because of difficulty describing its usage
+                    when embedded in APIs. 1. Ignored fields.  It includes many fields
+                    which are not generally honored.  For instance, ResourceVersion
+                    and FieldPath are both very rarely valid in actual usage. 2. Invalid
+                    usage help.  It is impossible to add specific help for individual
+                    usage.  In most embedded usages, there are particular restrictions
+                    like, \"must refer only to types A and B\" or \"UID not honored\"
+                    or \"name must be restricted\". Those cannot be well described
+                    when embedded. 3. Inconsistent validation.  Because the usages
+                    are different, the validation rules are different by usage, which
+                    makes it hard for users to predict what will happen. 4. The fields
+                    are both imprecise and overly precise.  Kind is not a precise
+                    mapping to a URL. This can produce ambiguity during interpretation
+                    and require a REST mapping.  In most cases, the dependency is
+                    on the group,resource tuple and the version of the actual struct
+                    is irrelevant. 5. We cannot easily change it.  Because this type
+                    is embedded in many locations, updates to this type will affect
+                    numerous schemas.  Don't make new APIs embed an underspecified
+                    API type they do not control. \n Instead of using this type, create
+                    a locally provided and used type that is well-focused on your
+                    reference. For example, ServiceReferences for admission registration:
+                    https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
+                    ."
+                  properties:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: 'If referring to a piece of an object instead of
+                        an entire object, this string should contain a valid JSON/Go
+                        field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within
+                        a pod, this would take on a value like: "spec.containers{name}"
+                        (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]"
+                        (container with index 2 in this pod). This syntax is chosen
+                        only to have some well-defined way of referencing a part of
+                        an object. TODO: this design is not final and this field is
+                        subject to change in the future.'
+                      type: string
+                    kind:
+                      description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                      type: string
+                    name:
+                      description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                      type: string
+                    namespace:
+                      description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                      type: string
+                    resourceVersion:
+                      description: 'Specific resourceVersion to which this reference
+                        is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                      type: string
+                    uid:
+                      description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                      type: string
+                  type: object
+                type: array
+              lastScheduleTime:
+                format: date-time
+                type: string
+              lastSuccessfulTime:
+                format: date-time
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+{{- else }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: timeofdaycronjobs.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: TimeOfDayCronJob
+    listKind: TimeOfDayCronJobList
+    plural: timeofdaycronjobs
+    singular: timeofdaycronjob
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: TimeOfDayCronJob is the Schema for the timeofdaycronjobs API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TimeOfDayCronJobSpec defines the desired state of TimeOfDayCronJob
+            properties:
+              cState:
+                description: CStatesSpec defines the desired state of CStates
+                properties:
+                  exclusivePoolCStates:
+                    additionalProperties:
+                      additionalProperties:
+                        type: boolean
+                      type: object
+                    type: object
+                  individualCoreCStates:
+                    additionalProperties:
+                      additionalProperties:
+                        type: boolean
+                      type: object
+                    type: object
+                  sharedPoolCStates:
+                    additionalProperties:
+                      type: boolean
+                    type: object
+                type: object
+              hour:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file'
+                type: integer
+              minute:
+                type: integer
+              pods:
+                additionalProperties:
+                  additionalProperties:
+                    type: string
+                  type: object
+                type: object
+              profile:
+                type: string
+              reservedCPUs:
+                items:
+                  type: integer
+                type: array
+              second:
+                type: integer
+              timeZone:
+                type: string
+            required:
+            - hour
+            - minute
+            - profile
+            - timeZone
+            type: object
+          status:
+            properties:
+              active:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                items:
+                  description: "ObjectReference contains enough information to let
+                    you inspect or modify the referred object. --- New uses of this
+                    type are discouraged because of difficulty describing its usage
+                    when embedded in APIs. 1. Ignored fields.  It includes many fields
+                    which are not generally honored.  For instance, ResourceVersion
+                    and FieldPath are both very rarely valid in actual usage. 2. Invalid
+                    usage help.  It is impossible to add specific help for individual
+                    usage.  In most embedded usages, there are particular restrictions
+                    like, \"must refer only to types A and B\" or \"UID not honored\"
+                    or \"name must be restricted\". Those cannot be well described
+                    when embedded. 3. Inconsistent validation.  Because the usages
+                    are different, the validation rules are different by usage, which
+                    makes it hard for users to predict what will happen. 4. The fields
+                    are both imprecise and overly precise.  Kind is not a precise
+                    mapping to a URL. This can produce ambiguity during interpretation
+                    and require a REST mapping.  In most cases, the dependency is
+                    on the group,resource tuple and the version of the actual struct
+                    is irrelevant. 5. We cannot easily change it.  Because this type
+                    is embedded in many locations, updates to this type will affect
+                    numerous schemas.  Don't make new APIs embed an underspecified
+                    API type they do not control. \n Instead of using this type, create
+                    a locally provided and used type that is well-focused on your
+                    reference. For example, ServiceReferences for admission registration:
+                    https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
+                    ."
+                  properties:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: 'If referring to a piece of an object instead of
+                        an entire object, this string should contain a valid JSON/Go
+                        field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within
+                        a pod, this would take on a value like: "spec.containers{name}"
+                        (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]"
+                        (container with index 2 in this pod). This syntax is chosen
+                        only to have some well-defined way of referencing a part of
+                        an object. TODO: this design is not final and this field is
+                        subject to change in the future.'
+                      type: string
+                    kind:
+                      description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                      type: string
+                    name:
+                      description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                      type: string
+                    namespace:
+                      description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                      type: string
+                    resourceVersion:
+                      description: 'Specific resourceVersion to which this reference
+                        is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                      type: string
+                    uid:
+                      description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                      type: string
+                  type: object
+                type: array
+              lastScheduleTime:
+                format: date-time
+                type: string
+              lastSuccessfulTime:
+                format: date-time
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+{{- end }}
+---
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: timeofdays.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: TimeOfDay
+    listKind: TimeOfDayList
+    plural: timeofdays
+    singular: timeofday
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: TimeOfDay is the Schema for the timeofdays API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TimeOfDaySpec defines the desired state of TimeOfDay
+            properties:
+              reservedCPUs:
+                items:
+                  type: integer
+                type: array
+              schedule:
+                description: Schedule for adjusting performance mode
+                items:
+                  properties:
+                    cState:
+                      description: CStatesSpec defines the desired state of CStates
+                      properties:
+                        exclusivePoolCStates:
+                          additionalProperties:
+                            additionalProperties:
+                              type: boolean
+                            type: object
+                          type: object
+                        individualCoreCStates:
+                          additionalProperties:
+                            additionalProperties:
+                              type: boolean
+                            type: object
+                          type: object
+                        sharedPoolCStates:
+                          additionalProperties:
+                            type: boolean
+                          type: object
+                      type: object
+                    pods:
+                      items:
+                        properties:
+                          labels:
+                            description: A label selector is a label query over a
+                              set of resources. The result of matchLabels and matchExpressions
+                              are ANDed. An empty label selector matches all objects.
+                              A null label selector matches no objects.
+                            properties:
+                              matchExpressions:
+                                description: matchExpressions is a list of label selector
+                                  requirements. The requirements are ANDed.
+                                items:
+                                  description: A label selector requirement is a selector
+                                    that contains values, a key, and an operator that
+                                    relates the key and values.
+                                  properties:
+                                    key:
+                                      description: key is the label key that the selector
+                                        applies to.
+                                      type: string
+                                    operator:
+                                      description: operator represents a key's relationship
+                                        to a set of values. Valid operators are In,
+                                        NotIn, Exists and DoesNotExist.
+                                      type: string
+                                    values:
+                                      description: values is an array of string values.
+                                        If the operator is In or NotIn, the values
+                                        array must be non-empty. If the operator is
+                                        Exists or DoesNotExist, the values array must
+                                        be empty. This array is replaced during a
+                                        strategic merge patch.
+                                      items:
+                                        type: string
+                                      type: array
+                                  required:
+                                  - key
+                                  - operator
+                                  type: object
+                                type: array
+                              matchLabels:
+                                additionalProperties:
+                                  type: string
+                                description: matchLabels is a map of {key,value} pairs.
+                                  A single {key,value} in the matchLabels map is equivalent
+                                  to an element of matchExpressions, whose key field
+                                  is "key", the operator is "In", and the values array
+                                  contains only "value". The requirements are ANDed.
+                                type: object
+                            type: object
+                          target:
+                            type: string
+                        required:
+                        - labels
+                        - target
+                        type: object
+                      type: array
+                    powerProfile:
+                      type: string
+                    time:
+                      type: string
+                  required:
+                  - time
+                  type: object
+                type: array
+              timeZone:
+                description: Time Zone to use for scheduling
+                type: string
+            required:
+            - schedule
+            type: object
+          status:
+            description: TimeOfDayStatus defines the observed state of TimeOfDay
+            properties:
+              lastSchedule:
+                description: The time of the last update
+                type: string
+              nextSchedule:
+                description: The time of the next update
+                type: string
+              powerProfile:
+                description: PowerProfile associated with Time of Day
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  name: uncores.power.intel.com
+spec:
+  group: power.intel.com
+  names:
+    kind: Uncore
+    listKind: UncoreList
+    plural: uncores
+    singular: uncore
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Uncore is the Schema for the uncores API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: UncoreSpec defines the desired state of Uncore
+            properties:
+              dieSelector:
+                items:
+                  properties:
+                    die:
+                      type: integer
+                    max:
+                      type: integer
+                    min:
+                      type: integer
+                    package:
+                      type: integer
+                  required:
+                  - max
+                  - min
+                  - package
+                  type: object
+                type: array
+              sysMax:
+                type: integer
+              sysMin:
+                type: integer
+            type: object
+          status:
+            description: UncoreStatus defines the observed state of Uncore
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

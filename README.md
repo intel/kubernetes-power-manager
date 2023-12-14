@@ -191,6 +191,8 @@ supported with helm charts:
 * v2.1.0
 * v2.2.0
 * v2.3.0
+* v2.3.1
+* ocp-4.13-v2.3.1
 
 When set up using the provided helm charts, the following will be deployed:
 
@@ -205,7 +207,7 @@ To change any of the values the above are deployed with, edit the values.yaml fi
 To deploy the Kubernetes Power Manager using Helm, you must have Helm installed. For more information on installing 
 Helm, see the installation guide here https://helm.sh/docs/intro/install/.
 
-The Kubernetes Power Manager has make targets for each version available. To deploy the latest version, use the following command:
+To install the latest version, use the following command:
 
 `make helm-install`
 
@@ -213,11 +215,13 @@ To uninstall the latest version, use the following command:
 
 `make helm-uninstall`
 
-Or you can use the following commands to deploy a specific version of the Kubernetes Power Manager:
+You can use the HELM_CHART and OCP parameters to deploy an older or Openshift specific version of the Kubernetes Power Manager:
 
-`make helm-install-v2.2.0`
-`make helm-install-v2.1.0`
-`make helm-install-v2.0.0`
+`HELM_CHART=ocp-4.13-v2.3.1 OCP=true make helm-install`
+`HELM_CHART=v2.2.0 make helm-install`
+`HELM_CHART=v2.1.0 make helm-install`
+
+Please note when installing older versions that certain features listed in this README may not be supported.
 
 ## Working environments
 

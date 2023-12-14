@@ -1,6 +1,11 @@
 export APP_NAME=intel-kubernetes-power-manager
 # Current Operator version
 VERSION ?= 2.3.1
+# parameter used for helm chart image
+HELM_CHART ?= v2.3.1
+HELM_VERSION := $(shell echo $(HELM_CHART) | cut -d "v" -f2)
+# used to detemine if certain targets should build for openshift
+OCP ?= false
 # Default bundle image tag
 BUNDLE_IMG ?= intel-kubernetes-power-manager-bundle:$(VERSION)
 # version of ocp being supported
@@ -74,41 +79,27 @@ images-ocp: generate manifests install
 run: generate fmt vet manifests
 	go run ./main.go
 
-.PHONY: helm-install helm-uninstall helm-install-v2.3.0 helm-uninstall-v2.3.0 helm-install-ocp helm-uninstall-ocp
+.PHONY: helm-install helm-uninstall 
 helm-install:
-	helm install kubernetes-power-manager-v2.3.1 ./helm/kubernetes-power-manager-v2.3.1
+ifeq (true, $(OCP))
+	$(eval HELM_FLAG:=--set ocp=true)
+endif
+	sed -i 's/^version:.*$$/version: $(HELM_VERSION)/' helm/kubernetes-power-manager/Chart.yaml 
+	sed -i 's/^appVersion:.*$$/appVersion: \"$(HELM_CHART)\"/' helm/kubernetes-power-manager/Chart.yaml
+	sed -i 's/^version:.*$$/version: $(HELM_VERSION)/' helm/crds/Chart.yaml 
+	sed -i 's/^appVersion:.*$$/appVersion: \"$(HELM_CHART)\"/' helm/crds/Chart.yaml 
+	helm install kubernetes-power-manager-crds ./helm/crds
+	helm dependency update ./helm/kubernetes-power-manager
+	helm install kubernetes-power-manager-$(HELM_CHART) ./helm/kubernetes-power-manager --set operator.container.image=intel/power-operator:$(HELM_CHART) $(HELM_FLAG)
+
 helm-uninstall:
-	helm uninstall kubernetes-power-manager-v2.3.1
-helm-install-ocp: generate manifests install
-	helm install kubernetes-power-manager-ocp-4.13-v2.3.1 ./helm/kubernetes-power-manager-ocp-4.13-v$(VERSION)
+	sed -i 's/^version:.*$$/version: $(HELM_VERSION)/' helm/kubernetes-power-manager/Chart.yaml 
+	sed -i 's/^appVersion:.*$$/appVersion: \"$(HELM_CHART)\"/' helm/kubernetes-power-manager/Chart.yaml 
+	sed -i 's/^version:.*$$/version: $(HELM_VERSION)/' helm/crds/Chart.yaml 
+	sed -i 's/^appVersion:.*$$/appVersion: \"$(HELM_CHART)\"/' helm/crds/Chart.yaml 
+	helm uninstall kubernetes-power-manager-$(HELM_CHART)
+	helm uninstall kubernetes-power-manager-crds
 
-helm-uninstall-ocp:
-	helm uninstall kubernetes-power-manager-ocp-4.13-v2.3.1
-
-helm-install-v2.3.0: generate manifests install
-	helm install kubernetes-power-manager-v2.3.0 ./helm/kubernetes-power-manager-v2.3.0
-
-helm-uninstall-v2.3.0:
-	helm uninstall kubernetes-power-manager-v2.3.0
-
-.PHONY: helm-install-v2.2.0 helm-uninstall-v2.2.0 helm-install-v2.1.0 helm-uninstall-v2.1.0 helm-install-v2.0.0 helm-uninstall-v2.0.0
-helm-install-v2.2.0: generate manifests install
-	helm install kubernetes-power-manager-v2.2.0 ./helm/kubernetes-power-manager-v2.2.0
-
-helm-uninstall-v2.2.0:
-	helm uninstall kubernetes-power-manager-v2.2.0
-
-helm-install-v2.1.0: generate manifests install
-	helm install kubernetes-power-manager-v2.1.0 ./helm/kubernetes-power-manager-v2.1.0
-
-helm-uninstall-v2.1.0:
-	helm uninstall kubernetes-power-manager-v2.1.0
-
-helm-install-v2.0.0: generate manifests install
-	helm install kubernetes-power-manager-v2.0.0 ./helm/kubernetes-power-manager-v2.0.0
-
-helm-uninstall-v2.0.0:
-	helm uninstall kubernetes-power-manager-v2.0.0
 
 .PHONY: install uninstall deploy manifests fmt vet tls
 # Install CRDs into a cluster
@@ -126,7 +117,7 @@ deploy: manifests kustomize
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-ifeq (, $(OCP))
+ifeq (false, $(OCP))
 	sed -i 's/- .*\/rbac\.yaml/- \.\/rbac.yaml/' config/rbac/kustomization.yaml
 	sed -i 's/- .*\/role\.yaml/- \.\/role.yaml/' config/rbac/kustomization.yaml
 else
@@ -192,7 +183,7 @@ endif
 # Generate bundle manifests and metadata, then validate generated files.
 bundle: update manifests kustomize
 # directory used to get image name for bundle
-ifeq (, $(OCP))
+ifeq (false, $(OCP))
 	sed -i 's/\.\.\/manager.*$$/\.\.\/manager/' config/default/kustomization.yaml
 else
 	sed -i 's/\.\.\/manager.*$$/\.\.\/manager\/ocp/' config/default/kustomization.yaml
