@@ -42,12 +42,6 @@ specifically Intel SST.
   Please see the _diagrams-docs_ directory for diagrams with a visual breakdown of the power manager and its components.
 ## Functionality of the Kubernetes Power Manager
 
-- **SST-BF - (Speed Select Technology - Base Frequency)**
-
-  The base frequency of some cores can be changed by the user using this function. The CPU's performance is ensured at
-  the basic frequency (a CPU will never go below its base frequency). Priority cores can apply their crucial workloads
-  for a guaranteed performance at a base frequency that is greater than the majority of the other cores on the system.
-
 - **SST-CP - (Speed Select Technology - Core Power)**
 
   The user can arrange cores according to priority levels using this capability. When the system has extra power, it can
@@ -107,6 +101,12 @@ specifically Intel SST.
   Xeon scalable and D processors could save up to 40% of CPU power or improved performance gains.
 
 ## Future planned additions to the Kubernetes Power Manager
+
+- **SST-BF - (Speed Select Technology - Base Frequency)**
+
+  The base frequency of some cores can be changed by the user using this feature. The CPU's performance is ensured at
+  the basic frequency (a CPU will never go below its base frequency). Priority cores can apply their crucial workloads
+  for a guaranteed performance at a base frequency that is greater than the majority of the other cores on the system.
 
 - **SST-TF - Turbo Frequency**
 
@@ -249,9 +249,8 @@ Note: this does not include additional environments.
 
 [Intel Power Optimization Library](https://github.com/intel/power-optimization-library), takes the desired configuration
 for the cores associated with Exclusive Pods and tune them based on the requested Power Profile. The Power Optimization
-Library will also facilitate the use of the Intel SST (Speed Select Technology) Suite (SST-BF - Speed Select
-Technology-Base Frequency, SST-CP - Speed Select Technology-Core Power, and Frequency Tuning) and C-States
-functionality.
+Library will also facilitate the use of the Intel SST (Speed Select Technology) Suite (SST-CP - Speed Select
+Technology-Core Power, and Frequency Tuning) and C-States functionality.
 
 ### Power Node Agent
 
