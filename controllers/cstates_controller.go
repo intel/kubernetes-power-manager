@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -85,6 +86,7 @@ func (r *CStatesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger.V(4).Info("checking to verify that C-States exist")
 	err = r.verifyCSStatesExist(&cStatesCRD.Spec, &logger)
 	if err != nil {
+		err = stripMultiError(err)
 		logger.Info("the C-States validation failed", "error", err.Error())
 		return ctrl.Result{}, err
 	}
@@ -94,6 +96,7 @@ func (r *CStatesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger.V(4).Info("resetting C-States configuration")
 	err = r.restoreCStates(ctx, &logger)
 	if err != nil {
+		err = stripMultiError(err)
 		logger.Error(err, "failed to restore C-States", "error", err.Error())
 		return ctrl.Result{}, err
 	}
@@ -102,6 +105,7 @@ func (r *CStatesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger.V(4).Info("applying C-States to the CRD Spec")
 	err = r.applyCStates(&cStatesCRD.Spec, &logger)
 	if err != nil {
+		err = stripMultiError(err)
 		logger.Error(err, "setting C-States was partially successful")
 		return ctrl.Result{Requeue: false}, err
 	}
@@ -156,7 +160,7 @@ func (r *CStatesReconciler) verifyCSStatesExist(cStatesSpec *powerv1.CStatesSpec
 		}
 	}
 	for coreID, coreCStates := range cStatesSpec.IndividualCoreCStates {
-		logger.V(5).Info("checking the power library to confirm that C-States are a individual core", "coreID", coreID)
+		logger.V(5).Info("checking the power library to confirm that C-States are on individual core", "coreID", coreID)
 		err := r.PowerLibrary.ValidateCStates(coreCStates)
 		if err != nil {
 			results = multierror.Append(results, fmt.Errorf("error reconciling C-States on node %s: %w", nodeName, err))
@@ -221,4 +225,12 @@ func (r *CStatesReconciler) restoreCStates(ctx context.Context, logger *logr.Log
 		results = multierror.Append(results, core.SetCStates(nil))
 	}
 	return results.ErrorOrNil()
+}
+
+//removes extra tabs and newlines from multi error
+func stripMultiError(err error) error {
+	stripped := strings.Replace(err.Error(), "\n", "", -1)
+	stripped = strings.Replace(stripped, "\t", "", -1)
+	stripped = strings.Replace(stripped, "*", " -", -1)
+	return fmt.Errorf(stripped)
 }

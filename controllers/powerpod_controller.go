@@ -294,12 +294,12 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 		containerID := getContainerID(pod, container.Name)
 		coreIDs, err := r.PodResourcesClient.GetContainerCPUs(pod.GetName(), container.Name)
 		if err != nil {
-			logger.V(5).Info("Error getting CoreIDs.", "ContainerID", containerID)
+			logger.V(5).Info("error getting CoreIDs.", "ContainerID", containerID)
 			recoverableErrs = append(recoverableErrs, err)
 			continue
 		}
 		cleanCoreList := getCleanCoreList(coreIDs)
-		logger.V(5).Info("Reserving cores to container.", "ContainerID", containerID, "Cores", cleanCoreList)
+		logger.V(5).Info("reserving cores to container.", "ContainerID", containerID, "Cores", cleanCoreList)
 
 		logger.V(5).Info("creating the power container")
 		powerContainer := &powerv1.Container{}
