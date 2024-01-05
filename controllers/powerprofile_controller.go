@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	rt "runtime"
 	"strconv"
 	"strings"
 
@@ -333,7 +332,7 @@ func (r *PowerProfileReconciler) createExtendedResources(nodeName string, profil
 		return err
 	}
 
-	numCPUsOnNode := float64(rt.NumCPU())
+	numCPUsOnNode := float64(len(*r.PowerLibrary.GetAllCpus()))
 	logger.V(5).Info("configuring based on the percentage associated to the specific power profile")
 	numExtendedResources := int64(numCPUsOnNode * profilePercentages[eppValue]["resource"])
 	profilesAvailable := resource.NewQuantity(numExtendedResources, resource.DecimalSI)
