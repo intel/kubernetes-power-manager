@@ -12,6 +12,23 @@ pipeline {
         zip zipFile: 'repo.zip', dir:'.', archive: true
       }
     }
+    stage('Build container images'){
+      steps{
+        script{
+          container(name: 'kaniko-env', shell: '/busybox/sh') {
+            sh '''
+              /kaniko/executor --dockerfile build/Dockerfile --context . \
+              --destination "localhost:5000/power-operator:latest" \
+              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+             
+              /kaniko/executor --dockerfile build/Dockerfile.nodeagent --context . \
+              --destination "localhost:5000/power-node-agent:latest" \
+             --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+           '''
+          }
+        }
+      }
+    }
     stage('Trivy Scan'){
       steps{
         script{
@@ -77,6 +94,18 @@ pipeline {
               container('abi-env') {
                 sh '''
                    abi virus_scan --target "repo.zip" --logtarget "logs" --report-name "sdl-virus-scan"
+                   '''
+              }
+            }
+          }
+        }
+        stage('Trivy Images Scan') {
+          steps{
+            script{
+              container('trivy-env') {
+                sh '''
+                   trivy image --insecure localhost:5000/power-operator:latest
+                   trivy image --insecure localhost:5000/power-node-agent:latest
                    '''
               }
             }

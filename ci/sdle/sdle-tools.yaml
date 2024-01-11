@@ -36,3 +36,12 @@ spec:
     tty: true
     imagePullPolicy: Always
     command: ["cat"]
+  - name: kaniko-env
+    image: gcr.io/kaniko-project/executor:debug
+    tty: true
+    imagePullPolicy: IfNotPresent
+    command: ["/busybox/sleep","infinity"]
+    # ephemeral image registry, avavaliable at localhost:5000 only for the lifetime of the pipeline
+  - name: image-registry
+    image: registry:2
+    imagePullPolicy: IfNotPresent
