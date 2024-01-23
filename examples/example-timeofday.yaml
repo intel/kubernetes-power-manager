@@ -1,7 +1,8 @@
 apiVersion: power.intel.com/v1
 kind: TimeOfDay
 metadata:
-  name: timeofday-sample
+  # Replace <NODE_NAME> with the name of the node to use TOD on
+  name: <NODE_NAME>
   namespace: intel-power
 spec:
   timeZone: "Eire"

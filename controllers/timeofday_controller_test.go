@@ -57,7 +57,7 @@ func TestTimeOfDay_Reconcile(t *testing.T) {
 	}
 	todObj := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: IntelPowerNamespace,
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -90,7 +90,7 @@ func TestTimeOfDay_Reconcile(t *testing.T) {
 	assert.NoError(t, err)
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: IntelPowerNamespace,
 		},
 	}
@@ -115,7 +115,7 @@ func TestTimeOfDay_Reconcile(t *testing.T) {
 	// incorrect format error
 	todObj = &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -138,7 +138,7 @@ func TestTimeOfDay_Reconcile(t *testing.T) {
 	// time overflow
 	todObj = &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -182,7 +182,7 @@ func FuzzTimeOfDayController(f *testing.F) {
 
 		todObj := &powerv1.TimeOfDay{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "timeofday-test",
+				Name:      testNode,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.TimeOfDaySpec{
@@ -204,7 +204,7 @@ func FuzzTimeOfDayController(f *testing.F) {
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name:      "timeofday-test",
+				Name:      testNode,
 				Namespace: "intel-power",
 			},
 		}
@@ -220,6 +220,7 @@ func FuzzTimeOfDayController(f *testing.F) {
 func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	// incorrect node
 	testNode := "TestNode"
+	t.Setenv("NODE_NAME", testNode)
 	nodeObj := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   testNode,
@@ -236,7 +237,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	}
 	todObj := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -254,7 +255,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	}
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "made-up",
 		},
 	}
@@ -269,7 +270,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	// invalid timezone
 	todObj = &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -287,7 +288,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	}
 	req = reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: IntelPowerNamespace,
 		},
 	}
@@ -298,7 +299,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	// multiple TODs
 	todObj1 := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test1",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -313,8 +314,8 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	}
 	todObj2 := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test2",
-			Namespace: "intel-power",
+			Name:      testNode,
+			Namespace: "default",
 		},
 		Spec: powerv1.TimeOfDaySpec{
 			TimeZone:     "Eire",
@@ -331,7 +332,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	}
 	req = reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: IntelPowerNamespace,
 		},
 	}
@@ -344,9 +345,11 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 func TestTimeOfDay_Reconcile_ClientErrs(t *testing.T) {
 	timeZone := "Eire"
 	profile := "performance"
+	testNode := "TestNode"
+	t.Setenv("NODE_NAME", testNode)
 	todObj := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -373,7 +376,7 @@ func TestTimeOfDay_Reconcile_ClientErrs(t *testing.T) {
 	}
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: IntelPowerNamespace,
 		},
 	}

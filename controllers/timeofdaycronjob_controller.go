@@ -312,8 +312,10 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 								return ctrl.Result{Requeue: false}, err
 							}
 						}
-						// looping over the container field of the workload
-						for i, container := range workloadFrom.Spec.Node.Containers {
+						var remainingFromContainers []powerv1.Container
+						// getting the indices of containers we need to change
+						for i:=0; i < len(workloadFrom.Spec.Node.Containers); i ++ {
+							container := workloadFrom.Spec.Node.Containers[i]
 							if container.Pod == podName {
 								logger.V(5).Info(fmt.Sprintf("Found %s for tuning", container.Pod))
 								// first we set the profile on the container to its new value
@@ -324,20 +326,24 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 								coresToSwap := workloadFrom.Spec.Node.Containers[i].ExclusiveCPUs
 								// append cores to one workload and shrink the list in the other
 								workloadTo.Spec.Node.CpuIds = append(workloadTo.Spec.Node.CpuIds, coresToSwap...)
-								workloadFrom.Spec.Node.Containers[i] = workloadFrom.Spec.Node.Containers[len(workloadFrom.Spec.Node.Containers)-1]
-								workloadFrom.Spec.Node.Containers = workloadFrom.Spec.Node.Containers[:len(workloadFrom.Spec.Node.Containers)-1]
 								updatedWorkloadCPUList := getNewWorkloadCPUList(coresToSwap, workloadFrom.Spec.Node.CpuIds, &logger)
 								workloadFrom.Spec.Node.CpuIds = updatedWorkloadCPUList
-								//update both workloads to bring changes into affect
-								if err := r.Client.Update(c, &workloadFrom); err != nil {
-									logger.Error(err, "cannot update the workload")
-									return ctrl.Result{}, err
-								}
-								if err := r.Client.Update(c, &workloadTo); err != nil {
-									logger.Error(err, "cannot update the workload")
-									return ctrl.Result{}, err
-								}
-
+							} else {
+								// take note of containers that should stay in the workload
+								remainingFromContainers = append(remainingFromContainers, workloadFrom.Spec.Node.Containers[i])
+							}
+						}
+						// some containers have moved workload
+						if len(remainingFromContainers) != len(workloadFrom.Spec.Node.Containers) {
+							workloadFrom.Spec.Node.Containers = remainingFromContainers
+							//update both workloads to bring changes into affect
+							if err := r.Client.Update(c, &workloadFrom); err != nil {
+								logger.Error(err, "cannot update the workload")
+								return ctrl.Result{}, err
+							}
+							if err := r.Client.Update(c, &workloadTo); err != nil {
+								logger.Error(err, "cannot update the workload")
+								return ctrl.Result{}, err
 							}
 						}
 						pod.ObjectMeta.Annotations["PM-updated"] = fmt.Sprint(time.Now().Unix())

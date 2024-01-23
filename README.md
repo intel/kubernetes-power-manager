@@ -626,7 +626,8 @@ profile as well as the profile used by individual pods.
 apiVersion: power.intel.com/v1
 kind: TimeOfDay
 metadata:
-  name: timeofday-sample
+  # Replace <NODE_NAME> with the name of the node to use TOD on
+  name: <NODE_NAME>
   namespace: intel-power
 spec:
   timeZone: "Eire"
@@ -670,7 +671,7 @@ spec:
   reservedCPUs: [ 0,1 ]
 
 ```
-
+The `TimeOfDay` object is deployed on a per-node basis and should have the same name as the node it's deployed on.
 When applying changes to the shared pool, users must specify the CPUs reserved by the system. Additionally the user must
 specify a timezone to schedule with.
 The configuration for Time Of Day consists of a schedule list. Each item in the list consists of a time and any desired

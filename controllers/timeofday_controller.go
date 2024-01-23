@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -57,6 +58,10 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 		err := fmt.Errorf("incorrect namespace")
 		logger.Error(err, "resource is not in the intel-power namespace, ignoring")
 		return ctrl.Result{Requeue: false}, err
+	}
+	nodeName := os.Getenv("NODE_NAME")
+	if req.Name != nodeName {
+		return ctrl.Result{}, nil
 	}
 	//enforces HH:MM:SS time format
 	timeRegex := regexp.MustCompile("(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?")
