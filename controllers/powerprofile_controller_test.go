@@ -701,6 +701,34 @@ func TestPowerProfile_Reconcile_SharedProfileDoesNotExistInLibrary(t *testing.T)
 }
 
 func TestPowerProfile_Reconcile_DeleteProfile(t *testing.T) {
+	cstatedummy := &powerv1.CStates{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "TestNode",
+			Namespace: IntelPowerNamespace,
+		},
+		Spec: powerv1.CStatesSpec{
+			SharedPoolCStates: map[string]bool{
+				"C1": true,
+			},
+			ExclusivePoolCStates: map[string]map[string]bool{
+				"performance": {
+					"C6": false,
+					"1E": true,
+				},
+				"user-created": {
+					"C6":  false,
+					"C1E": true,
+					"C1":  true,
+				},
+			},
+			IndividualCoreCStates: map[string]map[string]bool{
+				"1": {
+					"C1": true,
+				},
+			},
+		},
+		Status: powerv1.CStatesStatus{},
+	}
 	tcases := []struct {
 		testCase    string
 		nodeName    string
@@ -730,6 +758,7 @@ func TestPowerProfile_Reconcile_DeleteProfile(t *testing.T) {
 						},
 					},
 				},
+				cstatedummy,
 			},
 		},
 		{
@@ -754,6 +783,7 @@ func TestPowerProfile_Reconcile_DeleteProfile(t *testing.T) {
 						},
 					},
 				},
+				cstatedummy,
 			},
 		},
 		{
@@ -824,6 +854,24 @@ func TestPowerProfile_Reconcile_DeleteProfile(t *testing.T) {
 			t.Fatalf("%s - error retrieving the node object", tc.testCase)
 		}
 
+		if tc.testCase != "Test Case 3 - Profile user-created, ERs not present, workload not present" {
+			cstate := &powerv1.CStates{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name:      tc.nodeName,
+				Namespace: IntelPowerNamespace,
+			}, cstate)
+			if err != nil {
+				t.Error(err)
+				t.Fatalf("%s - error retrieving the cstate object", tc.testCase)
+			}
+			for profile, _ := range cstate.Spec.ExclusivePoolCStates {
+				if profile == tc.profileName {
+					t.Error(err)
+					t.Fatalf("%s - error retrieving the cstate object - profile should be deleted", tc.testCase)
+				}
+			}
+		}
+		
 		resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
 		if _, exists := node.Status.Capacity[resourceName]; exists {
 			t.Errorf("%s - failed: expected the extended resource '%s' to have been deleted", tc.testCase, fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
@@ -1556,6 +1604,7 @@ func TestPowerProfile_Reconcile_ClientErrs(t *testing.T) {
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerProfile")).Return(errors.NewNotFound(schema.GroupResource{}, "profile"))
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerWorkload")).Return(nil)
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.CStates")).Return(nil)
 				mkcl.On("Delete", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client delete error"))
 				return mkcl
 			},
@@ -1601,6 +1650,7 @@ func TestPowerProfile_Reconcile_ClientErrs(t *testing.T) {
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerProfile")).Return(errors.NewNotFound(schema.GroupResource{}, "profile"))
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerWorkload")).Return(nil)
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.CStates")).Return(nil)
 				mkcl.On("Delete", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client delete error"))
 				return mkcl
 			},

@@ -119,6 +119,26 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 				logger.Info("attempted to remove the non existing pool", "pool", req.Name)
 				return ctrl.Result{Requeue: false}, err
 			}
+
+			// To get current cstate obj matching node name and removing powerprofile entry
+			currentNodeCStates := &powerv1.CStates{}
+			err = r.Client.Get(c, client.ObjectKey{Name: nodeName, Namespace: IntelPowerNamespace}, currentNodeCStates)
+			// if we're unsuccessful trying to fetch the cStates coresponding to the current power profile
+			if err != nil && !errors.IsNotFound(err) {
+				logger.Error(err, fmt.Sprintf("unable to retrieve the cState object from the library for %s", nodeName))
+				return ctrl.Result{}, err
+			}
+			// we make changes to the cStates object only if an exclusive pool set-up exists for this c-state
+			// and the corresponding node configuration for exclusive pool is not empty
+			if len(currentNodeCStates.Spec.ExclusivePoolCStates) != 0 && currentNodeCStates.Spec.ExclusivePoolCStates[req.Name] != nil {
+				delete(currentNodeCStates.Spec.ExclusivePoolCStates, req.Name) //req.name current profile
+				err = r.Update(c, currentNodeCStates)
+				if err != nil {
+					logger.Error(err, fmt.Sprintf("error updating the current cState object: %v", currentNodeCStates))
+					return ctrl.Result{}, err
+				}
+			}
+
 			err = pool.Remove()
 			if err != nil {
 				logger.Error(err, "error deleting the power profile from the library")
