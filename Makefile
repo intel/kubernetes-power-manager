@@ -41,7 +41,6 @@ endif
 
 BUNDLE_IMGS ?= $(BUNDLE_IMG)
 
-
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
@@ -66,6 +65,10 @@ test: generate fmt vet manifests
 build: generate manifests install
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o build/bin/manager build/manager/main.go
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o build/bin/nodeagent build/nodeagent/main.go
+
+verify-build: gofmt test race coverage tidy clean verify-test
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o build/bin/manager build/manager/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o build/bin/nodeagent build/nodeagent/main.go	
 
 # Build the Manager and Node Agent images
 images: generate manifests install
@@ -99,7 +102,6 @@ helm-uninstall:
 	sed -i 's/^appVersion:.*$$/appVersion: \"$(HELM_CHART)\"/' helm/crds/Chart.yaml 
 	helm uninstall kubernetes-power-manager-$(HELM_CHART)
 	helm uninstall kubernetes-power-manager-crds
-
 
 .PHONY: install uninstall deploy manifests fmt vet tls
 # Install CRDs into a cluster
@@ -174,7 +176,7 @@ endif
 
 kustomize:
 ifeq (, $(shell which kustomize))
-	go install sigs.k8s.io/kustomize/kustomize/v4@latest
+	go install sigs.k8s.io/kustomize/kustomize/v4@latest	
 KUSTOMIZE=$(GOBIN)/kustomize
 else
 KUSTOMIZE=$(shell which kustomize)
@@ -233,8 +235,25 @@ coverage:
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Average code coverage: $$(go tool cover -func coverage.out | awk 'END {print $$3}' | sed 's/\..*//')%" 
 	@if [ $$(go tool cover -func coverage.out | awk 'END {print $$3}' | sed 's/\..*//') -lt 85 ]; then \
-		echo "WARNING: Total unit test coverage below 85%"; false; \
-	fi
+                echo "Total unit test coverage below 85%"; false; \
+        fi
+
+tidy:
+	go mod tidy
+
+verify-test: tidy
+        go test -count=1 -v ./...
+
+race: tidy
+        CGO_ENABLED=1 go test -count=1 -race -v ./...
+
+clean:
+	go clean --cache
+	rm -r build/bin/manager
+	rm -r build/bin/nodeagent
+
+gofmt:
+	gofmt -w .
 
 update:
 	sed -i 's/intel\/power-operator.*$$/intel\/power-operator:v$(VERSION)/' config/manager/manager.yaml
