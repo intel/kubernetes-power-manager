@@ -161,8 +161,10 @@ func TestTimeOfDay_Reconcile(t *testing.T) {
 
 }
 
+// go test -fuzz FuzzTimeOfDayController -run=FuzzTimeOfDayController
 func FuzzTimeOfDayController(f *testing.F) {
-	f.Fuzz(func(t *testing.T, timeZone string, time1 string, time2 uint, time3 uint) {
+	f.Add("Eire", "12:30:24", uint(19), uint(45), "performance", "balance-power", "shared", "power", "bigger", "C4", "25")
+	f.Fuzz(func(t *testing.T, timeZone string, time1 string, time2 uint, time3 uint, prof1 string, prof2 string, prof3 string, label1 string, label2 string, cstate string, corevalue string) {
 		testNode := "TestNode"
 		t.Setenv("NODE_NAME", testNode)
 		nodeObj := &corev1.Node{
@@ -190,9 +192,43 @@ func FuzzTimeOfDayController(f *testing.F) {
 				ReservedCPUs: &[]uint{0, 1},
 				Schedule: []powerv1.ScheduleInfo{
 					{
-						Time: time1,
-					}, {
-						Time: strconv.Itoa(int(time2)) + ":" + strconv.Itoa(int(time3)),
+						Time:         time1,
+						PowerProfile: &prof1,
+						Pods: &[]powerv1.PodInfo{
+							{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label1: "true"}}, Target: prof3},
+							{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label2: "false"}}, Target: prof3},
+						},
+						CState: &powerv1.CStatesSpec{
+							SharedPoolCStates: map[string]bool{cstate: true},
+							ExclusivePoolCStates: map[string]map[string]bool{
+								prof1: {"C1E": false, "C6": false, "C1": false},
+								prof2: {"C1E": true, "C6": false},
+							},
+							IndividualCoreCStates: map[string]map[string]bool{
+								"200":     {"C1E": true, "C6": false},
+								"-4":      {"C1E": false, "C6": false},
+								corevalue: {"C1E": false, "C6": false, "CIE": true},
+							},
+						},
+					},
+					{
+						Time:         strconv.Itoa(int(time2)) + ":" + strconv.Itoa(int(time3)),
+						PowerProfile: &prof2,
+						Pods: &[]powerv1.PodInfo{
+							{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label2: "true"}}, Target: prof1},
+							{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label1: "false"}}, Target: prof2},
+						},
+						CState: &powerv1.CStatesSpec{
+							SharedPoolCStates: map[string]bool{},
+							ExclusivePoolCStates: map[string]map[string]bool{
+								prof1: {cstate: false},
+								prof2: {"C1E": true, "C6": false},
+							},
+							IndividualCoreCStates: map[string]map[string]bool{
+								"3": {"C1E": true, "C6": false},
+								"8": {"C1E": false, "C6": false},
+							},
+						},
 					},
 				},
 			},

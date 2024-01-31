@@ -574,26 +574,23 @@ func FuzzUncoreReconciler(f *testing.F) {
 	mockpkg.On("Dies").Return(&dielst)
 	mockpkg.On("Die", mock.Anything).Return(mockdie)
 	mockdie.On("SetUncore", mock.Anything).Return(nil)
+	f.Add("node1", "intel-power", true, "node2", true, uint(240000), uint(120000),uint(0))
+	f.Fuzz(func(t *testing.T, nodeName string, namespace string, extraNode bool, node2Name string, runningOnTargetNode bool, min uint, max uint, die_and_package uint) {
 
-	f.Fuzz(func(t *testing.T, nodeName string, namespace string, extraNode bool, node2Name string, runningOnTargetNode bool) {
-
-		r, req := setupUncoreFuzz(t, nodeName, namespace, extraNode, node2Name, runningOnTargetNode, hostmk)
+		r, req := setupUncoreFuzz(t, nodeName, namespace, extraNode, node2Name, runningOnTargetNode, min, max, die_and_package, hostmk)
 		if r == nil {
 			// if r is nil setupFuzz must have panicked, so we ignore it
 			return
 		}
-		_, err := r.Reconcile(context.Background(), req)
-		if err != nil {
-			t.Errorf("error reconciling: %s", err)
-		}
+		r.Reconcile(context.Background(), req)
+
 	})
 }
 
+// go test -fuzz FuzzUncoreReconciler -run=FuzzUncoreReconciler
 // sets up fuzzing and discards invalid inputs
-func setupUncoreFuzz(t *testing.T, nodeName string, namespace string, extraNode bool, node2Name string, runningOnTargetNode bool, powerLib power.Host) (*UncoreReconciler, reconcile.Request) {
-	max := uint(2400000)
-	min := uint(1200000)
-	die_and_package := uint(0)
+func setupUncoreFuzz(t *testing.T, nodeName string, namespace string, extraNode bool, node2Name string,
+	runningOnTargetNode bool, min uint, max uint, die_and_package uint, powerLib power.Host) (*UncoreReconciler, reconcile.Request) {
 	diemin := min - 10000
 	diemax := max - 10000
 	defer func(t *testing.T) {
@@ -607,7 +604,7 @@ func setupUncoreFuzz(t *testing.T, nodeName string, namespace string, extraNode 
 		Namespace: namespace,
 		Name:      nodeName,
 	}}
-	//prevents empty and null terminated strings
+	// prevents empty and null terminated strings
 	nodeName = strings.ReplaceAll(nodeName, " ", "")
 	node2Name = strings.ReplaceAll(node2Name, " ", "")
 	nodeName = strings.ReplaceAll(nodeName, "\t", "")

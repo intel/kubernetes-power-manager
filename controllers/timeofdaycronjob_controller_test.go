@@ -1293,3 +1293,81 @@ func TestCronReconcileSetupFail(t *testing.T) {
 	assert.Error(t, err)
 
 }
+
+// go test -fuzz FuzzTimeOfDayCronController -run=FuzzTimeOfDayCronController
+func FuzzTimeOfDayCronController(f *testing.F) {
+	f.Add("Eire", 12, 32, 30, "performance", "balance-power", "shared", "power", "bigger", "C4", "25")
+	f.Fuzz(func(t *testing.T, timeZone string, hr int, min int, sec int, prof1 string, prof2 string, prof3 string, label1 string, label2 string, cstate string, corevalue string) {
+		testNode := "TestNode"
+		t.Setenv("NODE_NAME", testNode)
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "test-pod-1",
+				Namespace:   IntelPowerNamespace,
+				UID:         "abcdefg",
+				Labels:      map[string]string{label1: "true"},
+				Annotations: map[string]string{"jibber": "jabber"},
+			},
+			Spec:   podSpec,
+			Status: podStaus,
+		}
+		nodeObj := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   testNode,
+				Labels: map[string]string{"powernode": "selector"},
+			},
+			Status: corev1.NodeStatus{
+				Capacity: map[corev1.ResourceName]resource.Quantity{
+					CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+				},
+			},
+		}
+		todObj := &powerv1.TimeOfDayCronJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      testNode,
+				Namespace: "intel-power",
+			},
+			Spec: powerv1.TimeOfDayCronJobSpec{
+				TimeZone:     &timeZone,
+				ReservedCPUs: &[]uint{0, 1},
+				Hour:         hr,
+				Minute:       min,
+				Second:       sec,
+				Profile:      &prof1,
+				Pods: &[]powerv1.PodInfo{
+					{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label1: "true"}}, Target: prof3},
+					{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label2: "false"}}, Target: prof2},
+				},
+				CState: &powerv1.CStatesSpec{
+					SharedPoolCStates: map[string]bool{cstate: true},
+					ExclusivePoolCStates: map[string]map[string]bool{
+						prof1: {"C1E": false, "C6": false, "C1": false},
+						prof2: {"C1E": true, "C6": false},
+					},
+					IndividualCoreCStates: map[string]map[string]bool{
+						"200":     {"C1E": true, "C6": false},
+						"-4":      {"C1E": false, "C6": false},
+						corevalue: {"C1E": false, "C6": false, "CIE": true},
+					},
+				},
+			},
+		}
+
+		clientObjs := []client.Object{
+			nodeObj, todObj, pod,
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      testNode,
+				Namespace: "intel-power",
+			},
+		}
+		r, err := createTODCronReconcilerObject(clientObjs)
+		if err != nil {
+			t.Error(err)
+		}
+		r.Reconcile(context.TODO(), req)
+
+	})
+}
