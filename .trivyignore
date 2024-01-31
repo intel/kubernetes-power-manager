@@ -1,0 +1,6 @@
+# Power Manager needs write access to root files
+AVD-KSV-0014
+# Power Manager needs securityContext.privileged
+AVD-KSV-0017
+# complains about wildcard in rbac but we need full privelages for those resources
+AVD-KSV-0045

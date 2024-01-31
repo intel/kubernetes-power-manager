@@ -6,35 +6,54 @@ pipeline {
       yamlFile 'ci/sdle/sdle-tools.yaml'
     }
   }
+  environment {
+    LIBRARY_BRANCH = 'main'
+    }
   stages {
     stage('Preprocess'){
       steps{
         zip zipFile: 'repo.zip', dir:'.', archive: true
       }
     }
-    // stage('Build container images'){
-    //   steps{
-    //     script{
-    //       container(name: 'kaniko-env', shell: '/busybox/sh') {
-    //         sh '''
-    //           /kaniko/executor --dockerfile build/Dockerfile --context . \
-    //           --destination "localhost:5000/power-operator:latest" \
-    //           --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+    stage('Checkout-Library') {
+      steps {
+        script {
+            dir('library') {
+                checkout([$class: 'GitSCM', 
+                    branches: [[name: 'main']],
+                    userRemoteConfigs: [[url: 'https://github.com/intel-innersource/libraries.orchestrators.resourcemanagement.power.powerlibrary.git', credentialsId: 'sys_rmcci_github']]
+                ])
+                 sh 'git checkout ${LIBRARY_BRANCH}'
+            }
+            sh 'echo "replace github.com/intel/power-optimization-library => ./library" >> go.mod'
+            sh "sed -i 's/COPY go\\.sum go\\.sum/COPY go\\.sum go\\.sum\\nCOPY \\.\\/library \\.\\/library/' build/Dockerfile"
+            sh "sed -i 's/COPY go\\.sum go\\.sum/COPY go\\.sum go\\.sum\\nCOPY \\.\\/library \\.\\/library/' build/Dockerfile.nodeagent"
+          }
+       }
+    }
+    stage('Build container images'){
+      steps{
+        script{
+          container(name: 'kaniko-env', shell: '/busybox/sh') {
+            sh '''
+              /kaniko/executor --dockerfile build/Dockerfile --context . \
+              --destination "localhost:5000/power-operator:latest" \
+              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
              
-    //           /kaniko/executor --dockerfile build/Dockerfile.nodeagent --context . \
-    //           --destination "localhost:5000/power-node-agent:latest" \
-    //          --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
-    //        '''
-    //       }
-    //     }
-    //   }
-    // }
+              /kaniko/executor --dockerfile build/Dockerfile.nodeagent --context . \
+              --destination "localhost:5000/power-node-agent:latest" \
+             --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+            '''
+          }
+        }
+      }
+    }
     stage('Trivy Scan'){
       steps{
         script{
           container('trivy-env') {
-            sh 'trivy fs .'
-            sh 'trivy config .'
+            sh 'trivy fs . --severity "HIGH,CRITICAL" --exit-code 1'
+            sh 'trivy config . --severity "HIGH,CRITICAL" --exit-code 1'
           }
         }
       }
@@ -104,8 +123,8 @@ pipeline {
             script{
               container('trivy-env') {
                 sh '''
-                   trivy image --insecure localhost:5000/power-operator:latest
-                   trivy image --insecure localhost:5000/power-node-agent:latest
+                   trivy image --insecure localhost:5000/power-operator:latest --severity "HIGH,CRITICAL" --exit-code 1
+                   trivy image --insecure localhost:5000/power-node-agent:latest --severity "HIGH,CRITICAL" --exit-code 1
                    '''
               }
             }
