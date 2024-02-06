@@ -220,15 +220,21 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 				containerList = append(containerList, workloadContainer)
 			}
 		}
-		for i, newContainer := range containerList {
+		var newContainerList []powerv1.Container
+		for _, newContainer := range containerList {
+			duplicate := false
 			logger.V(5).Info("confirming the containers are not duplicated")
 			for _, oldContainer := range workload.Spec.Node.Containers {
 				if newContainer.Id == oldContainer.Id && reflect.DeepEqual(newContainer.ExclusiveCPUs, oldContainer.ExclusiveCPUs) {
-					containerList[i] = containerList[len(containerList)-1]
+					duplicate = true
+					continue
 				}
 			}
+			if !duplicate {
+				newContainerList = append(newContainerList, newContainer)
+			}
 		}
-		workload.Spec.Node.Containers = append(workload.Spec.Node.Containers, containerList...)
+		workload.Spec.Node.Containers = append(workload.Spec.Node.Containers, newContainerList...)
 		err = r.Client.Update(context.TODO(), workload)
 		logger.V(5).Info("ammending the workload in the container list")
 		if err != nil {

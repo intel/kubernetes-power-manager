@@ -176,14 +176,6 @@ func TestPowerPod_Reconcile_Create(t *testing.T) {
 						PowerProfile: "performance",
 						Node: powerv1.WorkloadNode{
 							Name: "TestNode",
-							Containers: []powerv1.Container{
-								{
-									Name:          "test-container-1",
-									ExclusiveCPUs: []uint{1, 5, 8},
-									PowerProfile:  "performance",
-								},
-							},
-							CpuIds: []uint{1, 5, 8},
 						},
 					},
 				},
@@ -512,6 +504,116 @@ func TestPowerPod_Reconcile_Create(t *testing.T) {
 			}
 		}
 	}
+}
+
+// ensures duplicate containers don't get added to workloads
+func TestPowerPod_Duplicate_Containers(t *testing.T) {
+	nodeName := "TestNode"
+	podName := "test-pod-1"
+	workloadName := "performance-TestNode"
+	podResources := []*podresourcesapi.PodResources{
+		{
+			Name:      podName,
+			Namespace: IntelPowerNamespace,
+			Containers: []*podresourcesapi.ContainerResources{
+				{
+					Name:   "test-container-1",
+					CpuIds: []int64{1, 5, 8},
+				},
+			},
+		},
+	}
+	clientObjs := []runtime.Object{
+		defaultNode,
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "TestNode",
+			},
+		},
+		defaultProfile,
+		&powerv1.PowerWorkload{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      workloadName,
+				Namespace: IntelPowerNamespace,
+			},
+			Spec: powerv1.PowerWorkloadSpec{
+				Name:         workloadName,
+				PowerProfile: "performance",
+				Node: powerv1.WorkloadNode{
+					Name: "TestNode",
+					Containers: []powerv1.Container{
+						{
+							Name:          "test-container-1",
+							Id: "abcdefg",
+							ExclusiveCPUs: []uint{1, 5, 8},
+							PowerProfile:  "performance",
+						},
+					},
+					CpuIds: []uint{1, 5, 8},
+				},
+			},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName,
+				Namespace: IntelPowerNamespace,
+				UID:       "abcdefg",
+			},
+			Spec: corev1.PodSpec{
+				NodeName: "TestNode",
+				Containers: []corev1.Container{
+					{
+						Name:      "test-container-1",
+						Resources: defaultResources,
+					},
+				},
+				EphemeralContainers: []corev1.EphemeralContainer{},
+			},
+			Status: corev1.PodStatus{
+				Phase:    corev1.PodRunning,
+				QOSClass: corev1.PodQOSGuaranteed,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:        "test-container-1",
+						ContainerID: "docker://abcdefg",
+					},
+				},
+			},
+		},
+	}
+	t.Setenv("NODE_NAME", nodeName)
+
+	podResourcesClient := createFakePodResourcesListerClient(podResources)
+
+	r, err := createPodReconcilerObject(clientObjs, podResourcesClient)
+	assert.Nil(t, err)
+
+	req := reconcile.Request{
+		NamespacedName: client.ObjectKey{
+			Name:      podName,
+			Namespace: IntelPowerNamespace,
+		},
+	}
+
+	_, err = r.Reconcile(context.TODO(), req)
+	assert.Nil(t, err)
+
+	workload := &powerv1.PowerWorkload{}
+	err = r.Client.Get(context.TODO(), client.ObjectKey{
+		Name:      workloadName,
+		Namespace: IntelPowerNamespace,
+	}, workload)
+	assert.Nil(t, err)
+
+	for i, con1 := range workload.Spec.Node.Containers {
+		for j := i+1; j < len(workload.Spec.Node.Containers); j++ {
+			con2 := workload.Spec.Node.Containers[j]
+			if con1.Id == con2.Id && reflect.DeepEqual(con1.ExclusiveCPUs, con2.ExclusiveCPUs) {
+				t.Error("duplicate container not filtered out")
+			}
+		}
+	}
+	
 }
 
 // tests where the workload associated with the profile requested does not exist
