@@ -11,7 +11,7 @@ BUNDLE_IMG ?= intel-kubernetes-power-manager-bundle:$(VERSION)
 # version of ocp being supported
 OCP_VERSION=4.13
 # image used for building the dockerfile for ocp
-OCP_IMAGE=redhat/ubi9-minimal@sha256:35c99977ee5baa359bdc80f9ccc360644d2dbccb7462ca0fd97a23170a00cfd1
+OCP_IMAGE=redhat/ubi9-minimal@sha256:06d06f15f7b641a78f2512c8817cbecaa1bf549488e273f5ac27ff1654ed33f0
 # Options for 'bundle-build'
 ifneq ($(origin CHANNELS), undefined)
 BUNDLE_CHANNELS := --channels=$(CHANNELS)
@@ -76,8 +76,8 @@ images: generate manifests install
 	 $(IMGTOOL) build -f build/Dockerfile.nodeagent -t intel/power-node-agent:v$(VERSION) .
 
 images-ocp: generate manifests install
-	 $(IMGTOOL) build --build-arg="IMAGE=$(OCP_IMAGE)" -f build/Dockerfile -t intel/power-operator_ocp-$(OCP_VERSION):v$(VERSION) .
-	 $(IMGTOOL) build --build-arg="IMAGE=$(OCP_IMAGE)" -f build/Dockerfile.nodeagent -t intel/power-node-agent_ocp-$(OCP_VERSION):v$(VERSION) .
+	 $(IMGTOOL) build --build-arg="BASE_IMAGE=$(OCP_IMAGE)" -f build/Dockerfile -t intel/power-operator_ocp-$(OCP_VERSION):v$(VERSION) .
+	 $(IMGTOOL) build --build-arg="BASE_IMAGE=$(OCP_IMAGE)" -f build/Dockerfile.nodeagent -t intel/power-node-agent_ocp-$(OCP_VERSION):v$(VERSION) .
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
 	go run ./main.go
@@ -154,10 +154,10 @@ build-agent:
 	$(IMGTOOL) build -f build/Dockerfile.nodeagent -t intel-power-node-agent .
 
 build-controller-ocp:
-	$(IMGTOOL) build --build-arg="IMAGE=$(OCP_IMAGE)" -f build/Dockerfile -t intel/power-operator_ocp-$(OCP_VERSION):v$(VERSION) .
+	$(IMGTOOL) build --build-arg="BASE_IMAGE=$(OCP_IMAGE)" -f build/Dockerfile -t intel/power-operator_ocp-$(OCP_VERSION):v$(VERSION) .
 
 build-agent-ocp:
-	$(IMGTOOL) build --build-arg="IMAGE=$(OCP_IMAGE)" -f build/Dockerfile.nodeagent -t intel/power-node-agent_ocp-$(OCP_VERSION):v$(VERSION) .
+	$(IMGTOOL) build --build-arg="BASE_IMAGE=$(OCP_IMAGE)" -f build/Dockerfile.nodeagent -t intel/power-node-agent_ocp-$(OCP_VERSION):v$(VERSION) .
 
 .PHONY: docker-push controller-gen kustomize bundle bundle-build bundle-push
 # Push the image

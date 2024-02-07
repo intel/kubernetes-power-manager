@@ -39,10 +39,20 @@ pipeline {
               /kaniko/executor --dockerfile build/Dockerfile --context . \
               --destination "localhost:5000/power-operator:latest" \
               --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
-             
+
               /kaniko/executor --dockerfile build/Dockerfile.nodeagent --context . \
               --destination "localhost:5000/power-node-agent:latest" \
-             --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+
+              OCP_BASE_IMAGE=$(sed -n 's/OCP_IMAGE=//p' Makefile)
+
+              /kaniko/executor --dockerfile build/Dockerfile.nodeagent --context .  --build-arg="BASE_IMAGE=$OCP_BASE_IMAGE"\
+              --destination "localhost:5000/power-node-agent-ocp:latest" \
+              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+
+              /kaniko/executor --dockerfile build/Dockerfile --context . --build-arg="BASE_IMAGE=$OCP_BASE_IMAGE" \
+              --destination "localhost:5000/power-operator-ocp:latest" \
+              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
             '''
           }
         }
@@ -52,16 +62,11 @@ pipeline {
       steps{
         script{
           container('trivy-env') {
-            sh 'trivy fs . --severity "HIGH,CRITICAL" --exit-code 1'
-            sh 'trivy config . --severity "HIGH,CRITICAL" --exit-code 1'
-          }
-        }
-      }
-    }
-    stage('Kubesec Server') {
-      steps{
-        script{
-          container('kubesec-env') {
+            sh '''
+              set -e
+              trivy fs . --severity "HIGH,CRITICAL" --exit-code 1     >> trivy-filesystem.txt
+              trivy config . --severity "HIGH,CRITICAL" --exit-code 1 >> trivy-config.txt
+            '''
           }
         }
       }
@@ -123,8 +128,11 @@ pipeline {
             script{
               container('trivy-env') {
                 sh '''
-                   trivy image --insecure localhost:5000/power-operator:latest --severity "HIGH,CRITICAL" --exit-code 1
-                   trivy image --insecure localhost:5000/power-node-agent:latest --severity "HIGH,CRITICAL" --exit-code 1
+                   set -e
+                   trivy image localhost:5000/power-operator:latest --severity "HIGH,CRITICAL" --exit-code 1       >> trivy-image-operator.txt
+                   trivy image localhost:5000/power-operator-ocp:latest --severity "HIGH,CRITICAL" --exit-code 1   >> trivy-image-operator-ocp.txt
+                   trivy image localhost:5000/power-node-agent:latest --severity "HIGH,CRITICAL" --exit-code 1     >> trivy-image-nodeagent.txt
+                   trivy image localhost:5000/power-node-agent-ocp:latest --severity "HIGH,CRITICAL" --exit-code 1 >> trivy-image-nodeagent-ocp.txt
                    '''
               }
             }
@@ -164,6 +172,7 @@ pipeline {
       archiveArtifacts artifacts: 'golangci-lint.txt', allowEmptyArchive: true, fingerprint: false
       archiveArtifacts artifacts: 'hadolint.txt', allowEmptyArchive: true, fingerprint: false
       archiveArtifacts artifacts: 'shellcheck.txt', allowEmptyArchive: true, fingerprint: false
+      archiveArtifacts artifacts: 'trivy*.txt', allowEmptyArchive: true, fingerprint: false
     }
   }
 }
