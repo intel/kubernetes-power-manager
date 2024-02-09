@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"testing"
 
@@ -871,7 +872,7 @@ func TestPowerProfile_Reconcile_DeleteProfile(t *testing.T) {
 				}
 			}
 		}
-		
+
 		resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
 		if _, exists := node.Status.Capacity[resourceName]; exists {
 			t.Errorf("%s - failed: expected the extended resource '%s' to have been deleted", tc.testCase, fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
@@ -1789,6 +1790,73 @@ func TestPowerProfile_Wrong_Namespace(t *testing.T) {
 
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.ErrorContains(t, err, "incorrect namespace")
+}
+
+// uses dummy sysfs so must be run in isolation from other fuzzers
+// go test -fuzz FuzzPowerProfileController -run=FuzzPowerProfileController -parallel=1
+func FuzzPowerProfileController(f *testing.F) {
+	f.Add("TestNode", "performance", 3600, 3200, "performance", "powersave", false)
+	f.Fuzz(func(t *testing.T, nodeName, prof string, maxVal int, minVal int, epp string, governor string, shared bool) {
+		nodeName = strings.ReplaceAll(nodeName, " ", "")
+		nodeName = strings.ReplaceAll(nodeName, "\t", "")
+		nodeName = strings.ReplaceAll(nodeName, "\000", "")
+		if len(nodeName) == 0 {
+			return
+		}
+		t.Setenv("NODE_NAME", nodeName)
+
+		clientObjs := []runtime.Object{
+			&powerv1.PowerProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      prof,
+					Namespace: IntelPowerNamespace,
+				},
+				Spec: powerv1.PowerProfileSpec{
+					Name:     prof,
+					Max:      maxVal,
+					Min:      minVal,
+					Epp:      epp,
+					Governor: governor,
+					Shared:   shared,
+				},
+			},
+			&corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName,
+				},
+				Status: corev1.NodeStatus{
+					Capacity: map[corev1.ResourceName]resource.Quantity{
+						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+					},
+				},
+			},
+		}
+		r, err := createProfileReconcilerObject(clientObjs)
+		assert.Nil(t, err)
+		host, teardown, err := fullDummySystem()
+		assert.Nil(t, err)
+		defer teardown()
+		r.PowerLibrary = host
+		host.AddExclusivePool(prof)
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      prof,
+				Namespace: IntelPowerNamespace,
+			},
+		}
+
+		r.Reconcile(context.TODO(), req)
+		req = reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      "not-found",
+				Namespace: IntelPowerNamespace,
+			},
+		}
+
+		r.Reconcile(context.TODO(), req)
+
+	})
 }
 
 // tests positive and negative cases for SetupWithManager function

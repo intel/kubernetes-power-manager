@@ -1294,7 +1294,7 @@ func TestCronReconcileSetupFail(t *testing.T) {
 
 }
 
-// go test -fuzz FuzzTimeOfDayCronController -run=FuzzTimeOfDayCronController
+// go test -fuzz FuzzTimeOfDayCronController -run=FuzzTimeOfDayCronController -parallel=1
 func FuzzTimeOfDayCronController(f *testing.F) {
 	f.Add("Eire", 12, 32, 30, "performance", "balance-power", "shared", "power", "bigger", "C4", "25")
 	f.Fuzz(func(t *testing.T, timeZone string, hr int, min int, sec int, prof1 string, prof2 string, prof3 string, label1 string, label2 string, cstate string, corevalue string) {
@@ -1363,7 +1363,11 @@ func FuzzTimeOfDayCronController(f *testing.F) {
 				Namespace: "intel-power",
 			},
 		}
+		dummyFilesystemHost, teardown, err := fullDummySystem()
+		assert.Nil(t, err)
+		defer teardown()
 		r, err := createTODCronReconcilerObject(clientObjs)
+		r.PowerLibrary = dummyFilesystemHost
 		if err != nil {
 			t.Error(err)
 		}

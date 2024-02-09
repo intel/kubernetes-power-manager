@@ -711,6 +711,55 @@ func TestPowerConfig_Reconcile_Deletion(t *testing.T) {
 	}
 }
 
+// go test -fuzz FuzzPowerConfigController -run=FuzzPowerConfigController
+func FuzzPowerConfigController(f *testing.F) {
+	f.Add("sample-config", "performance", "feature.node.kubernetes.io/power-node", "device-plugin")
+	f.Fuzz(func(t *testing.T, name string, prof string, label string, devicePlugin string) {
+		clientObjs := []client.Object{
+			&powerv1.PowerConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: IntelPowerNamespace,
+				},
+				Spec: powerv1.PowerConfigSpec{
+					PowerNodeSelector: map[string]string{
+						label: "true",
+					},
+					PowerProfiles: []string{
+						prof,
+					},
+					CustomDevices: []string{devicePlugin},
+				},
+			},
+			&corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "TestNode",
+					Labels: map[string]string{
+						label: "true",
+					},
+				},
+				Status: corev1.NodeStatus{
+					Capacity: map[corev1.ResourceName]resource.Quantity{
+						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+					},
+				},
+			},
+		}
+		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+		r, err := createConfigReconcilerObject(clientObjs)
+		assert.Nil(t, err)
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      "test-config",
+				Namespace: IntelPowerNamespace,
+			},
+		}
+
+		r.Reconcile(context.TODO(), req)
+
+	})
+}
+
 // tests positive and negative cases for SetupWithManager function
 func TestPowerConfig_Reconcile_SetupPass(t *testing.T) {
 	r, err := createConfigReconcilerObject([]client.Object{})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -136,8 +137,8 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 			Namespace: IntelPowerNamespace,
 		},
 		Spec: powerv1.PowerWorkloadSpec{
-			Name:         "shared-" + testNode,
-			AllCores:     true,
+			Name:     "shared-" + testNode,
+			AllCores: true,
 			ReservedCPUs: []powerv1.ReservedSpec{
 				{Cores: []uint{0, 1}, PowerProfile: "performance"},
 				{Cores: []uint{2}, PowerProfile: "performance"},
@@ -518,6 +519,94 @@ func TestPowerWorkload_Reconcile_ClientErrs(t *testing.T) {
 	req.Name = workloadName
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.ErrorContains(t, err, "client delete error")
+}
+
+// uses dummy sysfs so must be run in isolation from other fuzzers
+// go test -fuzz FuzzPowerWorkloadController -run=FuzzPowerWorkloadController -parallel=1
+func FuzzPowerWorkloadController(f *testing.F) {
+	f.Add("TestNode", "performance", 3600, 3200, "performance", "powersave", false, false, uint(44), "performance", uint(1), uint(5), uint(2), uint(7))
+	f.Fuzz(func(t *testing.T, nodeName string, prof string, maxVal int, minVal int, epp string, governor string, shared bool, allcores bool, reservedCore uint, reservedProfile string, wCore1 uint, wCore2 uint, nCore1, nCore2 uint) {
+		nodeName = strings.ReplaceAll(nodeName, " ", "")
+		nodeName = strings.ReplaceAll(nodeName, "\t", "")
+		nodeName = strings.ReplaceAll(nodeName, "\000", "")
+		if len(nodeName) == 0 {
+			return
+		}
+		t.Setenv("NODE_NAME", nodeName)
+
+		clientObjs := []runtime.Object{
+			&powerv1.PowerProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      prof,
+					Namespace: IntelPowerNamespace,
+				},
+				Spec: powerv1.PowerProfileSpec{
+					Name:     prof,
+					Max:      maxVal,
+					Min:      minVal,
+					Epp:      epp,
+					Governor: governor,
+					Shared:   shared,
+				},
+			},
+			&powerv1.PowerWorkload{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      prof + "-" + nodeName,
+					Namespace: IntelPowerNamespace,
+				},
+				Spec: powerv1.PowerWorkloadSpec{
+					Name:     prof + "-" + nodeName,
+					AllCores: allcores,
+					ReservedCPUs: []powerv1.ReservedSpec{
+						{
+							Cores:        []uint{reservedCore},
+							PowerProfile: reservedProfile,
+						},
+					},
+					PowerNodeSelector: map[string]string{"kubernetes.io/hostname": nodeName},
+					Node: powerv1.WorkloadNode{
+						Name: nodeName,
+						Containers: []powerv1.Container{
+							{
+								Name:          "test-container-1",
+								ExclusiveCPUs: []uint{wCore1, wCore2},
+								PowerProfile:  prof,
+							},
+						},
+						CpuIds: []uint{nCore1, nCore2},
+					},
+					PowerProfile: prof,
+				},
+			},
+			&corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName,
+				},
+				Status: corev1.NodeStatus{
+					Capacity: map[corev1.ResourceName]resource.Quantity{
+						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+					},
+				},
+			},
+		}
+		r, err := createWorkloadReconcilerObject(clientObjs)
+		assert.Nil(t, err)
+		host, teardown, err := fullDummySystem()
+		assert.Nil(t, err)
+		defer teardown()
+		r.PowerLibrary = host
+		host.GetReservedPool().SetCpuIDs([]uint{})
+		host.AddExclusivePool(prof)
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      prof + "-" + nodeName,
+				Namespace: IntelPowerNamespace,
+			},
+		}
+
+		r.Reconcile(context.TODO(), req)
+
+	})
 }
 
 func TestPowerWorkload_Reconcile_SetupPass(t *testing.T) {

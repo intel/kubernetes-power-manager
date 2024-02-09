@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"go.uber.org/zap/zapcore"
@@ -358,6 +359,138 @@ func TestPowerNode_Reconcile_ClientErrs(t *testing.T) {
 		_, err = r.Reconcile(context.TODO(), req)
 		assert.ErrorContains(t, err, tc.clientErr)
 	}
+}
+
+// go test -fuzz FuzzPowerNodeController -run=FuzzPowerNodeController -parallel=1
+func FuzzPowerNodeController(f *testing.F) {
+	f.Add("TestNode", "some-plugin", "performance", "balance-performance", "balance-power", "perfromance-TestNode", "shared-TestNode", "0-44", "reserved-TestNode")
+	f.Fuzz(func(t *testing.T, nodeName string, devicePlugin string, prof1 string, prof2 string, prof3 string, workload string, sharedPool string, unaffectedCores string, reservedPools string) {
+		nodeName = strings.ReplaceAll(nodeName, " ", "")
+		nodeName = strings.ReplaceAll(nodeName, "\t", "")
+		nodeName = strings.ReplaceAll(nodeName, "\000", "")
+		if len(nodeName) == 0 {
+			return
+		}
+		t.Setenv("NODE_NAME", nodeName)
+		container := powerv1.Container{
+			Name:          "test-container-1",
+			Id:            "abcdefg",
+			Pod:           "test-pod-1",
+			ExclusiveCPUs: []uint{1, 2, 3},
+			PowerProfile:  prof1,
+			Workload:      prof1 + nodeName,
+		}
+		clientObjs := []runtime.Object{
+			&corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName,
+				},
+				Status: corev1.NodeStatus{
+					Capacity: map[corev1.ResourceName]resource.Quantity{
+						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+					},
+				},
+			},
+			&powerv1.PowerProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      prof1,
+					Namespace: IntelPowerNamespace,
+				},
+				Spec: powerv1.PowerProfileSpec{
+					Name: prof1,
+				},
+			},
+			&powerv1.PowerProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      prof2,
+					Namespace: IntelPowerNamespace,
+				},
+				Spec: powerv1.PowerProfileSpec{
+					Name: prof2,
+				},
+			},
+			&powerv1.PowerProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      prof3,
+					Namespace: IntelPowerNamespace,
+				},
+				Spec: powerv1.PowerProfileSpec{
+					Name: prof3,
+				},
+			},
+			&powerv1.PowerWorkload{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      prof1 + "-" + nodeName,
+					Namespace: IntelPowerNamespace,
+				},
+				Spec: powerv1.PowerWorkloadSpec{
+					Name:         prof1 + "-" + nodeName,
+					PowerProfile: prof1,
+					Node: powerv1.WorkloadNode{
+						Name:   nodeName,
+						CpuIds: []uint{1, 2, 3},
+					},
+				},
+			},
+			&powerv1.PowerNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      nodeName,
+					Namespace: IntelPowerNamespace,
+				},
+				Spec: powerv1.PowerNodeSpec{
+					CustomDevices:   []string{devicePlugin},
+					PowerProfiles:   []string{prof1, prof2, prof3},
+					PowerWorkloads:  []string{workload},
+					SharedPool:      sharedPool,
+					UnaffectedCores: unaffectedCores,
+					ReservedPools:   []string{reservedPools},
+					PowerContainers: []powerv1.Container{
+						container,
+					},
+				},
+			},
+		}
+		pod := powerv1.GuaranteedPod{
+			Node:      "TestNode",
+			Name:      "test-pod-1",
+			Namespace: IntelPowerNamespace,
+			UID:       "abcdefg",
+			Containers: []powerv1.Container{
+				container,
+			},
+		}
+		dummyFilesystemHost, teardown, err := fullDummySystem()
+		assert.Nil(t, err)
+		defer teardown()
+
+		pool, _ := dummyFilesystemHost.AddExclusivePool(prof1)
+		profile, _ := power.NewPowerProfile(prof1, 10000, 10000, "powersave", "")
+		pool.SetPowerProfile(profile)
+		dummyFilesystemHost.GetSharedPool().SetPowerProfile(profile)
+		dummyFilesystemHost.GetSharedPool().MoveCpuIDs([]uint{0, 1, 2, 3, 4, 5})
+		pool.MoveCpuIDs([]uint{1, 2, 3})
+		pool, _ = dummyFilesystemHost.AddExclusivePool(prof2)
+		profile, _ = power.NewPowerProfile(prof1, 10000, 10000, "powersave", "")
+		pool.SetPowerProfile(profile)
+		pool, _ = dummyFilesystemHost.AddExclusivePool(prof3)
+		profile, _ = power.NewPowerProfile(prof1, 10000, 10000, "powersave", "")
+		pool.SetPowerProfile(profile)
+
+		r, err := createPowerNodeReconcilerObject(clientObjs)
+		assert.Nil(t, err)
+		r.State.UpdateStateGuaranteedPods(pod)
+		r.PowerLibrary = dummyFilesystemHost
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      nodeName,
+				Namespace: IntelPowerNamespace,
+			},
+		}
+
+		r.Reconcile(context.TODO(), req)
+
+	})
 }
 
 // positive and negative test casses for the SetupWithManager function
