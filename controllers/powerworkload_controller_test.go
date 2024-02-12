@@ -334,7 +334,25 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 			clientObjs: []runtime.Object{sharedSkeleton, nodeObj},
 		},
 		{
-			testCase:     "Test Case 11 - reserved recovery",
+			testCase:     "Test Case 11 - reserved SetCpuIDs() and pseudoReservedPool.Remove() errors",
+			workloadName: "shared-" + testNode,
+			getNodemk: func() *hostMock {
+				template := mocktemplate()
+				template.exclusiveRserved.ExpectedCalls = popCall(template.exclusiveRserved.ExpectedCalls, "SetCpuIDs")
+				template.reserved.ExpectedCalls = popCall(template.reserved.ExpectedCalls, "MoveCpuIDs")
+				template.node.ExpectedCalls = popCall(template.node.ExpectedCalls, "GetExclusivePool")
+				template.exclusiveRserved.On("SetCpuIDs", mock.Anything).Return(fmt.Errorf("set profile err"))
+				template.exclusiveRserved.On("Remove", mock.Anything).Return(fmt.Errorf("remove pool error"))
+				template.reserved.On("MoveCpuIDs", mock.Anything).Return(fmt.Errorf("recovery failed"))
+				return template.node
+			},
+			validateErr: func(r *PowerWorkloadReconciler, e error) bool {
+				return assert.ErrorContains(t, e, "recovery failed")
+			},
+			clientObjs: []runtime.Object{sharedSkeleton, nodeObj},
+		},
+		{
+			testCase:     "Test Case 12 - reserved recovery",
 			workloadName: "shared-" + testNode,
 			getNodemk: func() *hostMock {
 				template := mocktemplate()
@@ -352,6 +370,62 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 				exclusiveReservedmk2.On("SetPowerProfile", mock.Anything).Return(nil)
 				template.exclusiveRserved.On("SetCpuIDs", mock.Anything).Return(fmt.Errorf("set profile err"))
 				template.reserved.On("MoveCpuIDs", mock.Anything).Return(nil)
+				return template.node
+			},
+			validateErr: func(r *PowerWorkloadReconciler, e error) bool {
+				return assert.ErrorContains(t, e, "error(s) encountered establishing reserved pool")
+			},
+			clientObjs: []runtime.Object{sharedSkeleton, nodeObj},
+		},
+		{
+			testCase:     "Test Case 13 - SetPowerProfile() and pseudoReservedPool.Remove() errors",
+			workloadName: "shared-" + testNode,
+			getNodemk: func() *hostMock {
+				template := mocktemplate()
+				exclusiveReservedmk2 := new(poolMock)
+				template.exclusiveRserved.ExpectedCalls = popCall(template.exclusiveRserved.ExpectedCalls, "SetCpuIDs")
+				template.reserved.ExpectedCalls = popCall(template.reserved.ExpectedCalls, "MoveCpuIDs")
+				template.node.ExpectedCalls = popCall(template.node.ExpectedCalls, "GetAllExclusivePools")
+				template.node.ExpectedCalls = popCall(template.node.ExpectedCalls, "AddExclusivePool")
+				template.node.On("GetAllExclusivePools").Return(&power.PoolList{exclusiveReservedmk2, template.exclusiveRserved})
+				template.node.On("AddExclusivePool", "TestNode-reserved-[2]").Return(exclusiveReservedmk2, nil)
+				template.node.On("AddExclusivePool", "TestNode-reserved-[0 1]").Return(template.exclusiveRserved, nil)
+				exclusiveReservedmk2.On("Name").Return("TestNode-reserved-[2]")
+				exclusiveReservedmk2.On("Remove").Return(nil).Once()
+				exclusiveReservedmk2.On("Remove").Return(fmt.Errorf("remove error")).Once()
+				exclusiveReservedmk2.On("SetCpuIDs", mock.Anything).Return(nil)
+				exclusiveReservedmk2.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("set profile err"))
+				template.exclusiveRserved.On("SetCpuIDs", mock.Anything).Return(fmt.Errorf("set CPU ids err"))
+				template.exclusiveRserved.On("Remove").Return(nil)
+				template.reserved.On("MoveCpuIDs", mock.Anything).Return(nil)
+				return template.node
+			},
+			validateErr: func(r *PowerWorkloadReconciler, e error) bool {
+				return assert.ErrorContains(t, e, "error(s) encountered establishing reserved pool")
+			},
+			clientObjs: []runtime.Object{sharedSkeleton, nodeObj},
+		},
+		{
+			testCase:     "Test Case 14 - nil GetExclusivePool() response and pseudoReservedPool.Remove() error",
+			workloadName: "shared-" + testNode,
+			getNodemk: func() *hostMock {
+				template := mocktemplate()
+				exclusiveReservedmk2 := new(poolMock)
+				template.node.ExpectedCalls = popCall(template.node.ExpectedCalls, "GetAllExclusivePools")
+				template.node.ExpectedCalls = popCall(template.node.ExpectedCalls, "AddExclusivePool")
+				template.node.ExpectedCalls = popCall(template.node.ExpectedCalls, "GetExclusivePool")
+				template.node.On("GetAllExclusivePools").Return(&power.PoolList{exclusiveReservedmk2, template.exclusiveRserved})
+				template.node.On("AddExclusivePool", "TestNode-reserved-[2]").Return(exclusiveReservedmk2, nil)
+				template.node.On("AddExclusivePool", "TestNode-reserved-[0 1]").Return(template.exclusiveRserved, nil)
+				template.node.On("GetExclusivePool", "performance").Return(template.performance).Once()
+				template.node.On("GetExclusivePool", "performance").Return(nil).Once()
+
+				exclusiveReservedmk2.On("Name").Return("TestNode-reserved-[2]")
+				exclusiveReservedmk2.On("Remove").Return(nil).Once()
+				exclusiveReservedmk2.On("Remove").Return(fmt.Errorf("remove error 2")).Once()
+				exclusiveReservedmk2.On("SetCpuIDs", mock.Anything).Return(nil)
+				exclusiveReservedmk2.On("SetPowerProfile", mock.Anything).Return(nil)
+
 				return template.node
 			},
 			validateErr: func(r *PowerWorkloadReconciler, e error) bool {

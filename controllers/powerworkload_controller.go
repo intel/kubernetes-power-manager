@@ -22,15 +22,16 @@ import (
 	"os"
 	"strings"
 
+	e "errors"
+
 	"github.com/go-logr/logr"
+	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+	"github.com/intel/kubernetes-power-manager/pkg/util"
+	"github.com/intel/power-optimization-library/pkg/power"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	e "errors"
-	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
-	"github.com/intel/kubernetes-power-manager/pkg/util"
-	"github.com/intel/power-optimization-library/pkg/power"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -258,28 +259,39 @@ func validateCoreIsInCoreList(core uint, coreList []uint) bool {
 }
 
 func createReservedPool(library power.Host, coreConfig powerv1.ReservedSpec, logger *logr.Logger) error {
-
 	pseudoReservedPool, err := library.AddExclusivePool(os.Getenv("NODE_NAME") + "-reserved-" + fmt.Sprintf("%v", coreConfig.Cores))
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("error creating reserved pool for cores %v", coreConfig.Cores))
 		return err
 	}
+
 	if err := pseudoReservedPool.SetCpuIDs(coreConfig.Cores); err != nil {
-		pseudoReservedPool.Remove()
+		if removePoolError := pseudoReservedPool.Remove(); removePoolError != nil {
+			logger.Error(removePoolError, fmt.Sprintf("error removing pool %v", pseudoReservedPool.Name()))
+		}
+
 		logger.Error(err, "error moving cores to special reserved pool")
 		return err
 	}
+
 	corePool := library.GetExclusivePool(coreConfig.PowerProfile)
 	if corePool == nil {
-		pseudoReservedPool.Remove()
+		if removePoolError := pseudoReservedPool.Remove(); removePoolError != nil {
+			logger.Error(removePoolError, fmt.Sprintf("error removing pool %v", pseudoReservedPool.Name()))
+		}
+
+		logger.Error(err, "error setting retrieving exclusive pool for reserved cores")
 		return fmt.Errorf(fmt.Sprintf("specified profile %s has no existing pool", coreConfig.PowerProfile))
-	} 
+	}
+
 	if err := pseudoReservedPool.SetPowerProfile(corePool.GetPowerProfile()); err != nil {
-		pseudoReservedPool.Remove()
+		if removePoolError := pseudoReservedPool.Remove(); removePoolError != nil {
+			logger.Error(removePoolError, fmt.Sprintf("error removing pool %v", pseudoReservedPool.Name()))
+		}
 		logger.Error(err, "error setting profile for reserved cores")
 		return err
 	}
-	
+
 	return nil
 }
 
