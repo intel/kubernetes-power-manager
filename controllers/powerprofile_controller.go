@@ -114,11 +114,6 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 				}
 				return ctrl.Result{}, nil
 			}
-			pool := r.PowerLibrary.GetExclusivePool(req.Name)
-			if pool == nil {
-				logger.Info("attempted to remove the non existing pool", "pool", req.Name)
-				return ctrl.Result{Requeue: false}, err
-			}
 
 			// To get current cstate obj matching node name and removing powerprofile entry
 			currentNodeCStates := &powerv1.CStates{}
@@ -139,12 +134,6 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 				}
 			}
 
-			err = pool.Remove()
-			if err != nil {
-				logger.Error(err, "error deleting the power profile from the library")
-				return ctrl.Result{}, err
-			}
-
 			powerWorkloadName := fmt.Sprintf("%s-%s", req.NamespacedName.Name, nodeName)
 			powerWorkload := &powerv1.PowerWorkload{}
 			err = r.Client.Get(context.TODO(), client.ObjectKey{
@@ -163,7 +152,6 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 					return ctrl.Result{}, err
 				}
 			}
-
 			// Remove the extended resources for this power profile from the node
 			err = r.removeExtendedResources(nodeName, req.NamespacedName.Name, &logger)
 			if err != nil {

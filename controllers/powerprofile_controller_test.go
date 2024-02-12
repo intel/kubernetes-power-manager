@@ -1066,64 +1066,6 @@ func TestPowerProfile_Reconcile_MaxValueZeroMinValueGreaterThanZero(t *testing.T
 	}
 }
 
-func TestPowerProfile_Reconcile_PowerProfileReturnsErrors(t *testing.T) {
-	tcases := []struct {
-		testCase    string
-		nodeName    string
-		profileName string
-		clientObjs  []runtime.Object
-	}{
-		{
-			testCase:    "Test 1 - Profile deleted, library.DeleteProfile returns error",
-			nodeName:    "TestNode",
-			profileName: "performance",
-			clientObjs: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "TestNode",
-					},
-					Status: corev1.NodeStatus{
-						Capacity: map[corev1.ResourceName]resource.Quantity{
-							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-						},
-					},
-				},
-			},
-		},
-	}
-
-	for _, tc := range tcases {
-		t.Setenv("NODE_NAME", tc.nodeName)
-
-		r, err := createProfileReconcilerObject(tc.clientObjs)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error creating the reconciler object", tc.testCase)
-		}
-		dummyShared := new(poolMock)
-		dummyProf := new(profMock)
-		nodemk := new(hostMock)
-		pool := new(poolMock)
-		nodemk.On("GetExclusivePool", tc.profileName).Return(pool)
-		pool.On("Remove").Return(fmt.Errorf("test error"))
-		nodemk.On("GetSharedPool").Return(dummyShared)
-		dummyShared.On("GetPowerProfile").Return(dummyProf)
-		dummyProf.On("Name").Return("shared")
-		r.PowerLibrary = nodemk
-
-		req := reconcile.Request{
-			NamespacedName: client.ObjectKey{
-				Name:      tc.profileName,
-				Namespace: IntelPowerNamespace,
-			},
-		}
-
-		_, err = r.Reconcile(context.TODO(), req)
-		assert.Error(t, err)
-
-	}
-}
-
 func TestPowerProfile_Reconcile_AcpiDriver(t *testing.T) {
 	tcases := []struct {
 		testCase    string
