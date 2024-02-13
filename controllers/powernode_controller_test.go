@@ -463,18 +463,33 @@ func FuzzPowerNodeController(f *testing.F) {
 		assert.Nil(t, err)
 		defer teardown()
 
-		pool, _ := dummyFilesystemHost.AddExclusivePool(prof1)
-		profile, _ := power.NewPowerProfile(prof1, 10000, 10000, "powersave", "")
-		pool.SetPowerProfile(profile)
-		dummyFilesystemHost.GetSharedPool().SetPowerProfile(profile)
-		dummyFilesystemHost.GetSharedPool().MoveCpuIDs([]uint{0, 1, 2, 3, 4, 5})
-		pool.MoveCpuIDs([]uint{1, 2, 3})
-		pool, _ = dummyFilesystemHost.AddExclusivePool(prof2)
-		profile, _ = power.NewPowerProfile(prof1, 10000, 10000, "powersave", "")
-		pool.SetPowerProfile(profile)
-		pool, _ = dummyFilesystemHost.AddExclusivePool(prof3)
-		profile, _ = power.NewPowerProfile(prof1, 10000, 10000, "powersave", "")
-		pool.SetPowerProfile(profile)
+		pool, err1 := dummyFilesystemHost.AddExclusivePool(prof1)
+		profile, err2 := power.NewPowerProfile(prof1, 10000, 10000, "powersave", "")
+		// continue test without pools
+		if err1 == nil && err2 == nil {
+			pool.SetPowerProfile(profile)
+			dummyFilesystemHost.GetSharedPool().SetPowerProfile(profile)
+			dummyFilesystemHost.GetSharedPool().MoveCpuIDs([]uint{0, 1, 2, 3, 4, 5})
+			pool.MoveCpuIDs([]uint{1, 2, 3})
+			pool, err = dummyFilesystemHost.AddExclusivePool(prof2)
+			if err !=nil {
+				return
+			}
+			profile, err = power.NewPowerProfile(prof1, 10000, 10000, "powersave", "")
+			if err !=nil {
+				return
+			}
+			pool.SetPowerProfile(profile)
+			pool, err = dummyFilesystemHost.AddExclusivePool(prof3)
+			if err !=nil {
+				return
+			}
+			profile, err = power.NewPowerProfile(prof1, 10000, 10000, "powersave", "")
+			if err !=nil {
+				return
+			}
+			pool.SetPowerProfile(profile)
+		}
 
 		r, err := createPowerNodeReconcilerObject(clientObjs)
 		assert.Nil(t, err)
