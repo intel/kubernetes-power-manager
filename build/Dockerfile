@@ -1,6 +1,6 @@
-ARG BASE_IMAGE=clearlinux@sha256:d3dd73575d2eb9c6ffb635c82b266fa9266591db844ac9f41014c0af415992c9
+ARG BASE_IMAGE=scratch
 # Build the manager binary
-FROM golang@sha256:403f48633fb5ebd49f9a2b6ad6719f912df23dae44974a0c9445be331e72ff5e as builder
+FROM golang@sha256:163801a964d358d6450aeb51b59d5c807d43a7c97fed92cc7ff1be5bd72811ab as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
