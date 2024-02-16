@@ -217,7 +217,7 @@ To uninstall the latest version, use the following command:
 
 You can use the HELM_CHART and OCP parameters to deploy an older or Openshift specific version of the Kubernetes Power Manager:
 
-`HELM_CHART=ocp-4.13-v2.3.1 OCP=true make helm-install`
+`HELM_CHART=v2.3.1 OCP=true make helm-install`
 `HELM_CHART=v2.2.0 make helm-install`
 `HELM_CHART=v2.1.0 make helm-install`
 

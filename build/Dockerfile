@@ -21,10 +21,11 @@ COPY pkg/ pkg/
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
 FROM ${BASE_IMAGE}
+ARG MANIFEST=build/manifests/power-node-agent-ds.yaml
 WORKDIR /
 COPY LICENSE /licenses/LICENSE
 COPY --from=builder /workspace/manager .
-COPY build/manifests/ /power-manifests/
+COPY ${MANIFEST} /power-manifests/
 USER 10001
 
 ENTRYPOINT ["/manager"]

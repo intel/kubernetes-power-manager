@@ -1,8 +1,8 @@
 export APP_NAME=intel-kubernetes-power-manager
 # Current Operator version
-VERSION ?= 2.3.1
+VERSION ?= 2.4.0
 # parameter used for helm chart image
-HELM_CHART ?= v2.3.1
+HELM_CHART ?= v2.4.0
 HELM_VERSION := $(shell echo $(HELM_CHART) | cut -d "v" -f2)
 # used to detemine if certain targets should build for openshift
 OCP ?= false
@@ -76,7 +76,7 @@ images: generate manifests install
 	 $(IMGTOOL) build -f build/Dockerfile.nodeagent -t intel/power-node-agent:v$(VERSION) .
 
 images-ocp: generate manifests install
-	 $(IMGTOOL) build --build-arg="BASE_IMAGE=$(OCP_IMAGE)" -f build/Dockerfile -t intel/power-operator_ocp-$(OCP_VERSION):v$(VERSION) .
+	 $(IMGTOOL) build --build-arg="BASE_IMAGE=$(OCP_IMAGE)" --build-arg="MANIFEST=build/manifests/ocp/power-node-agent-ds.yaml" -f build/Dockerfile -t intel/power-operator_ocp-$(OCP_VERSION):v$(VERSION) .
 	 $(IMGTOOL) build --build-arg="BASE_IMAGE=$(OCP_IMAGE)" -f build/Dockerfile.nodeagent -t intel/power-node-agent_ocp-$(OCP_VERSION):v$(VERSION) .
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
@@ -86,6 +86,7 @@ run: generate fmt vet manifests
 helm-install:
 ifeq (true, $(OCP))
 	$(eval HELM_FLAG:=--set ocp=true)
+	$(eval OCP_SUFFIX:=_ocp-$(OCP_VERSION))
 endif
 	sed -i 's/^version:.*$$/version: $(HELM_VERSION)/' helm/kubernetes-power-manager/Chart.yaml 
 	sed -i 's/^appVersion:.*$$/appVersion: \"$(HELM_CHART)\"/' helm/kubernetes-power-manager/Chart.yaml
@@ -93,7 +94,7 @@ endif
 	sed -i 's/^appVersion:.*$$/appVersion: \"$(HELM_CHART)\"/' helm/crds/Chart.yaml 
 	helm install kubernetes-power-manager-crds ./helm/crds
 	helm dependency update ./helm/kubernetes-power-manager
-	helm install kubernetes-power-manager-$(HELM_CHART) ./helm/kubernetes-power-manager --set operator.container.image=intel/power-operator:$(HELM_CHART) $(HELM_FLAG)
+	helm install kubernetes-power-manager-$(HELM_CHART) ./helm/kubernetes-power-manager --set operator.container.image=intel/power-operator$(OCP_SUFFIX):$(HELM_CHART) $(HELM_FLAG)
 
 helm-uninstall:
 	sed -i 's/^version:.*$$/version: $(HELM_VERSION)/' helm/kubernetes-power-manager/Chart.yaml 
