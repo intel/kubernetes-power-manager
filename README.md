@@ -379,6 +379,23 @@ spec:
   powerProfile: "shared-example-node"
 ````
 
+**Important** Version 2.4.0 of the Kubernetes Power Manager allows users the possibility of assigning a specific power profile
+to a reserved pool. This is turn relies on a change in the PowerWorkload CRD that is not backwards compatible with
+older versions of Kubernetes Power Manager (v2.3.1 and older). If affected by this problem, you will see similar error in the
+manager POD's logs:
+````
+Failed to watch *v1.PowerWorkload: failed to list *v1.PowerWorkload: json: cannot unmarshal number into Go struct field PowerWorkloadSpec.items.spec.reservedCPUs of type v1.ReservedSpec
+````
+
+To mitigate this problem, we ask customers to update their PowerWorkload manifests as suggested below:
+````yaml
+-   - 0
+-   - 1
++   - cores: [0, 1]
+````
+We aim to fix this issue in the next release of the Kubernetes Power Manager. 
+
+
 ### Profile Controller
 
 The Profile Controller holds values for specific SST settings which are then applied to cores at host level by the
