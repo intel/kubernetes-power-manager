@@ -372,7 +372,7 @@ spec:
   allCores: true
   reservedCPUs:
     - cores: [0, 1]
-      profile: "performance"
+      powerProfile: "performance"
   powerNodeSelector:
     # Labels other than hostname can be used
     - “kubernetes.io/hostname”: “example-node”
