@@ -17,4 +17,4 @@ spec:
     # Add wanted PowerProfiles here; valid entries are as follows:
     - balance-performance
     - balance-power
-    - "performance"
+    - performance

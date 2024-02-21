@@ -41,7 +41,7 @@ spec:
     tty: true
     imagePullPolicy: IfNotPresent
     command: ["/busybox/sleep","infinity"]
-    # ephemeral image registry, avavaliable at localhost:5000 only for the lifetime of the pipeline
+    # ephemeral image registry, available at localhost:5000 only for the lifetime of the pipeline
   - name: image-registry
     image: registry:2
     imagePullPolicy: IfNotPresent
