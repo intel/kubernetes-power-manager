@@ -1,0 +1,29 @@
+apiVersion: v2
+name: kubernetes-power-manager-v2.3.1
+description: A Helm chart for Intel's Kubernetes Power Manager
+
+# A chart can be either an 'application' or a 'library' chart.
+#
+# Application charts are a collection of templates that can be packaged into versioned archives
+# to be deployed.
+#
+# Library charts provide useful utilities or functions for the chart developer.
+# For example they can be used to abtract common and re-usable boiler plate yaml files. They're included as
+# a dependency of application charts to inject those utilities and functions into the rendering
+# pipeline. Library charts do not define any templates and therefore cannot be deployed.
+type: application
+
+# This is the chart version. This version number should be incremented each time you make changes
+# to the chart and its templates, including the app version.
+# Versions are expected to follow Semantic Versioning (https://semver.org/)
+version: 2.4.0
+
+# This is the version number of the application being deployed. This version number should be
+# incremented each time you make changes to the application. Versions are not expected to
+# follow Semantic Versioning. They should reflect the version the application is using.
+# It is recommended to use it with quotes.
+appVersion: "v2.4.0"
+dependencies:
+- name: manager-chart-library
+  version: 0.1.0
+  repository: file://../manager-chart-library

@@ -22,6 +22,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -52,6 +53,7 @@ type PowerNodeReconciler struct {
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powernodes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=power.intel.com,resources=powernodes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 
 func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -78,6 +80,11 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 		}
 		return ctrl.Result{RequeueAfter: queuetime}, err
 	}
+
+	if len(powerNode.Spec.CustomDevices) > 0 {
+		logger.V(5).Info("the power node contains the following custom devices.", "Custom Devices", powerNode.Spec.CustomDevices)
+	}
+
 	powerProfiles := &powerv1.PowerProfileList{}
 	logger.V(5).Info("retrieving the power profile list")
 	err = r.Client.List(context.TODO(), powerProfiles)
@@ -165,12 +172,18 @@ func (r *PowerNodeReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 		cores := prettifyCoreList(sharedCores)
 		powerNode.Spec.SharedPool = fmt.Sprintf("%s || %v || %v || %s", sharedProfile.Name(), sharedProfile.MaxFreq(), sharedProfile.MinFreq(), cores)
 	}
-
-	if len(reservedSystemCpus) > 0 {
-		logger.V(5).Info("configurating the cores to the reserved pool")
-		cores := prettifyCoreList(reservedSystemCpus)
-		powerNode.Spec.UneffectedCores = cores
+	// look for any special reserved pools
+	pools := r.PowerLibrary.GetAllExclusivePools()
+	powerNode.Spec.ReservedPools = []string{}
+	for _, pool := range *pools {
+		if strings.Contains(pool.Name(), nodeName+"-reserved-") {
+			cores := prettifyCoreList(pool.Cpus().IDs())
+			powerNode.Spec.ReservedPools = append(powerNode.Spec.ReservedPools, fmt.Sprintf("%v || %v || %s", pool.GetPowerProfile().MaxFreq(), pool.GetPowerProfile().MinFreq(), cores))
+		}
 	}
+	logger.V(5).Info("configurating the cores to the reserved pool")
+	cores := prettifyCoreList(reservedSystemCpus)
+	powerNode.Spec.UnaffectedCores = cores
 	err = r.Client.Update(context.TODO(), powerNode)
 	if err != nil {
 		return ctrl.Result{RequeueAfter: queuetime}, err

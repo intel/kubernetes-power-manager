@@ -1,6 +1,7 @@
-# Build the manager binary
-FROM golang@sha256:403f48633fb5ebd49f9a2b6ad6719f912df23dae44974a0c9445be331e72ff5e as builder
+ARG BASE_IMAGE=scratch
 
+# Build the manager binary
+FROM golang@sha256:163801a964d358d6450aeb51b59d5c807d43a7c97fed92cc7ff1be5bd72811ab as builder
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -10,24 +11,20 @@ COPY go.sum go.sum
 
 RUN go mod download
 
-ENV USER_ID=10001 \
-    USER_NAME=power-node-agent
-
 # Copy the go source
-COPY build/bin bin/
 COPY build/nodeagent/main.go main.go
 COPY api/ api/
 COPY controllers/ controllers/
 COPY pkg/ pkg/
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o nodeagent main.go
+RUN mkdir -p /install_root/etc && adduser -D -g "" -u 10001 -s /sbin/nologin power-node-agent && tail -1 /etc/passwd > /install_root/etc/passwd \
+    && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o /install_root/nodeagent ./main.go
 
-FROM clearlinux@sha256:41c996dd143d65e23f81441cad5305798c16f89ea74728714a9419beb25b3314
+FROM ${BASE_IMAGE}
 WORKDIR /
-COPY --from=builder /workspace/nodeagent .
-COPY build/bin bin/
-RUN bin/user_setup
+COPY LICENSE /licenses/LICENSE
+COPY --from=builder /install_root .
 USER 10001
 
 ENTRYPOINT ["/nodeagent"]

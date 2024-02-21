@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -44,25 +45,22 @@ type TimeOfDayReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// Only power and performance profiles supported for now
 
 //+kubebuilder:rbac:groups=power.intel.com,resources=timeofdays,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=power.intel.com,resources=timeofdays/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the TimeOfDay object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.6.4/pkg/reconcile
+
 func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("timeofday", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
-		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
+		err := fmt.Errorf("incorrect namespace")
+		logger.Error(err, "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{Requeue: false}, err
+	}
+	nodeName := os.Getenv("NODE_NAME")
+	if req.Name != nodeName {
 		return ctrl.Result{}, nil
 	}
 	//enforces HH:MM:SS time format
@@ -100,7 +98,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 
 	// Validate incoming values from time-of-day manifest
 	timeZone := timeOfDay.Spec.TimeZone
-	logger.V(5).Info("validated timezone for time-of-day, values are: %s", timeZone)
+	logger.V(5).Info(fmt.Sprintf("validated timezone for time-of-day, values are: %s", timeZone))
 
 	if timeZone != "" {
 		_, err := time.LoadLocation(timeZone)

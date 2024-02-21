@@ -1,0 +1,18 @@
+apiVersion: power.intel.com/v1
+kind: PowerProfile
+metadata:
+  labels:
+    app.kubernetes.io/name: PowerProfile
+    app.kubernetes.io/instance: shared
+    app.kubernetes.io/part-of: kubernetes-power-manager
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: kubernetes-power-manager
+  name: shared
+  namespace: intel-power
+spec:
+  name: "shared"
+  max: 1000
+  min: 1000
+  epp: "power"
+  shared: true
+  governor: "powersave"

@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: intel-power-operator
+  namespace: intel-power
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: intel-power-node-agent
+  namespace: intel-power
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: operator-custom-resource-definitions-role
+  namespace: intel-power
+rules:
+  - apiGroups: [ "", "power.intel.com", "apps", "coordination.k8s.io" ]
+    resources: [ "powerconfigs", "powerconfigs/status", "powerprofiles", "powerprofiles/status", "events", "daemonsets", "configmaps", "configmaps/status", "leases","uncores" ]
+    verbs: [ "*" ]
+  - apiGroups:
+    - security.openshift.io
+    resourceNames:
+    - privileged
+    resources:
+    - securitycontextconstraints
+    verbs:
+    - use
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: operator-custom-resource-definitions-role-binding
+  namespace: intel-power
+subjects:
+  - kind: ServiceAccount
+    name: intel-power-operator
+    namespace: intel-power
+roleRef:
+  kind: Role
+  name: operator-custom-resource-definitions-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: operator-nodes
+rules:
+  - apiGroups: [ "", "power.intel.com", "apps" ]
+    resources: [ "nodes", "nodes/status", "configmaps", "configmaps/status", "powerconfigs", "powerconfigs/status", "powerprofiles", "powerprofiles/status", "powerworkloads", "powerworkloads/status", "powernodes", "powernodes/status", "events", "daemonsets","uncores" ]
+    verbs: [ "*" ]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: operator-nodes-binding
+subjects:
+  - kind: ServiceAccount
+    name: intel-power-operator
+    namespace: intel-power
+roleRef:
+  kind: ClusterRole
+  name: operator-nodes
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-agent-cluster-resources
+rules:
+  - apiGroups: [ "", "batch", "power.intel.com" ]
+    resources: [ "nodes", "nodes/status", "pods", "pods/status", "cronjobs", "cronjobs/status", "powerprofiles", "powerprofiles/status", "powerworkloads", "powerworkloads/status", "powernodes", "powernodes/status", "cstates", "cstates/status", "timeofdays", "timeofdays/status", "timeofdaycronjobs", "timeofdaycronjobs/status","uncores" ]
+    verbs: [ "*" ]
+  - apiGroups:
+    - security.openshift.io
+    resourceNames:
+    - privileged
+    resources:
+    - securitycontextconstraints
+    verbs:
+    - use
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-agent-cluster-resources-binding
+subjects:
+  - kind: ServiceAccount
+    name: intel-power-node-agent
+    namespace: intel-power
+roleRef:
+  kind: ClusterRole
+  name: node-agent-cluster-resources
+  apiGroup: rbac.authorization.k8s.io
+
+---

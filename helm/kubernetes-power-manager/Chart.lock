@@ -1,0 +1,6 @@
+dependencies:
+- name: manager-chart-library
+  repository: file://../manager-chart-library
+  version: 0.1.0
+digest: sha256:c551fc8bb470130752c3746c51dbc010a685b1abdd69c4e6cf38b3a949212dd4
+generated: "2023-10-24T09:31:12.409824943Z"

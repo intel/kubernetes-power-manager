@@ -49,6 +49,7 @@ type TimeOfDayCronJobReconciler struct {
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=timeofdaycronjobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=power.intel.com,resources=timeofdaycronjobs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
@@ -62,8 +63,9 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 	_ = context.Background()
 	logger := r.Log.WithValues("timeofdaycronjob", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
-		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
-		return ctrl.Result{}, nil
+		err := fmt.Errorf("incorrect namespace")
+		logger.Error(err, "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{Requeue: false}, err
 	}
 	logger.Info("reconciling time-of-day cron job")
 
@@ -72,7 +74,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 
 	if err != nil {
 		logger.Error(err, "error retrieving the time-of-day cron job")
-		return ctrl.Result{}, nil
+		return ctrl.Result{Requeue: false}, err
 	}
 
 	// setting up the location
@@ -157,7 +159,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 						Spec: powerv1.PowerWorkloadSpec{
 							Name:         workloadName,
 							AllCores:     true,
-							ReservedCPUs: *cronJob.Spec.ReservedCPUs,
+							ReservedCPUs: []powerv1.ReservedSpec{{Cores: *cronJob.Spec.ReservedCPUs}},
 							Node: powerv1.WorkloadNode{
 								Name: nodeName,
 							},
@@ -182,7 +184,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 				var absoluteMaximumFrequency, absoluteMinimumFrequency int
 				if absoluteMaximumFrequency, absoluteMinimumFrequency, err = getMaxMinFrequencyValues(); err != nil {
 					logger.Error(err, "error retrieving the frequency values from the node")
-					return ctrl.Result{}, nil
+					return ctrl.Result{Requeue: false}, err
 				}
 				if prof.Spec.Epp != "" && prof.Spec.Max == 0 && prof.Spec.Min == 0 {
 					profileMaxFreq = int(float64(absoluteMaximumFrequency) - (float64((absoluteMaximumFrequency - absoluteMinimumFrequency)) * profilePercentages[prof.Spec.Epp]["difference"]))
@@ -194,12 +196,12 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 				powerProfile, err := power.NewPowerProfile(prof.Spec.Name, uint(profileMinFreq), uint(profileMaxFreq), prof.Spec.Governor, prof.Spec.Epp)
 				if err != nil {
 					logger.Error(err, "could not set the power profile for the shared pool")
-					return ctrl.Result{}, nil
+					return ctrl.Result{Requeue: false}, err
 				}
 				err = r.PowerLibrary.GetSharedPool().SetPowerProfile(powerProfile)
 				if err != nil {
 					logger.Error(err, "could not set the power profile for the shared pool")
-					return ctrl.Result{}, nil
+					return ctrl.Result{Requeue: false}, err
 				}
 				if err := r.Client.Update(c, workloadMatch); err != nil {
 					logger.Error(err, "cannot update the workload")
@@ -275,7 +277,7 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 						podState := r.State.GetPodFromState(pod.Name, pod.Namespace)
 						if podState.Name != pod.Name {
 							logger.Error(err, fmt.Sprintf("mismatch between the pod name and the internal state name: %s and %s", podState.Name, pod.Name))
-							return ctrl.Result{}, nil
+							return ctrl.Result{Requeue: false}, err
 						}
 						var from string
 						for i, container := range podState.Containers {
@@ -310,8 +312,10 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 								return ctrl.Result{Requeue: false}, err
 							}
 						}
-						// looping over the container field of the workload
-						for i, container := range workloadFrom.Spec.Node.Containers {
+						var remainingFromContainers []powerv1.Container
+						// getting the indices of containers we need to change
+						for i:=0; i < len(workloadFrom.Spec.Node.Containers); i ++ {
+							container := workloadFrom.Spec.Node.Containers[i]
 							if container.Pod == podName {
 								logger.V(5).Info(fmt.Sprintf("Found %s for tuning", container.Pod))
 								// first we set the profile on the container to its new value
@@ -322,20 +326,24 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 								coresToSwap := workloadFrom.Spec.Node.Containers[i].ExclusiveCPUs
 								// append cores to one workload and shrink the list in the other
 								workloadTo.Spec.Node.CpuIds = append(workloadTo.Spec.Node.CpuIds, coresToSwap...)
-								workloadFrom.Spec.Node.Containers[i] = workloadFrom.Spec.Node.Containers[len(workloadFrom.Spec.Node.Containers)-1]
-								workloadFrom.Spec.Node.Containers = workloadFrom.Spec.Node.Containers[:len(workloadFrom.Spec.Node.Containers)-1]
 								updatedWorkloadCPUList := getNewWorkloadCPUList(coresToSwap, workloadFrom.Spec.Node.CpuIds, &logger)
 								workloadFrom.Spec.Node.CpuIds = updatedWorkloadCPUList
-								//update both workloads to bring changes into affect
-								if err := r.Client.Update(c, &workloadFrom); err != nil {
-									logger.Error(err, "cannot update the workload")
-									return ctrl.Result{}, err
-								}
-								if err := r.Client.Update(c, &workloadTo); err != nil {
-									logger.Error(err, "cannot update the workload")
-									return ctrl.Result{}, err
-								}
-
+							} else {
+								// take note of containers that should stay in the workload
+								remainingFromContainers = append(remainingFromContainers, workloadFrom.Spec.Node.Containers[i])
+							}
+						}
+						// some containers have moved workload
+						if len(remainingFromContainers) != len(workloadFrom.Spec.Node.Containers) {
+							workloadFrom.Spec.Node.Containers = remainingFromContainers
+							//update both workloads to bring changes into affect
+							if err := r.Client.Update(c, &workloadFrom); err != nil {
+								logger.Error(err, "cannot update the workload")
+								return ctrl.Result{}, err
+							}
+							if err := r.Client.Update(c, &workloadTo); err != nil {
+								logger.Error(err, "cannot update the workload")
+								return ctrl.Result{}, err
 							}
 						}
 						pod.ObjectMeta.Annotations["PM-updated"] = fmt.Sprint(time.Now().Unix())

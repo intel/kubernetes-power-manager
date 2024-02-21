@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -45,6 +46,7 @@ type CStatesReconciler struct {
 
 //+kubebuilder:rbac:groups=power.intel.com,resources=cstates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=power.intel.com,resources=cstates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -55,8 +57,9 @@ func (r *CStatesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	var err error
 	logger := r.Log.WithValues("cStates", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
-		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
-		return ctrl.Result{}, nil
+		err = fmt.Errorf("incorrect namespace")
+		logger.Error(err, "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{Requeue: false}, err
 	}
 	nodeName := os.Getenv("NODE_NAME")
 	logger.Info("reconciling C-States")
@@ -83,22 +86,31 @@ func (r *CStatesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger.V(4).Info("checking to verify that C-States exist")
 	err = r.verifyCSStatesExist(&cStatesCRD.Spec, &logger)
 	if err != nil {
-		logger.Error(err, "the C-States validation failed")
-	}
-	// prepare system by resetting configuration
-	logger.V(4).Info("resetting system configuration")
-	err = r.restoreCStates(ctx, &logger)
-	if err != nil {
-		logger.Error(err, "failed to restore C-States")
+		err = stripMultiError(err)
+		logger.Info("the C-States validation failed", "error", err.Error())
 		return ctrl.Result{}, err
 	}
+	logger.V(4).Info("C-States validation successful")
+
+	// prepare system by resetting configuration
+	logger.V(4).Info("resetting C-States configuration")
+	err = r.restoreCStates(ctx, &logger)
+	if err != nil {
+		err = stripMultiError(err)
+		logger.Error(err, "failed to restore C-States", "error", err.Error())
+		return ctrl.Result{}, err
+	}
+	logger.V(4).Info("C-States configuration successful")
 
 	logger.V(4).Info("applying C-States to the CRD Spec")
 	err = r.applyCStates(&cStatesCRD.Spec, &logger)
 	if err != nil {
-		return ctrl.Result{}, err
+		err = stripMultiError(err)
+		logger.Error(err, "setting C-States was partially successful")
+		return ctrl.Result{Requeue: false}, err
 	}
-	logger.Info("successfully applied new C-States config")
+
+	logger.Info("successfully applied all C-States config")
 	return ctrl.Result{}, nil
 }
 
@@ -148,7 +160,7 @@ func (r *CStatesReconciler) verifyCSStatesExist(cStatesSpec *powerv1.CStatesSpec
 		}
 	}
 	for coreID, coreCStates := range cStatesSpec.IndividualCoreCStates {
-		logger.V(5).Info("checking the power library to confirm that C-States are a individual core", "coreID", coreID)
+		logger.V(5).Info("checking the power library to confirm that C-States are on individual core", "coreID", coreID)
 		err := r.PowerLibrary.ValidateCStates(coreCStates)
 		if err != nil {
 			results = multierror.Append(results, fmt.Errorf("error reconciling C-States on node %s: %w", nodeName, err))
@@ -158,7 +170,7 @@ func (r *CStatesReconciler) verifyCSStatesExist(cStatesSpec *powerv1.CStatesSpec
 }
 
 func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec, logger *logr.Logger) error {
-	// If CRD is empty or we're handling a delete event this function will do nothing
+	// if the CRD is empty or we're handling a delete event this function will do nothing
 	logger.V(5).Info("checking if the CRD is empty or we received a delete event")
 	results := new(multierror.Error)
 	// individual cores
@@ -171,7 +183,9 @@ func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec, logge
 		logger.V(5).Info("applying C-States to cores", "coreID", coreID)
 		coreObj := r.PowerLibrary.GetAllCpus().ByID(uint(coreID))
 		if coreObj == nil {
-			return fmt.Errorf("invalid core id ID: %d", coreID)
+			// instead of erroring out, add the error to the list of errors and continue
+			results = multierror.Append(results, fmt.Errorf("invalid core id ID: %d", coreID))
+			continue
 		}
 		results = multierror.Append(results, coreObj.SetCStates(cStatesMap))
 	}
@@ -179,7 +193,8 @@ func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec, logge
 	for poolName, cStatesMap := range cStatesSpec.ExclusivePoolCStates {
 		pool := r.PowerLibrary.GetExclusivePool(poolName)
 		if pool == nil {
-			return fmt.Errorf("pool with name %s does not exist", poolName)
+			results = multierror.Append(results, fmt.Errorf("pool with name %s does not exist", poolName)) // add the error to joined erros and continue
+			continue
 		}
 		err := pool.SetCStates(cStatesMap)
 		results = multierror.Append(results, err)
@@ -188,7 +203,7 @@ func (r *CStatesReconciler) applyCStates(cStatesSpec *powerv1.CStatesSpec, logge
 	// shared pool
 	err := r.PowerLibrary.GetSharedPool().SetCStates(cStatesSpec.SharedPoolCStates)
 	results = multierror.Append(results, err)
-	logger.V(5).Info("applying C-States to the shared pool")
+	logger.V(5).Info("finished applying C-States to the shared pool")
 
 	return results.ErrorOrNil()
 }
@@ -205,8 +220,17 @@ func (r *CStatesReconciler) restoreCStates(ctx context.Context, logger *logr.Log
 	}
 
 	logger.V(5).Info("resetting C-States on each core")
-	for _, core := range *r.PowerLibrary.GetAllCpus() {
+	allCPUs := *r.PowerLibrary.GetAllCpus()
+	for _, core := range allCPUs {
 		results = multierror.Append(results, core.SetCStates(nil))
 	}
 	return results.ErrorOrNil()
+}
+
+//removes extra tabs and newlines from multi error
+func stripMultiError(err error) error {
+	stripped := strings.Replace(err.Error(), "\n", "", -1)
+	stripped = strings.Replace(stripped, "\t", "", -1)
+	stripped = strings.Replace(stripped, "*", " -", -1)
+	return fmt.Errorf(stripped)
 }

@@ -1,0 +1,22 @@
+apiVersion: power.intel.com/v1
+kind: CStates
+metadata:
+  labels:
+    app.kubernetes.io/name: CStates
+    app.kubernetes.io/instance: <NODE_NAME>
+    app.kubernetes.io/part-of: kubernetes-power-manager
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: kubernetes-power-manager
+  # Replace <NODE_NAME> with the name of the node to configure the C-States on that node
+  name: <NODE_NAME>
+  namespace: intel-power
+spec:
+  sharedPoolCStates:
+    C1: true
+  exclusivePoolCStates:
+    performance:
+      C1: false
+  individualCoreCStates:
+    "5":
+      C1: true
+      C6: false

@@ -24,7 +24,7 @@ spec:
             - --zap-log-level
             - "3"
           imagePullPolicy: IfNotPresent
-          image: intel/power-operator:v2.3.1
+          image: intel/power-operator:v2.4.0
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

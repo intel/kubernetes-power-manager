@@ -191,6 +191,8 @@ supported with helm charts:
 * v2.1.0
 * v2.2.0
 * v2.3.0
+* v2.3.1
+* ocp-4.13-v2.3.1
 
 When set up using the provided helm charts, the following will be deployed:
 
@@ -205,7 +207,7 @@ To change any of the values the above are deployed with, edit the values.yaml fi
 To deploy the Kubernetes Power Manager using Helm, you must have Helm installed. For more information on installing 
 Helm, see the installation guide here https://helm.sh/docs/intro/install/.
 
-The Kubernetes Power Manager has make targets for each version available. To deploy the latest version, use the following command:
+To install the latest version, use the following command:
 
 `make helm-install`
 
@@ -213,11 +215,13 @@ To uninstall the latest version, use the following command:
 
 `make helm-uninstall`
 
-Or you can use the following commands to deploy a specific version of the Kubernetes Power Manager:
+You can use the HELM_CHART and OCP parameters to deploy an older or Openshift specific version of the Kubernetes Power Manager:
 
-`make helm-install-v2.2.0`
-`make helm-install-v2.1.0`
-`make helm-install-v2.0.0`
+`HELM_CHART=v2.3.1 OCP=true make helm-install`
+`HELM_CHART=v2.2.0 make helm-install`
+`HELM_CHART=v2.1.0 make helm-install`
+
+Please note when installing older versions that certain features listed in this README may not be supported.
 
 ## Working environments
 
@@ -367,13 +371,30 @@ spec:
   name: "shared-example-node-workload"
   allCores: true
   reservedCPUs:
-    - 0
-    - 1
+    - cores: [0, 1]
+      profile: "performance"
   powerNodeSelector:
     # Labels other than hostname can be used
     - “kubernetes.io/hostname”: “example-node”
   powerProfile: "shared-example-node"
 ````
+
+**Important** Version 2.4.0 of the Kubernetes Power Manager allows users the possibility of assigning a specific power profile
+to a reserved pool. This is turn relies on a change in the PowerWorkload CRD that is not backwards compatible with
+older versions of Kubernetes Power Manager (v2.3.1 and older). If affected by this problem, you will see similar error in the
+manager POD's logs:
+````
+Failed to watch *v1.PowerWorkload: failed to list *v1.PowerWorkload: json: cannot unmarshal number into Go struct field PowerWorkloadSpec.items.spec.reservedCPUs of type v1.ReservedSpec
+````
+
+To mitigate this problem, we ask customers to update their PowerWorkload manifests as suggested below:
+````yaml
+-   - 0
+-   - 1
++   - cores: [0, 1]
+````
+We aim to fix this issue in the next release of the Kubernetes Power Manager. 
+
 
 ### Profile Controller
 
@@ -622,7 +643,8 @@ profile as well as the profile used by individual pods.
 apiVersion: power.intel.com/v1
 kind: TimeOfDay
 metadata:
-  name: timeofday-sample
+  # Replace <NODE_NAME> with the name of the node to use TOD on
+  name: <NODE_NAME>
   namespace: intel-power
 spec:
   timeZone: "Eire"
@@ -666,7 +688,7 @@ spec:
   reservedCPUs: [ 0,1 ]
 
 ```
-
+The `TimeOfDay` object is deployed on a per-node basis and should have the same name as the node it's deployed on.
 When applying changes to the shared pool, users must specify the CPUs reserved by the system. Additionally the user must
 specify a timezone to schedule with.
 The configuration for Time Of Day consists of a schedule list. Each item in the list consists of a time and any desired
@@ -879,32 +901,36 @@ Apply the Profile:
 The example Shared PowerWorkload in examples/example-shared-workload.yaml contains the following PowerWorkload spec:
 
 ````yaml
-apiVersion: "power.intel.com/v1"
+apiVersion: power.intel.com/v1
 kind: PowerWorkload
 metadata:
-  # Replace <NODE_NAME> with the Node you intend this PowerWorkload to be associated with
+  # Replace <NODE_NAME> with the Node associated with PowerWorkload 
   name: shared-<NODE_NAME>-workload
   namespace: intel-power
 spec:
-  # Replace <NODE_NAME> with the Node you intend this PowerWorkload to be associated with
+  # Replace <NODE_NAME> with the Node associated with PowerWorkload 
   name: "shared-<NODE_NAME>-workload"
   allCores: true
   reservedCPUs:
     # IMPORTANT: The CPUs in reservedCPUs should match the value of the reserved system CPUs in your Kubelet config file
-    - 0
-    - 1
+    - cores: [0, 1]
   powerNodeSelector:
     # The label must be as below, as this workload will be specific to the Node
     kubernetes.io/hostname: <NODE_NAME>
   # Replace this value with the intended shared PowerProfile
   powerProfile: "shared"
+
 ````
 
 Replace the necessary values with those that correspond to your cluster and apply the Workload:
 `kubectl apply -f examples/example-shared-workload.yaml`
 
-Once created the workload controller will see its creation and create the corresponding Pool in all of the cores on the
-system except for the reservedCPUs will be brought down to this lower frequency level.
+Once created the workload controller will see its creation and create the corresponding Pool. All of the cores on the
+system except the reservedCPUs will then be brought down to this lower frequency level. 
+The reservedCPUs will be kept at the system default min and max frequency by default. If the user specifies a profile along with a set of reserved 
+cores then a separate pool will be created for those cores and that profile. If an invalid profile is supplied the cores will instead be placed in
+the default reserved pool with system defaults. It should be noted that in most instances leaving these cores at system defaults is the best approach 
+to prevent important k8s or kernel related processes from becoming starved.
 
 - **Performance Pod**
 

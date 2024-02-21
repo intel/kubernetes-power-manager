@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: power-node-agent
+  namespace: intel-power
+spec:
+  selector:
+    matchLabels:
+      name: power-node-agent-pod
+  template:
+    metadata:
+      namespace: intel-power
+      labels:
+        name: power-node-agent-pod
+    spec:
+      serviceAccountName: intel-power-node-agent
+      containers:
+        - image: intel/power-node-agent_ocp-4.13:v2.3.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          name: power-node-agent
+          args: [ "--zap-log-level","3" ]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            limits:
+              cpu: 100m
+              memory: 64Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - mountPath: /sys/devices/system/cpu
+              name: cpusetup
+            - mountPath: /sys/fs/cgroup
+              name: cgroup
+              readOnly: true
+            - mountPath: /var/lib/kubelet/pod-resources/
+              name: kubesock
+              readOnly: true
+      volumes:
+        - name: cpusetup
+          hostPath:
+            path: /sys/devices/system/cpu
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+        - name: kubesock
+          hostPath:
+            path: /var/lib/kubelet/pod-resources

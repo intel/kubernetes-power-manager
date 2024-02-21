@@ -92,7 +92,7 @@ func main() {
 			"driver", feature.Driver(),
 			"error", feature.FeatureError(),
 			"available", power.IsFeatureSupported(id))
-		if id == power.FreqencyScalingFeature {
+		if id == power.FrequencyScalingFeature {
 			govs := power.GetAvailableGovernors()
 			setupLog.Info(fmt.Sprintf("available governors: %v", govs))
 		}

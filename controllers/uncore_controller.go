@@ -42,6 +42,7 @@ type UncoreReconciler struct {
 //+kubebuilder:rbac:groups=power.intel.com,resources=uncores,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=power.intel.com,resources=uncores/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=power.intel.com,resources=uncores/finalizers,verbs=update
+//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -61,8 +62,9 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 	logger := r.Log.WithValues("uncore", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
-		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
-		return ctrl.Result{}, nil
+		err := fmt.Errorf("incorrect namespace")
+		logger.Error(err, "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{Requeue: false}, err
 	}
 	logger.Info("Reconciling uncore")
 	uncore := &powerv1.Uncore{}

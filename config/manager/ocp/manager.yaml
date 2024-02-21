@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: intel-power
+  labels:
+    control-plane: controller-manager
+spec:
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        control-plane: controller-manager
+    spec:
+      serviceAccountName: intel-power-operator
+      containers:
+        - command:
+            - /manager
+          args:
+            - --enable-leader-election
+            - --zap-log-level
+            - "3"
+          env:
+            - name: RELATED_IMAGE_AGENT
+              value: intel/power-node-agent_ocp-4.13:v2.3.1
+          imagePullPolicy: IfNotPresent
+          image: intel/power-operator_ocp-4.13:v2.3.1
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ "ALL" ]
+            runAsNonRoot: true
+            runAsUser: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          name: manager
+          resources:
+            limits:
+              cpu: 100m
+              memory: 64Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - mountPath: /sys/fs/cgroup
+              name: cgroup
+              mountPropagation: HostToContainer
+              readOnly: true
+      terminationGracePeriodSeconds: 10
+      volumes:
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup

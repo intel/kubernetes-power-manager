@@ -1,5 +1,6 @@
+ARG BASE_IMAGE=scratch
 # Build the manager binary
-FROM golang@sha256:403f48633fb5ebd49f9a2b6ad6719f912df23dae44974a0c9445be331e72ff5e as builder
+FROM golang@sha256:163801a964d358d6450aeb51b59d5c807d43a7c97fed92cc7ff1be5bd72811ab as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -19,10 +20,12 @@ COPY pkg/ pkg/
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
-FROM clearlinux@sha256:41c996dd143d65e23f81441cad5305798c16f89ea74728714a9419beb25b3314
+FROM ${BASE_IMAGE}
+ARG MANIFEST=build/manifests/power-node-agent-ds.yaml
 WORKDIR /
+COPY LICENSE /licenses/LICENSE
 COPY --from=builder /workspace/manager .
-COPY build/manifests/ /power-manifests/
+COPY ${MANIFEST} /power-manifests/
 USER 10001
 
 ENTRYPOINT ["/manager"]

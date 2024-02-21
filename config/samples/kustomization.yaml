@@ -1,0 +1,8 @@
+resources:
+- power_v1_uncore.yaml
+- power_v1_cstates.yaml
+- power_v1_powerconfig.yaml
+- power_v1_shared_profile.yaml
+- power_v1_shared_workload.yaml
+- power_v1_timeofday.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

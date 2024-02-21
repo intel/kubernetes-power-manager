@@ -17,11 +17,10 @@ import (
 
 	// "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -58,7 +57,7 @@ func TestTimeOfDay_Reconcile(t *testing.T) {
 	}
 	todObj := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: IntelPowerNamespace,
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -91,7 +90,7 @@ func TestTimeOfDay_Reconcile(t *testing.T) {
 	assert.NoError(t, err)
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: IntelPowerNamespace,
 		},
 	}
@@ -116,7 +115,7 @@ func TestTimeOfDay_Reconcile(t *testing.T) {
 	// incorrect format error
 	todObj = &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -139,7 +138,7 @@ func TestTimeOfDay_Reconcile(t *testing.T) {
 	// time overflow
 	todObj = &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -162,8 +161,10 @@ func TestTimeOfDay_Reconcile(t *testing.T) {
 
 }
 
+// go test -fuzz FuzzTimeOfDayController -run=FuzzTimeOfDayController
 func FuzzTimeOfDayController(f *testing.F) {
-	f.Fuzz(func(t *testing.T, timeZone string, time1 string, time2 uint, time3 uint) {
+	f.Add("Eire", "12:30:24", uint(19), uint(45), "performance", "balance-power", "shared", "power", "bigger", "C4", "25")
+	f.Fuzz(func(t *testing.T, timeZone string, time1 string, time2 uint, time3 uint, prof1 string, prof2 string, prof3 string, label1 string, label2 string, cstate string, corevalue string) {
 		testNode := "TestNode"
 		t.Setenv("NODE_NAME", testNode)
 		nodeObj := &corev1.Node{
@@ -183,7 +184,7 @@ func FuzzTimeOfDayController(f *testing.F) {
 
 		todObj := &powerv1.TimeOfDay{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "timeofday-test",
+				Name:      testNode,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.TimeOfDaySpec{
@@ -191,9 +192,43 @@ func FuzzTimeOfDayController(f *testing.F) {
 				ReservedCPUs: &[]uint{0, 1},
 				Schedule: []powerv1.ScheduleInfo{
 					{
-						Time: time1,
-					}, {
-						Time: strconv.Itoa(int(time2)) + ":" + strconv.Itoa(int(time3)),
+						Time:         time1,
+						PowerProfile: &prof1,
+						Pods: &[]powerv1.PodInfo{
+							{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label1: "true"}}, Target: prof3},
+							{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label2: "false"}}, Target: prof3},
+						},
+						CState: &powerv1.CStatesSpec{
+							SharedPoolCStates: map[string]bool{cstate: true},
+							ExclusivePoolCStates: map[string]map[string]bool{
+								prof1: {"C1E": false, "C6": false, "C1": false},
+								prof2: {"C1E": true, "C6": false},
+							},
+							IndividualCoreCStates: map[string]map[string]bool{
+								"200":     {"C1E": true, "C6": false},
+								"-4":      {"C1E": false, "C6": false},
+								corevalue: {"C1E": false, "C6": false, "CIE": true},
+							},
+						},
+					},
+					{
+						Time:         strconv.Itoa(int(time2)) + ":" + strconv.Itoa(int(time3)),
+						PowerProfile: &prof2,
+						Pods: &[]powerv1.PodInfo{
+							{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label2: "true"}}, Target: prof1},
+							{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label1: "false"}}, Target: prof2},
+						},
+						CState: &powerv1.CStatesSpec{
+							SharedPoolCStates: map[string]bool{},
+							ExclusivePoolCStates: map[string]map[string]bool{
+								prof1: {cstate: false},
+								prof2: {"C1E": true, "C6": false},
+							},
+							IndividualCoreCStates: map[string]map[string]bool{
+								"3": {"C1E": true, "C6": false},
+								"8": {"C1E": false, "C6": false},
+							},
+						},
 					},
 				},
 			},
@@ -205,7 +240,7 @@ func FuzzTimeOfDayController(f *testing.F) {
 
 		req := reconcile.Request{
 			NamespacedName: client.ObjectKey{
-				Name:      "timeofday-test",
+				Name:      testNode,
 				Namespace: "intel-power",
 			},
 		}
@@ -221,6 +256,7 @@ func FuzzTimeOfDayController(f *testing.F) {
 func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	// incorrect node
 	testNode := "TestNode"
+	t.Setenv("NODE_NAME", testNode)
 	nodeObj := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   testNode,
@@ -237,7 +273,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	}
 	todObj := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -255,14 +291,14 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	}
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "made-up",
 		},
 	}
 	r, err := createTimeOfDayReconcilerObject(clientObjs)
 	assert.NoError(t, err)
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.Nil(t, err)
+	assert.ErrorContains(t, err, "incorrect namespace")
 	// ensure object was not created
 	dummyObject := powerv1.TimeOfDay{}
 	err = r.Client.Get(context.TODO(), req.NamespacedName, &dummyObject)
@@ -270,7 +306,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	// invalid timezone
 	todObj = &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -288,7 +324,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	}
 	req = reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: IntelPowerNamespace,
 		},
 	}
@@ -299,7 +335,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	// multiple TODs
 	todObj1 := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test1",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -314,8 +350,8 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	}
 	todObj2 := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test2",
-			Namespace: "intel-power",
+			Name:      testNode,
+			Namespace: "default",
 		},
 		Spec: powerv1.TimeOfDaySpec{
 			TimeZone:     "Eire",
@@ -332,7 +368,7 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 	}
 	req = reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: IntelPowerNamespace,
 		},
 	}
@@ -345,9 +381,11 @@ func TestTimeOfDay_Reconcile_InvalidTODRequests(t *testing.T) {
 func TestTimeOfDay_Reconcile_ClientErrs(t *testing.T) {
 	timeZone := "Eire"
 	profile := "performance"
+	testNode := "TestNode"
+	t.Setenv("NODE_NAME", testNode)
 	todObj := &powerv1.TimeOfDay{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: "intel-power",
 		},
 		Spec: powerv1.TimeOfDaySpec{
@@ -374,7 +412,7 @@ func TestTimeOfDay_Reconcile_ClientErrs(t *testing.T) {
 	}
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "timeofday-test",
+			Name:      testNode,
 			Namespace: IntelPowerNamespace,
 		},
 	}
@@ -424,11 +462,12 @@ func TestTimeOfDay_Reconcile_SetupPass(t *testing.T) {
 	r, err := createTimeOfDayReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
-	mgr.On("GetControllerOptions").Return(v1alpha1.ControllerConfigurationSpec{})
+	mgr.On("GetControllerOptions").Return(config.Controller{})
 	mgr.On("GetScheme").Return(r.Scheme)
 	mgr.On("GetLogger").Return(r.Log)
 	mgr.On("SetFields", mock.Anything).Return(nil)
 	mgr.On("Add", mock.Anything).Return(nil)
+	mgr.On("GetCache").Return(new(cacheMk))
 	err = (&TimeOfDayReconciler{
 		Client: r.Client,
 		Scheme: r.Scheme,
@@ -440,9 +479,11 @@ func TestTimeOfDay_Reconcile_SetupPass(t *testing.T) {
 func TestTimeOfDay_Reconcile_SetupFail(t *testing.T) {
 	r, err := createTimeOfDayReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
-	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
-		Scheme: scheme.Scheme,
-	})
+	mgr := new(mgrMock)
+	mgr.On("GetControllerOptions").Return(config.Controller{})
+	mgr.On("GetScheme").Return(r.Scheme)
+	mgr.On("GetLogger").Return(r.Log)
+	mgr.On("Add", mock.Anything).Return(fmt.Errorf("setup fail"))
 
 	err = (&TimeOfDayReconciler{
 		Client: r.Client,

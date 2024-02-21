@@ -1,0 +1,288 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "power.intel.com/v1",
+          "kind": "CStates",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "kubernetes-power-manager",
+              "app.kubernetes.io/instance": "\u003cNODE_NAME\u003e",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "CStates",
+              "app.kubernetes.io/part-of": "kubernetes-power-manager"
+            },
+            "name": "\u003cNODE_NAME\u003e",
+            "namespace": "intel-power"
+          },
+          "spec": {
+            "exclusivePoolCStates": {
+              "performance": {
+                "C1": false
+              }
+            },
+            "individualCoreCStates": {
+              "5": {
+                "C1": true,
+                "C6": false
+              }
+            },
+            "sharedPoolCStates": {
+              "C1": true
+            }
+          }
+        },
+        {
+          "apiVersion": "power.intel.com/v1",
+          "kind": "PowerConfig",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "kubernetes-power-manager",
+              "app.kubernetes.io/instance": "power-config",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "PowerConfig",
+              "app.kubernetes.io/part-of": "kubernetes-power-manager"
+            },
+            "name": "power-config",
+            "namespace": "intel-power"
+          },
+          "spec": {
+            "powerNodeSelector": {
+              "feature.node.kubernetes.io/power-node": "true"
+            },
+            "powerProfiles": [
+              "balance-performance",
+              "balance-power",
+              "performance"
+            ]
+          }
+        },
+        {
+          "apiVersion": "power.intel.com/v1",
+          "kind": "PowerProfile",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "kubernetes-power-manager",
+              "app.kubernetes.io/instance": "shared",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "PowerProfile",
+              "app.kubernetes.io/part-of": "kubernetes-power-manager"
+            },
+            "name": "shared",
+            "namespace": "intel-power"
+          },
+          "spec": {
+            "epp": "power",
+            "governor": "powersave",
+            "max": 1000,
+            "min": 1000,
+            "name": "shared",
+            "shared": true
+          }
+        },
+        {
+          "apiVersion": "power.intel.com/v1",
+          "kind": "PowerWorkload",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "kubernetes-power-manager",
+              "app.kubernetes.io/instance": "shared-\u003cNODE_NAME\u003e-workload",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "PowerWorkload",
+              "app.kubernetes.io/part-of": "kubernetes-power-manager"
+            },
+            "name": "shared-\u003cNODE_NAME\u003e-workload",
+            "namespace": "intel-power"
+          },
+          "spec": {
+            "allCores": true,
+            "name": "shared-\u003cNODE_NAME\u003e-workload",
+            "powerNodeSelector": {
+              "kubernetes.io/hostname": "\u003cNODE_NAME\u003e"
+            },
+            "powerProfile": "shared",
+            "reservedCPUs": [
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "apiVersion": "power.intel.com/v1",
+          "kind": "TimeOfDay",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "kubernetes-power-manager",
+              "app.kubernetes.io/instance": "timeofday-sample",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "TimeOfDay",
+              "app.kubernetes.io/part-of": "kubernetes-power-manager"
+            },
+            "name": "timeofday-sample",
+            "namespace": "intel-power"
+          },
+          "spec": {
+            "reservedCPUs": [
+              0,
+              1
+            ],
+            "schedule": [
+              {
+                "cState": {
+                  "sharedPoolCStates": {
+                    "C1": false,
+                    "C6": true
+                  }
+                },
+                "pods": [
+                  {
+                    "labels": {
+                      "matchLabels": {
+                        "power": "true"
+                      }
+                    },
+                    "target": "performance"
+                  },
+                  {
+                    "labels": {
+                      "matchLabels": {
+                        "special": "false"
+                      }
+                    },
+                    "target": "balance-performance"
+                  }
+                ],
+                "powerProfile": "balance-power",
+                "time": "10:04"
+              },
+              {
+                "cState": {
+                  "sharedPoolCStates": {
+                    "C1": true,
+                    "C6": false
+                  }
+                },
+                "pods": [
+                  {
+                    "labels": {
+                      "matchLabels": {
+                        "power": "true"
+                      }
+                    },
+                    "target": "performance"
+                  },
+                  {
+                    "labels": {
+                      "matchLabels": {
+                        "special": "false"
+                      }
+                    },
+                    "target": "balance-power"
+                  }
+                ],
+                "powerProfile": "shared",
+                "time": "14:48:00"
+              },
+              {
+                "powerProfile": "balance-power",
+                "time": "14:35"
+              }
+            ],
+            "timeZone": "Eire"
+          }
+        },
+        {
+          "apiVersion": "power.intel.com/v1",
+          "kind": "Uncore",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "kubernetes-power-manager",
+              "app.kubernetes.io/instance": "uncore-sample",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "Uncore",
+              "app.kubernetes.io/part-of": "kubernetes-power-manager"
+            },
+            "name": "\u003cNODE_NAME\u003e",
+            "namespace": "intel-power"
+          },
+          "spec": {
+            "dieSelector": [
+              {
+                "die": 0,
+                "max": 2400000,
+                "min": 1500000,
+                "package": 0
+              }
+            ],
+            "sysMax": 2300000,
+            "sysMin": 1300000
+          }
+        }
+      ]
+    capabilities: Basic Install
+  name: intel-kubernetes-power-manager.v0.0.0
+  namespace: intel-power
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: PowerConfig is the Schema for the powerconfigs API
+      displayName: Power Config
+      kind: PowerConfig
+      name: powerconfigs.power.intel.com
+      version: v1
+    - description: PowerNode is the Schema for the powernodes API
+      displayName: Power Node
+      kind: PowerNode
+      name: powernodes.power.intel.com
+      version: v1
+    - description: PowerPod is the Schema for the powerpods API
+      displayName: Power Pod
+      kind: PowerPod
+      name: powerpods.power.intel.com
+      version: v1
+    - description: PowerProfile is the Schema for the powerprofiles API
+      displayName: Power Profile
+      kind: PowerProfile
+      name: powerprofiles.power.intel.com
+      version: v1
+    - description: TimeOfDay is the Schema for the timeofdays API
+      displayName: Time Of Day
+      kind: TimeOfDay
+      name: timeofdays.power.intel.com
+      version: v1
+  description: The Kubernetes Power Manager bridges the gap between the container
+    orchestration layer and hardware feature enablement, specifically Intel SST.
+  displayName: Intel Kubernetes Power Manager
+  icon:
+  - base64data: PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI0LjMuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IgoJIHZpZXdCb3g9IjAgMCA3MiAzMCIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNzIgMzA7IiB4bWw6c3BhY2U9InByZXNlcnZlIj4KPHN0eWxlIHR5cGU9InRleHQvY3NzIj4KCS5zdDB7ZmlsbDojMDA2OEI1O30KPC9zdHlsZT4KPGc+Cgk8cmVjdCB4PSIxLjgiIHk9IjIuMSIgY2xhc3M9InN0MCIgd2lkdGg9IjQuOTYiIGhlaWdodD0iNC45NiIvPgoJPHBhdGggY2xhc3M9InN0MCIgZD0iTTYuNjMsMjcuOVYxMC4wNmgtNC43VjI3LjlINi42M3ogTTM3Ljc4LDI4LjA4di00LjM3Yy0wLjY5LDAtMS4yNi0wLjA0LTEuNy0wLjExCgkJYy0wLjQ4LTAuMDgtMC44Ni0wLjI0LTEuMS0wLjQ5Yy0wLjI1LTAuMjUtMC40MS0wLjYxLTAuNDktMS4wN2MtMC4wNy0wLjQ0LTAuMTEtMS4wMi0wLjExLTEuNzJ2LTYuMjRoMy40di00LjAyaC0zLjRWMy4xMWgtNC43CgkJdjE3LjI0YzAsMS40NSwwLjEzLDIuNjksMC4zOCwzLjY4YzAuMjUsMC45NywwLjY3LDEuNzcsMS4yNSwyLjM3YzAuNTgsMC42LDEuMzYsMS4wMywyLjI5LDEuMjljMC45NSwwLjI2LDIuMTUsMC4zOSwzLjU4LDAuMzkKCQlIMzcuNzh6IE02NC43MSwyNy45VjEuNzRoLTQuN1YyNy45SDY0LjcxeiBNMjUuMTUsMTEuODJDMjMuODQsMTAuNDEsMjIsOS43LDE5LjY4LDkuN2MtMS4xMiwwLTIuMTYsMC4yMy0zLjA4LDAuNjkKCQljLTAuOTIsMC40Ni0xLjcxLDEuMS0yLjMzLDEuOWwtMC4yNiwwLjMzbDAtMC4zdi0yLjI2SDkuMzdWMjcuOWg0LjY3di05LjVsMCwwLjY2YzAtMC4xMSwwLTAuMjIsMC0wLjMyCgkJYzAuMDUtMS42NywwLjQ2LTIuOTEsMS4yNC0zLjdjMC44My0wLjg0LDEuODMtMS4yNywyLjk4LTEuMjdjMS4zNiwwLDIuMzksMC40MiwzLjA4LDEuMjNjMC42NywwLjgsMS4wMSwxLjk1LDEuMDIsMy40MmwwLDB2MC4wNAoJCWMwLDAsMCwwLjAxLDAsMC4wMWgwbDAsOS40M2g0Ljc0VjE3Ljc3QzI3LjExLDE1LjIzLDI2LjQ1LDEzLjIzLDI1LjE1LDExLjgyeiBNNTcuNTYsMTguOTRjMC0xLjI4LTAuMjMtMi40OS0wLjY4LTMuNjEKCQljLTAuNDUtMS4xMS0xLjA5LTIuMS0xLjg5LTIuOTVjLTAuOC0wLjg0LTEuNzgtMS41MS0yLjkxLTEuOThDNTAuOTYsOS45NCw0OS43LDkuNyw0OC4zNSw5LjdjLTEuMjgsMC0yLjUsMC4yNS0zLjYyLDAuNzMKCQljLTEuMTMsMC40OS0yLjEyLDEuMTUtMi45NSwxLjk4Yy0wLjgzLDAuODMtMS41LDEuODItMS45OCwyLjk1Yy0wLjQ5LDEuMTItMC43MywyLjM0LTAuNzMsMy42MmMwLDEuMjgsMC4yMywyLjUsMC43LDMuNjIKCQljMC40NiwxLjEzLDEuMTEsMi4xMiwxLjkzLDIuOTRjMC44MiwwLjgzLDEuODIsMS41LDIuOTgsMS45OGMxLjE2LDAuNDksMi40NSwwLjczLDMuODIsMC43M2MzLjk4LDAsNi40Ni0xLjgxLDcuOTQtMy41bC0zLjM4LTIuNTgKCQljLTAuNzEsMC44NS0yLjQsMS45OS00LjUyLDEuOTljLTEuMzMsMC0yLjQyLTAuMzEtMy4yNC0wLjkxYy0wLjgzLTAuNjEtMS40LTEuNDQtMS43LTIuNDhsLTAuMDUtMC4xN2gxNC4wMVYxOC45NHogTTQzLjU5LDE3LjMxCgkJYzAtMS4zMSwxLjUtMy41OSw0LjczLTMuNTljMy4yMywwLDQuNzMsMi4yOCw0LjczLDMuNThMNDMuNTksMTcuMzF6Ii8+Cgk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNNzAuMDYsMjUuNjVjLTAuMDktMC4yMS0wLjIyLTAuMzktMC4zNy0wLjU1Yy0wLjE2LTAuMTYtMC4zNC0wLjI4LTAuNTUtMC4zN2MtMC4yMS0wLjA5LTAuNDQtMC4xNC0wLjY4LTAuMTQKCQljLTAuMjQsMC0wLjQ3LDAuMDUtMC42OCwwLjE0Yy0wLjIxLDAuMDktMC4zOSwwLjIyLTAuNTUsMC4zN2MtMC4xNiwwLjE2LTAuMjgsMC4zNC0wLjM3LDAuNTVjLTAuMDksMC4yMS0wLjE0LDAuNDQtMC4xNCwwLjY4CgkJYzAsMC4yNCwwLjA1LDAuNDcsMC4xNCwwLjY4YzAuMDksMC4yMSwwLjIyLDAuMzksMC4zNywwLjU1YzAuMTYsMC4xNiwwLjM0LDAuMjgsMC41NSwwLjM3YzAuMjEsMC4wOSwwLjQ0LDAuMTQsMC42OCwwLjE0CgkJYzAuMjQsMCwwLjQ3LTAuMDUsMC42OC0wLjE0YzAuMjEtMC4wOSwwLjM5LTAuMjIsMC41NS0wLjM3YzAuMTYtMC4xNiwwLjI4LTAuMzQsMC4zNy0wLjU1YzAuMDktMC4yMSwwLjE0LTAuNDQsMC4xNC0wLjY4CgkJQzcwLjIsMjYuMDksNzAuMTUsMjUuODYsNzAuMDYsMjUuNjV6IE02OS43OCwyNi44OGMtMC4wNywwLjE3LTAuMTgsMC4zMy0wLjMxLDAuNDZjLTAuMTMsMC4xMy0wLjI4LDAuMjMtMC40NiwwLjMxCgkJYy0wLjE3LDAuMDctMC4zNiwwLjExLTAuNTYsMC4xMWMtMC4yLDAtMC4zOC0wLjA0LTAuNTYtMC4xMWMtMC4xNy0wLjA3LTAuMzMtMC4xOC0wLjQ2LTAuMzFjLTAuMTMtMC4xMy0wLjIzLTAuMjgtMC4zMS0wLjQ2CgkJYy0wLjA3LTAuMTctMC4xMS0wLjM2LTAuMTEtMC41NmMwLTAuMiwwLjA0LTAuMzgsMC4xMS0wLjU2YzAuMDctMC4xNywwLjE4LTAuMzMsMC4zMS0wLjQ2YzAuMTMtMC4xMywwLjI4LTAuMjMsMC40Ni0wLjMxCgkJYzAuMTctMC4wNywwLjM2LTAuMTEsMC41Ni0wLjExYzAuMiwwLDAuMzgsMC4wNCwwLjU2LDAuMTFjMC4xNywwLjA3LDAuMzMsMC4xOCwwLjQ2LDAuMzFjMC4xMywwLjEzLDAuMjMsMC4yOCwwLjMxLDAuNDYKCQljMC4wNywwLjE3LDAuMTEsMC4zNiwwLjExLDAuNTZDNjkuODksMjYuNTIsNjkuODUsMjYuNzEsNjkuNzgsMjYuODh6IE02OC43OSwyNi40N2MwLjE0LTAuMDIsMC4yNS0wLjA3LDAuMzQtMC4xNQoJCWMwLjA5LTAuMDksMC4xMy0wLjIyLDAuMTMtMC4zOWMwLTAuMTktMC4wNi0wLjM0LTAuMTctMC40NGMtMC4xMS0wLjEtMC4yOS0wLjE1LTAuNTMtMC4xNWgtMC43N3YxLjk5aDAuMzZ2LTAuODFoMC4yN2wwLjUsMC44MQoJCWgwLjM4TDY4Ljc5LDI2LjQ3eiBNNjguNTksMjYuMThjLTAuMDYsMC0wLjExLDAuMDEtMC4xNywwLjAxaC0wLjI3di0wLjU2aDAuMjdjMC4wNiwwLDAuMTEsMCwwLjE3LDBjMC4wNiwwLDAuMTEsMC4wMSwwLjE1LDAuMDMKCQljMC4wNSwwLjAyLDAuMDgsMC4wNSwwLjExLDAuMDhjMC4wMywwLjA0LDAuMDQsMC4wOSwwLjA0LDAuMTVzLTAuMDEsMC4xMi0wLjA0LDAuMTVjLTAuMDMsMC4wNC0wLjA2LDAuMDctMC4xMSwwLjA4CgkJQzY4LjcsMjYuMTYsNjguNjUsMjYuMTcsNjguNTksMjYuMTh6Ii8+CjwvZz4KPC9zdmc+Cg==
+    mediatype: image/svg+xml
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: false
+    type: AllNamespaces
+  keywords:
+  - kubernetes
+  - power-management
+  - sustainability
+  - containers
+  links:
+  - name: Kubernetes Power Manager
+    url: https://kubernetes-power-manager.domain
+  maturity: alpha
+  provider:
+    name: Intel Corporation
+    url: https://github.com/intel/kubernetes-power-manager
+  version: 2.3.1

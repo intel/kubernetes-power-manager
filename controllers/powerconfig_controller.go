@@ -58,14 +58,16 @@ type PowerConfigReconciler struct {
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerconfigs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 
 func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerconfig", req.NamespacedName)
 
 	if req.Namespace != IntelPowerNamespace {
-		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
-		return ctrl.Result{}, nil
+		err := fmt.Errorf("incorrect namespace")
+		logger.Error(err, "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{Requeue: false}, err
 	}
 
 	configs := &powerv1.PowerConfigList{}
@@ -94,7 +96,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 
 				for _, profile := range powerProfiles.Items {
 					err = r.Client.Delete(context.TODO(), &profile)
-					logger.V(5).Info("deleting power profile %s", profile.Name)
+					logger.V(5).Info(fmt.Sprintf("deleting power profile %s", profile.Name))
 					if err != nil {
 						logger.Error(err, fmt.Sprintf("error deleting power profile '%s' from cluster", profile.Name))
 						return ctrl.Result{}, err
@@ -111,7 +113,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 				}
 
 				for _, workload := range powerWorkloads.Items {
-					logger.V(5).Info("deleting power workload %s", workload.Name)
+					logger.V(5).Info(fmt.Sprintf("deleting power workload %s", workload.Name))
 					err = r.Client.Delete(context.TODO(), &workload)
 					if err != nil {
 						logger.Error(err, fmt.Sprintf("error deleting power workload '%s' from cluster", workload.Name))
@@ -128,7 +130,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 				}
 
 				for _, node := range powerNodes.Items {
-					logger.V(5).Info("deleting power nodes %s", node.Name)
+					logger.V(5).Info(fmt.Sprintf("deleting power nodes %s", node.Name))
 					err = r.Client.Delete(context.TODO(), &node)
 					if err != nil {
 						logger.Error(err, fmt.Sprintf("error deleting power node '%s' from cluster", node.Name))
@@ -188,6 +190,13 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 	labelledNodeList := &corev1.NodeList{}
 	listOption := config.Spec.PowerNodeSelector
 
+	// Searching for Custom Devices in PowerConfig
+	customDevices := config.Spec.CustomDevices
+	if len(customDevices) > 0 {
+		logger.V(5).Info("the behaviour of the power node agent will be affected by the following devices.",
+			"Custom Devices", customDevices)
+	}
+
 	logger.V(5).Info("confirming desired nodes match the power node selector")
 	err = r.Client.List(context.TODO(), labelledNodeList, client.MatchingLabels(listOption))
 	if err != nil {
@@ -205,7 +214,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 			Name:      node.Name,
 		}, powerNode)
 
-		logger.V(5).Info("creating the power node CRD %s", node.Name)
+		logger.V(5).Info(fmt.Sprintf("creating the power node CRD %s", node.Name))
 		if err != nil {
 			if errors.IsNotFound(err) {
 				powerNode = &powerv1.PowerNode{
@@ -216,7 +225,8 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 				}
 
 				powerNodeSpec := &powerv1.PowerNodeSpec{
-					NodeName: node.Name,
+					NodeName:      node.Name,
+					CustomDevices: customDevices,
 				}
 
 				powerNode.Spec = *powerNodeSpec
@@ -229,9 +239,17 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 				return ctrl.Result{}, err
 			}
 		}
+
+		powerNode.Spec.CustomDevices = customDevices
+		err := r.Client.Update(context.TODO(), powerNode)
+		if err != nil {
+			logger.Error(err, "failed to update power node with custom devices.")
+			return ctrl.Result{}, err
+		}
 	}
 
 	config.Status.Nodes = r.State.PowerNodeList
+	config.Spec.CustomDevices = customDevices
 	logger.V(5).Info("configured power node added to the power node list")
 	err = r.Client.Status().Update(context.TODO(), config)
 	if err != nil {
@@ -242,7 +260,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 	// Create the power profiles that were requested in the power config if it doesn't exist
 	// Delete any power profiles that are not being requested but exist
 	for _, profile := range config.Spec.PowerProfiles {
-		logger.V(5).Info("checking if the power profile exists %s", profile)
+		logger.V(5).Info(fmt.Sprintf("checking if the power profile exists %s", profile))
 		profileFromCluster := &powerv1.PowerProfile{}
 		err = r.Client.Get(context.TODO(), client.ObjectKey{
 			Name:      profile,
@@ -251,7 +269,7 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 		if err != nil {
 			if errors.IsNotFound(err) {
 				// Power profile does not exist, so we need to create it
-				logger.V(5).Info("creating power profile %s", profile)
+				logger.V(5).Info(fmt.Sprintf("creating power profile %s", profile))
 				epp := strings.Replace(profile, "-", "_", 1)
 				powerProfileSpec := &powerv1.PowerProfileSpec{
 					Name: profile,

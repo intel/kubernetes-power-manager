@@ -37,10 +37,15 @@ type PowerNodeSpec struct {
 
 	SharedPool string `json:"sharedPool,omitempty"`
 
-	UneffectedCores string `json:"unaffectedCores,omitempty"`
+	UnaffectedCores string `json:"unaffectedCores,omitempty"`
+
+	ReservedPools []string `json:"reservedPools,omitempty"`
 
 	// Information about the containers in the cluster utilizing some PowerWorkload
 	PowerContainers []Container `json:"powerContainers,omitempty"`
+
+	// The CustomDevices include alternative devices that represent other resources
+	CustomDevices []string `json:"customDevices,omitempty"`
 
 	// The PowerProfiles in the cluster that are currently being used by Pods
 	//ActiveProfiles map[string]bool `json:"activeProfiles,omitempty"`

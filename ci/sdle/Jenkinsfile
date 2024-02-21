@@ -1,0 +1,178 @@
+pipeline {
+  agent {
+    kubernetes {
+      cloud 'k8s-tweedledum'
+      slaveConnectTimeout '120'
+      yamlFile 'ci/sdle/sdle-tools.yaml'
+    }
+  }
+  environment {
+    LIBRARY_BRANCH = 'main'
+    }
+  stages {
+    stage('Preprocess'){
+      steps{
+        zip zipFile: 'repo.zip', dir:'.', archive: true
+      }
+    }
+    stage('Checkout-Library') {
+      steps {
+        script {
+            dir('library') {
+                checkout([$class: 'GitSCM', 
+                    branches: [[name: 'main']],
+                    userRemoteConfigs: [[url: 'https://github.com/intel-innersource/libraries.orchestrators.resourcemanagement.power.powerlibrary.git', credentialsId: 'sys_rmcci_github']]
+                ])
+                 sh 'git checkout ${LIBRARY_BRANCH}'
+            }
+            sh 'echo "replace github.com/intel/power-optimization-library => ./library" >> go.mod'
+            sh "sed -i 's/COPY go\\.sum go\\.sum/COPY go\\.sum go\\.sum\\nCOPY \\.\\/library \\.\\/library/' build/Dockerfile"
+            sh "sed -i 's/COPY go\\.sum go\\.sum/COPY go\\.sum go\\.sum\\nCOPY \\.\\/library \\.\\/library/' build/Dockerfile.nodeagent"
+          }
+       }
+    }
+    stage('Build container images'){
+      steps{
+        script{
+          container(name: 'kaniko-env', shell: '/busybox/sh') {
+            sh '''
+              /kaniko/executor --dockerfile build/Dockerfile --context . \
+              --destination "localhost:5000/power-operator:latest" \
+              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+
+              /kaniko/executor --dockerfile build/Dockerfile.nodeagent --context . \
+              --destination "localhost:5000/power-node-agent:latest" \
+              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+
+              OCP_BASE_IMAGE=$(sed -n 's/OCP_IMAGE=//p' Makefile)
+
+              /kaniko/executor --dockerfile build/Dockerfile.nodeagent --context .  --build-arg="BASE_IMAGE=$OCP_BASE_IMAGE"\
+              --destination "localhost:5000/power-node-agent-ocp:latest" \
+              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+
+              /kaniko/executor --dockerfile build/Dockerfile --context . --build-arg="BASE_IMAGE=$OCP_BASE_IMAGE" \
+              --destination "localhost:5000/power-operator-ocp:latest" \
+              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+            '''
+          }
+        }
+      }
+    }
+    stage('Trivy Scan'){
+      steps{
+        script{
+          container('trivy-env') {
+            sh '''
+              set -e
+              trivy fs . --severity "HIGH,CRITICAL" --exit-code 1     >> trivy-filesystem.txt
+              trivy config . --severity "HIGH,CRITICAL" --exit-code 1 >> trivy-config.txt
+            '''
+          }
+        }
+      }
+    }
+    stage('Kubesec Scan') {
+      steps{
+        script{
+          container('alpine-env') {
+            sh '''
+               apk add curl
+               find ./config -type f \\( -name "*.yml" -o -name "*.yaml" \\) -print -exec curl -sSX POST --data-binary @{} http://localhost:8080/scan \\; > kubesec.txt 2>&1
+               find ./examples -type f \\( -name "*.yml" -o -name "*.yaml" \\) -print -exec curl -sSX POST --data-binary @{} http://localhost:8080/scan \\; >> kubesec.txt 2>&1
+               '''
+          }
+        }
+      }
+    }
+    stage('Scans') {
+      parallel {
+        stage('Hadolint Scan') {
+          steps {
+            script {
+              container('hadolint-env') {
+                sh '''
+                   hadolint -v -V > hadolint.txt 2>&1
+                   find . -type f \\( -name "Dockerfile*" \\) -print -exec sha256sum {} \\; >> hadolint.txt 2>&1
+                   find . -type f \\( -name "Dockerfile*" \\) -print -exec hadolint  {} \\; >> hadolint.txt 2>&1
+                   '''
+              }
+            }
+          }
+        }
+        stage('Shellcheck Scan') {
+          steps {
+            script {
+              container('shellcheck-env') {
+                sh '''
+                   shellcheck -V > shellcheck.txt
+                   find . -name '*.sh' -print -exec sha256sum {} \\; >> shellcheck.txt 2>&1
+                   find . -type f \\( -name "*.sh" \\) -print -exec shellcheck -a -s bash -S warning -f gcc {} \\; >> shellcheck.txt 2>&1
+                   '''
+              }
+            }
+          }
+        }
+        stage('Virus Scan') {
+          steps{
+            script{
+              container('abi-env') {
+                sh '''
+                   abi virus_scan --target "repo.zip" --logtarget "logs" --report-name "sdl-virus-scan"
+                   '''
+              }
+            }
+          }
+        }
+        stage('Trivy Images Scan') {
+          steps{
+            script{
+              container('trivy-env') {
+                sh '''
+                   set -e
+                   trivy image localhost:5000/power-operator:latest --severity "HIGH,CRITICAL" --exit-code 1       >> trivy-image-operator.txt
+                   trivy image localhost:5000/power-operator-ocp:latest --severity "HIGH,CRITICAL" --exit-code 1   >> trivy-image-operator-ocp.txt
+                   trivy image localhost:5000/power-node-agent:latest --severity "HIGH,CRITICAL" --exit-code 1     >> trivy-image-nodeagent.txt
+                   trivy image localhost:5000/power-node-agent-ocp:latest --severity "HIGH,CRITICAL" --exit-code 1 >> trivy-image-nodeagent-ocp.txt
+                   '''
+              }
+            }
+          }
+        }
+        stage('Checkmarx Scan') {
+          steps{
+            withCredentials([usernamePassword(credentialsId: 'sys_rmcci', passwordVariable: 'PASS', usernameVariable: 'USER'), 
+            string(credentialsId: 'pm_checkmarx_id', variable: 'PM_CHECKMARX_ID'),
+            string(credentialsId: 'pm_checkmarx_server', variable: 'CHECKMARX_SERVER_URL')]) {
+              script{
+                container('abi-env') {
+                  sh '''
+                    abi static_security_scan scan \
+                      --debug \
+                      --zip_file repo.zip \
+                      --username  INTEL-GER\\\\$USER \
+                      --password $PASS \
+                      --server_url $CHECKMARX_SERVER_URL \
+                      --project_id $PM_CHECKMARX_ID \
+                      --report_name checkmarx \
+                      --timeout 180
+                  '''
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  post {
+    always {
+      archiveArtifacts artifacts: 'logs/*.html', allowEmptyArchive: true, fingerprint: false
+      archiveArtifacts artifacts: 'OWRBuild/static_security_scan/*', allowEmptyArchive: true, fingerprint: false
+      archiveArtifacts artifacts: 'kubesec.txt', allowEmptyArchive: true, fingerprint: false
+      archiveArtifacts artifacts: 'golangci-lint.txt', allowEmptyArchive: true, fingerprint: false
+      archiveArtifacts artifacts: 'hadolint.txt', allowEmptyArchive: true, fingerprint: false
+      archiveArtifacts artifacts: 'shellcheck.txt', allowEmptyArchive: true, fingerprint: false
+      archiveArtifacts artifacts: 'trivy*.txt', allowEmptyArchive: true, fingerprint: false
+    }
+  }
+}

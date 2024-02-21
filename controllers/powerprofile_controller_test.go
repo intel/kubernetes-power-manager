@@ -17,29 +17,38 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"testing"
-
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 func createProfileReconcilerObject(objs []runtime.Object) (*PowerProfileReconciler, error) {
+	log.SetLogger(zap.New(
+		zap.UseDevMode(true),
+		func(opts *zap.Options) {
+			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
+		},
+	),
+	)
 	// Register operator types with the runtime scheme.
 	s := scheme.Scheme
 
@@ -451,12 +460,16 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 		testCase    string
 		nodeName    string
 		profileName string
+		validateErr func(e error) bool
 		clientObjs  []runtime.Object
 	}{
 		{
 			testCase:    "Test Case 1 - Max value zero",
 			nodeName:    "TestNode",
 			profileName: "user-created",
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "max frequency value cannot be lower than the minimum frequency value")
+			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
@@ -476,6 +489,9 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 			testCase:    "Test Case 2 - Min value zero",
 			nodeName:    "TestNode",
 			profileName: "user-created",
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "max or min frequency cannot be zero")
+			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
@@ -495,6 +511,9 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 			testCase:    "Test Case 3 - Max/Min value zero",
 			nodeName:    "TestNode",
 			profileName: "user-created",
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "max or min frequency cannot be zero")
+			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
 					ObjectMeta: metav1.ObjectMeta{
@@ -531,10 +550,7 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error reconciling object", tc.testCase)
-		}
+		tc.validateErr(err)
 
 		workloads := &powerv1.PowerWorkloadList{}
 		err = r.Client.List(context.TODO(), workloads)
@@ -670,10 +686,7 @@ func TestPowerProfile_Reconcile_SharedProfileDoesNotExistInLibrary(t *testing.T)
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error reconciling object", tc.testCase)
-		}
+		assert.ErrorContains(t, err, "maximum or minimum frequency value cannot be below 1000")
 
 		workloads := &powerv1.PowerWorkloadList{}
 		err = r.Client.List(context.TODO(), workloads)
@@ -689,6 +702,34 @@ func TestPowerProfile_Reconcile_SharedProfileDoesNotExistInLibrary(t *testing.T)
 }
 
 func TestPowerProfile_Reconcile_DeleteProfile(t *testing.T) {
+	cstatedummy := &powerv1.CStates{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "TestNode",
+			Namespace: IntelPowerNamespace,
+		},
+		Spec: powerv1.CStatesSpec{
+			SharedPoolCStates: map[string]bool{
+				"C1": true,
+			},
+			ExclusivePoolCStates: map[string]map[string]bool{
+				"performance": {
+					"C6": false,
+					"1E": true,
+				},
+				"user-created": {
+					"C6":  false,
+					"C1E": true,
+					"C1":  true,
+				},
+			},
+			IndividualCoreCStates: map[string]map[string]bool{
+				"1": {
+					"C1": true,
+				},
+			},
+		},
+		Status: powerv1.CStatesStatus{},
+	}
 	tcases := []struct {
 		testCase    string
 		nodeName    string
@@ -718,6 +759,7 @@ func TestPowerProfile_Reconcile_DeleteProfile(t *testing.T) {
 						},
 					},
 				},
+				cstatedummy,
 			},
 		},
 		{
@@ -742,6 +784,7 @@ func TestPowerProfile_Reconcile_DeleteProfile(t *testing.T) {
 						},
 					},
 				},
+				cstatedummy,
 			},
 		},
 		{
@@ -812,6 +855,24 @@ func TestPowerProfile_Reconcile_DeleteProfile(t *testing.T) {
 			t.Fatalf("%s - error retrieving the node object", tc.testCase)
 		}
 
+		if tc.testCase != "Test Case 3 - Profile user-created, ERs not present, workload not present" {
+			cstate := &powerv1.CStates{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name:      tc.nodeName,
+				Namespace: IntelPowerNamespace,
+			}, cstate)
+			if err != nil {
+				t.Error(err)
+				t.Fatalf("%s - error retrieving the cstate object", tc.testCase)
+			}
+			for profile, _ := range cstate.Spec.ExclusivePoolCStates {
+				if profile == tc.profileName {
+					t.Error(err)
+					t.Fatalf("%s - error retrieving the cstate object - profile should be deleted", tc.testCase)
+				}
+			}
+		}
+
 		resourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
 		if _, exists := node.Status.Capacity[resourceName]; exists {
 			t.Errorf("%s - failed: expected the extended resource '%s' to have been deleted", tc.testCase, fmt.Sprintf("%s%s", ExtendedResourcePrefix, tc.profileName))
@@ -877,9 +938,7 @@ func TestPowerProfile_Reconcile_MaxValueLowerThanMinValue(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Errorf("%s failed: expected the reconciler to not have failed", tc.testCase)
-		}
+		assert.ErrorContains(t, err, "max frequency value cannot be lower than the minimum frequency value")
 	}
 }
 
@@ -941,9 +1000,7 @@ func TestPowerProfile_Reconcile_SharedFrequencyValuesLessThanAbsoluteValue(t *te
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Errorf("%s failed: expected the reconciler to not have failed", tc.testCase)
-		}
+		assert.ErrorContains(t, err, "maximum or minimum frequency value cannot be")
 	}
 }
 
@@ -1005,67 +1062,7 @@ func TestPowerProfile_Reconcile_MaxValueZeroMinValueGreaterThanZero(t *testing.T
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		if err != nil {
-			t.Errorf("%s failed: expected the reconciler to not have failed", tc.testCase)
-		}
-	}
-}
-
-func TestPowerProfile_Reconcile_PowerProfileReturnsErrors(t *testing.T) {
-	tcases := []struct {
-		testCase    string
-		nodeName    string
-		profileName string
-		clientObjs  []runtime.Object
-	}{
-		{
-			testCase:    "Test 1 - Profile deleted, library.DeleteProfile returns error",
-			nodeName:    "TestNode",
-			profileName: "performance",
-			clientObjs: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "TestNode",
-					},
-					Status: corev1.NodeStatus{
-						Capacity: map[corev1.ResourceName]resource.Quantity{
-							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-						},
-					},
-				},
-			},
-		},
-	}
-
-	for _, tc := range tcases {
-		t.Setenv("NODE_NAME", tc.nodeName)
-
-		r, err := createProfileReconcilerObject(tc.clientObjs)
-		if err != nil {
-			t.Error(err)
-			t.Fatalf("%s - error creating the reconciler object", tc.testCase)
-		}
-		dummyShared := new(poolMock)
-		dummyProf := new(profMock)
-		nodemk := new(hostMock)
-		pool := new(poolMock)
-		nodemk.On("GetExclusivePool", tc.profileName).Return(pool)
-		pool.On("Remove").Return(fmt.Errorf("test error"))
-		nodemk.On("GetSharedPool").Return(dummyShared)
-		dummyShared.On("GetPowerProfile").Return(dummyProf)
-		dummyProf.On("Name").Return("shared")
-		r.PowerLibrary = nodemk
-
-		req := reconcile.Request{
-			NamespacedName: client.ObjectKey{
-				Name:      tc.profileName,
-				Namespace: IntelPowerNamespace,
-			},
-		}
-
-		_, err = r.Reconcile(context.TODO(), req)
-		assert.Error(t, err)
-
+		assert.ErrorContains(t, err, "max frequency value cannot be lower than the minimum frequency value")
 	}
 }
 
@@ -1252,7 +1249,7 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 				return nodemk
 			},
 			validateErr: func(e error) bool {
-				return assert.Nil(t, e)
+				return assert.ErrorContains(t, e, "unit test set profile error")
 			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerWorkload{
@@ -1362,6 +1359,24 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			testCase:    "Test Case 5 - reset shared profile error",
+			profileName: "shared",
+			getNodemk: func() *hostMock {
+				nodemk := new(hostMock)
+				poolmk := new(poolMock)
+				profmk := new(profMock)
+				nodemk.On("GetSharedPool").Return(poolmk)
+				poolmk.On("GetPowerProfile").Return(profmk)
+				profmk.On("Name").Return("shared")
+				poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("Set profile err"))
+				return nodemk
+			},
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "Set profile err")
+			},
+			clientObjs: []runtime.Object{},
 		},
 	}
 	_, teardown, err := fullDummySystem()
@@ -1499,7 +1514,7 @@ func TestPowerProfile_Reconcile_FeatureNotSupportedErr(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.Nil(t, err)
+		assert.ErrorContains(t, err, "Frequency-Scaling - failed to determine driver")
 	}
 
 }
@@ -1532,6 +1547,7 @@ func TestPowerProfile_Reconcile_ClientErrs(t *testing.T) {
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerProfile")).Return(errors.NewNotFound(schema.GroupResource{}, "profile"))
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerWorkload")).Return(nil)
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.CStates")).Return(nil)
 				mkcl.On("Delete", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client delete error"))
 				return mkcl
 			},
@@ -1577,6 +1593,7 @@ func TestPowerProfile_Reconcile_ClientErrs(t *testing.T) {
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerProfile")).Return(errors.NewNotFound(schema.GroupResource{}, "profile"))
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerWorkload")).Return(nil)
+				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.CStates")).Return(nil)
 				mkcl.On("Delete", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client delete error"))
 				return mkcl
 			},
@@ -1703,16 +1720,98 @@ func TestPowerProfile_Reconcile_UnsupportedGovernor(t *testing.T) {
 
 }
 
+func TestPowerProfile_Wrong_Namespace(t *testing.T) {
+	r, err := createProfileReconcilerObject([]runtime.Object{})
+	assert.Nil(t, err)
+	req := reconcile.Request{
+		NamespacedName: client.ObjectKey{
+			Name:      "shared",
+			Namespace: "wrong-namespace",
+		},
+	}
+
+	_, err = r.Reconcile(context.TODO(), req)
+	assert.ErrorContains(t, err, "incorrect namespace")
+}
+
+// uses dummy sysfs so must be run in isolation from other fuzzers
+// go test -fuzz FuzzPowerProfileController -run=FuzzPowerProfileController -parallel=1
+func FuzzPowerProfileController(f *testing.F) {
+	f.Add("TestNode", "performance", 3600, 3200, "performance", "powersave", false)
+	f.Fuzz(func(t *testing.T, nodeName, prof string, maxVal int, minVal int, epp string, governor string, shared bool) {
+		nodeName = strings.ReplaceAll(nodeName, " ", "")
+		nodeName = strings.ReplaceAll(nodeName, "\t", "")
+		nodeName = strings.ReplaceAll(nodeName, "\000", "")
+		if len(nodeName) == 0 {
+			return
+		}
+		t.Setenv("NODE_NAME", nodeName)
+
+		clientObjs := []runtime.Object{
+			&powerv1.PowerProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      prof,
+					Namespace: IntelPowerNamespace,
+				},
+				Spec: powerv1.PowerProfileSpec{
+					Name:     prof,
+					Max:      maxVal,
+					Min:      minVal,
+					Epp:      epp,
+					Governor: governor,
+					Shared:   shared,
+				},
+			},
+			&corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName,
+				},
+				Status: corev1.NodeStatus{
+					Capacity: map[corev1.ResourceName]resource.Quantity{
+						CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+					},
+				},
+			},
+		}
+		r, err := createProfileReconcilerObject(clientObjs)
+		assert.Nil(t, err)
+		host, teardown, err := fullDummySystem()
+		assert.Nil(t, err)
+		defer teardown()
+		r.PowerLibrary = host
+		host.AddExclusivePool(prof)
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      prof,
+				Namespace: IntelPowerNamespace,
+			},
+		}
+
+		r.Reconcile(context.TODO(), req)
+		req = reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      "not-found",
+				Namespace: IntelPowerNamespace,
+			},
+		}
+
+		r.Reconcile(context.TODO(), req)
+
+	})
+}
+
 // tests positive and negative cases for SetupWithManager function
 func TestPowerProfile_Reconcile_SetupPass(t *testing.T) {
 	r, err := createProfileReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
-	mgr.On("GetControllerOptions").Return(v1alpha1.ControllerConfigurationSpec{})
+	mgr.On("GetControllerOptions").Return(config.Controller{})
 	mgr.On("GetScheme").Return(r.Scheme)
 	mgr.On("GetLogger").Return(r.Log)
 	mgr.On("SetFields", mock.Anything).Return(nil)
 	mgr.On("Add", mock.Anything).Return(nil)
+	mgr.On("GetCache").Return(new(cacheMk))
 	err = (&PowerProfileReconciler{
 		Client: r.Client,
 		Scheme: r.Scheme,
@@ -1723,9 +1822,11 @@ func TestPowerProfile_Reconcile_SetupPass(t *testing.T) {
 func TestPowerProfile_Reconcile_SetupFail(t *testing.T) {
 	r, err := createProfileReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
-	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
-		Scheme: scheme.Scheme,
-	})
+	mgr := new(mgrMock)
+	mgr.On("GetControllerOptions").Return(config.Controller{})
+	mgr.On("GetScheme").Return(r.Scheme)
+	mgr.On("GetLogger").Return(r.Log)
+	mgr.On("Add", mock.Anything).Return(fmt.Errorf("setup fail"))
 
 	err = (&PowerProfileReconciler{
 		Client: r.Client,

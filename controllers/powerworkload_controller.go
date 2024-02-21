@@ -22,15 +22,16 @@ import (
 	"os"
 	"strings"
 
+	e "errors"
+
 	"github.com/go-logr/logr"
+	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+	"github.com/intel/kubernetes-power-manager/pkg/util"
+	"github.com/intel/power-optimization-library/pkg/power"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
-	"github.com/intel/kubernetes-power-manager/pkg/util"
-	"github.com/intel/power-optimization-library/pkg/power"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -52,13 +53,15 @@ var sharedPowerWorkloadName = ""
 
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerworkloads,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=power.intel.com,resources=powerworkloads/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 
 func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
-		logger.Error(fmt.Errorf("incorrect namespace"), "resource is not in the intel-power namespace, ignoring")
-		return ctrl.Result{}, nil
+		err := fmt.Errorf("incorrect namespace")
+		logger.Error(err, "resource is not in the intel-power namespace, ignoring")
+		return ctrl.Result{Requeue: false}, err
 	}
 	nodeName := os.Getenv("NODE_NAME")
 
@@ -71,9 +74,20 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 			// and we need to remove it from the power library here. If the profile doesn't exist, then
 			// the power library will have deleted it for us
 			if req.NamespacedName.Name == sharedPowerWorkloadName {
-				err = r.PowerLibrary.GetReservedPool().MoveCpus(*r.PowerLibrary.GetSharedPool().Cpus())
+				movedCores := *r.PowerLibrary.GetSharedPool().Cpus()
+				pools := r.PowerLibrary.GetAllExclusivePools()
+				for _, pool := range *pools {
+					if strings.Contains(pool.Name(), nodeName+"-reserved-") {
+						movedCores = append(movedCores, *pool.Cpus()...)
+						if err := pool.Remove(); err != nil {
+							logger.Error(err, "failed to remove reserved pool")
+							return ctrl.Result{}, err
+						}
+					}
+				}
+				err = r.PowerLibrary.GetReservedPool().MoveCpus(movedCores)
 				if err != nil {
-					logger.Error(err, "failed to remove shared pool")
+					logger.Error(err, "failed to return all non exclusive cores to default reserved pool")
 					return ctrl.Result{}, err
 				}
 				sharedPowerWorkloadName = ""
@@ -102,7 +116,7 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 
 		err = r.Client.List(context.TODO(), labelledNodeList, client.MatchingLabels(listOption))
 		if err != nil {
-			logger.Error(err, "error retrieving the node with the power node selector", listOption)
+			logger.Error(err, "error retrieving the node with the power node selector", "selector", listOption)
 			return ctrl.Result{}, err
 		}
 
@@ -123,20 +137,57 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 
 			sharedPowerWorkloadAlreadyExists := errors.NewServiceUnavailable("a shared power workload already exists for this node")
 			logger.Error(sharedPowerWorkloadAlreadyExists, "error creating the shared power workload")
-			return ctrl.Result{}, nil
+			return ctrl.Result{Requeue: false}, sharedPowerWorkloadAlreadyExists
 		}
 
-		// add cores to shared pool by selecting which cores should be reserved,
-		// remaining cores will be moved to the shared pool
+		// move all cores to the shared pool,
+		// then set up individual pools for reserved cores
 		logger.V(5).Info("creating the shared pool in the power library")
-		err = r.PowerLibrary.GetReservedPool().SetCpuIDs(workload.Spec.ReservedCPUs)
-		if err != nil {
-			logger.Error(err, "error configuring the shared pool in the power library")
+		if err := r.PowerLibrary.GetReservedPool().SetCpuIDs([]uint{}); err != nil {
+			logger.Error(err, "error initializing reserved pool")
 			return ctrl.Result{}, err
 		}
-
+		// remove the existing reserved pools in case they aren't needed after this
+		pools := r.PowerLibrary.GetAllExclusivePools()
+		for _, pool := range *pools {
+			if strings.Contains(pool.Name(), nodeName+"-reserved-") {
+				if err := pool.Remove(); err != nil {
+					logger.Error(err, "failed to remove reserved pool")
+					return ctrl.Result{}, err
+				}
+			}
+		}
+		var recoveryErrs []error
+		for _, coreConfig := range workload.Spec.ReservedCPUs {
+			// move cores to shared pool to prevent exclusive->reserved conflicts
+			if err := r.PowerLibrary.GetSharedPool().MoveCpuIDs(coreConfig.Cores); err != nil {
+				logger.Error(err, "error moving cores to shared pool")
+				return ctrl.Result{}, err
+			}
+			if coreConfig.PowerProfile != "" {
+				if err := createReservedPool(r.PowerLibrary, coreConfig, &logger); err != nil {
+					recoveryErrs = append(recoveryErrs, err)
+					// if attaching a profile failed, try moving the cores to the default reserved pool
+					if err := r.PowerLibrary.GetReservedPool().MoveCpuIDs(coreConfig.Cores); err != nil {
+						logger.Error(err, "error moving cores to reserved pool")
+						return ctrl.Result{}, err
+					}
+				}
+			} else {
+				// no profile specified so leave the cores in the default reserved pool
+				if err := r.PowerLibrary.GetReservedPool().MoveCpuIDs(coreConfig.Cores); err != nil {
+					logger.Error(err, "error moving cores to reserved pool")
+					return ctrl.Result{}, err
+				}
+			}
+		}
 		sharedPowerWorkloadName = req.NamespacedName.Name
-
+		wrappedErrs := e.Join(recoveryErrs...)
+		if wrappedErrs != nil {
+			errString := "error(s) encountered establishing reserved pool"
+			logger.Error(wrappedErrs, errString)
+			return ctrl.Result{Requeue: false}, fmt.Errorf(errString)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -145,7 +196,7 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 		if poolFromLibrary == nil {
 			poolDoesNotExistError := errors.NewServiceUnavailable(fmt.Sprintf("pool '%s' does not exist in the power library", workload.Spec.PowerProfile))
 			logger.Error(poolDoesNotExistError, "error retrieving the pool from the power library")
-			return ctrl.Result{}, nil
+			return ctrl.Result{Requeue: false}, poolDoesNotExistError
 		}
 
 		logger.V(5).Info("updating the CPU list in the power library")
@@ -187,7 +238,7 @@ func detectCoresRemoved(originalCoreList []uint, updatedCoreList []uint, logger 
 
 func detectCoresAdded(originalCoreList []uint, updatedCoreList []uint, logger *logr.Logger) []uint {
 	var coresAdded []uint
-	logger.V(5).Info("creating the shared pool in the power library")
+	logger.V(5).Info("detecting if cores are added to the cores list")
 	for _, core := range updatedCoreList {
 		if !validateCoreIsInCoreList(core, originalCoreList) {
 			coresAdded = append(coresAdded, core)
@@ -205,6 +256,43 @@ func validateCoreIsInCoreList(core uint, coreList []uint) bool {
 	}
 
 	return false
+}
+
+func createReservedPool(library power.Host, coreConfig powerv1.ReservedSpec, logger *logr.Logger) error {
+	pseudoReservedPool, err := library.AddExclusivePool(os.Getenv("NODE_NAME") + "-reserved-" + fmt.Sprintf("%v", coreConfig.Cores))
+	if err != nil {
+		logger.Error(err, fmt.Sprintf("error creating reserved pool for cores %v", coreConfig.Cores))
+		return err
+	}
+
+	if err := pseudoReservedPool.SetCpuIDs(coreConfig.Cores); err != nil {
+		if removePoolError := pseudoReservedPool.Remove(); removePoolError != nil {
+			logger.Error(removePoolError, fmt.Sprintf("error removing pool %v", pseudoReservedPool.Name()))
+		}
+
+		logger.Error(err, "error moving cores to special reserved pool")
+		return err
+	}
+
+	corePool := library.GetExclusivePool(coreConfig.PowerProfile)
+	if corePool == nil {
+		if removePoolError := pseudoReservedPool.Remove(); removePoolError != nil {
+			logger.Error(removePoolError, fmt.Sprintf("error removing pool %v", pseudoReservedPool.Name()))
+		}
+
+		logger.Error(err, "error setting retrieving exclusive pool for reserved cores")
+		return fmt.Errorf(fmt.Sprintf("specified profile %s has no existing pool", coreConfig.PowerProfile))
+	}
+
+	if err := pseudoReservedPool.SetPowerProfile(corePool.GetPowerProfile()); err != nil {
+		if removePoolError := pseudoReservedPool.Remove(); removePoolError != nil {
+			logger.Error(removePoolError, fmt.Sprintf("error removing pool %v", pseudoReservedPool.Name()))
+		}
+		logger.Error(err, "error setting profile for reserved cores")
+		return err
+	}
+
+	return nil
 }
 
 func (r *PowerWorkloadReconciler) SetupWithManager(mgr ctrl.Manager) error {

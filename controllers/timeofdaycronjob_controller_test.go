@@ -10,20 +10,21 @@ import (
 	"github.com/intel/kubernetes-power-manager/pkg/podstate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var queueTime = (10 * time.Second)
+var queueTime = 10 * time.Second
 
 var podSpec = corev1.PodSpec{
 	NodeName: "IncorrectNode",
@@ -104,7 +105,14 @@ var defaultSharedWork = &powerv1.PowerWorkload{
 }
 
 // WIP timeofdaycronjob controller unit tests
-func createTODCronReconcilerObject(objs []runtime.Object) (*TimeOfDayCronJobReconciler, error) {
+func createTODCronReconcilerObject(objs []client.Object) (*TimeOfDayCronJobReconciler, error) {
+	log.SetLogger(zap.New(
+		zap.UseDevMode(true),
+		func(opts *zap.Options) {
+			opts.TimeEncoder = zapcore.ISO8601TimeEncoder
+		},
+	),
+	)
 	// Register operator types with the runtime scheme.
 	s := scheme.Scheme
 
@@ -118,8 +126,7 @@ func createTODCronReconcilerObject(objs []runtime.Object) (*TimeOfDayCronJobReco
 		return nil, err
 	}
 	// Create a fake client to mock API calls.
-	cl := fake.NewClientBuilder().WithRuntimeObjects(objs...).WithScheme(s).Build()
-
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(objs...).WithStatusSubresource(objs...).Build()
 	// Create a ReconcileNode object with the scheme and fake client.
 	r := &TimeOfDayCronJobReconciler{cl, ctrl.Log.WithName("testing"), s, state, nil}
 
@@ -167,7 +174,7 @@ func TestTimeOfDayCronJob_Reconcile_CronProfile(t *testing.T) {
 	loc, err := time.LoadLocation(zone)
 	assert.NoError(t, err)
 	hour, minute, second := addSeconds(queueTime, loc)
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -272,7 +279,7 @@ func TestTimeOfDayCronJob_Reconcile_CronPods(t *testing.T) {
 	loc, err := time.LoadLocation(zone)
 	assert.NoError(t, err)
 	hour, minute, second := addSeconds(queueTime, loc)
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -356,6 +363,7 @@ func TestTimeOfDayCronJob_Reconcile_CronPods(t *testing.T) {
 				Name:      "timeofday-test",
 				Namespace: "intel-power",
 			},
+			Status: powerv1.TimeOfDayCronJobStatus{},
 			Spec: powerv1.TimeOfDayCronJobSpec{
 				Hour:     hour,
 				Minute:   minute,
@@ -451,7 +459,7 @@ func TestTimeOfDayCronJob_Reconcile_Cstates(t *testing.T) {
 		SharedPoolCStates:    cMapShared,
 		ExclusivePoolCStates: cMapExclusiveOuter,
 	}
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -537,7 +545,7 @@ func TestTimeOfDayCronJob_Reconcile_ExistingCstates(t *testing.T) {
 		SharedPoolCStates:    cMapShared,
 		ExclusivePoolCStates: cMapExclusiveOuter,
 	}
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: nodename,
@@ -607,7 +615,7 @@ func TestTimeOfDayCronJob_Reconcile_ExistingCstates(t *testing.T) {
 }
 
 // tests setting workload when one exists
-func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload(t *testing.T) {
+func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload_Lib_Err(t *testing.T) {
 	nodename := "TestNode"
 	t.Setenv("NODE_NAME", nodename)
 	zone := "Eire"
@@ -615,7 +623,7 @@ func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload(t *testing.T) {
 	loc, err := time.LoadLocation(zone)
 	assert.NoError(t, err)
 	hour, minute, second := addSeconds(queueTime, loc)
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -674,6 +682,9 @@ func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload(t *testing.T) {
 			Namespace: "intel-power",
 		},
 	}
+	_, teardown, err := fullDummySystem()
+	assert.Nil(t, err)
+	defer teardown()
 	nodemk := new(hostMock)
 	poolmk := new(poolMock)
 	nodemk.On("GetSharedPool").Return(poolmk)
@@ -688,7 +699,7 @@ func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload(t *testing.T) {
 	r.PowerLibrary = nodemk
 	time.Sleep(res.RequeueAfter)
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.NoError(t, err)
+	assert.ErrorContains(t, err, "forced library err")
 	// ensure the workload profile has been created
 	workload := powerv1.PowerWorkload{}
 	err = r.Client.Get(context.TODO(), workloadReq.NamespacedName, &workload)
@@ -706,7 +717,7 @@ func TestTimeOfDayCronJob_Reconcile_MissedDeadline(t *testing.T) {
 	loc, err := time.LoadLocation(zone)
 	assert.NoError(t, err)
 	hour, minute, second := addSeconds(queueTime*-1, loc)
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -783,7 +794,7 @@ func TestTimeOfDayCronJob_Reconcile_ErrsSharedPoolExists(t *testing.T) {
 			},
 		},
 	}
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -829,16 +840,13 @@ func TestTimeOfDayCronJob_Reconcile_ErrsSharedPoolExists(t *testing.T) {
 				return c
 			},
 			validateErr: func(e error) bool {
-				return assert.Nil(t, e)
+				return assert.ErrorContains(t, e, "forced library err")
 			},
 		},
 		{
 			testCase: "Test Case 2: client list err",
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
-				poolmk := new(poolMock)
-				nodemk.On("GetSharedPool").Return(poolmk)
-				poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("forced library err"))
 				return nodemk
 			},
 			convertClient: func(c client.Client, cron powerv1.TimeOfDayCronJob) client.Client {
@@ -860,9 +868,6 @@ func TestTimeOfDayCronJob_Reconcile_ErrsSharedPoolExists(t *testing.T) {
 			testCase: "Test Case 3: client get err",
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
-				poolmk := new(poolMock)
-				nodemk.On("GetSharedPool").Return(poolmk)
-				poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("forced library err"))
 				return nodemk
 			},
 			convertClient: func(c client.Client, cron powerv1.TimeOfDayCronJob) client.Client {
@@ -972,7 +977,7 @@ func TestTimeOfDayCronJob_Reconcile_ErrsPodTuning(t *testing.T) {
 
 		Status: podStaus,
 	}
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -1120,8 +1125,11 @@ func TestTimeOfDayCronJob_Reconcile_ErrsPodTuning(t *testing.T) {
 }
 
 func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
+	_, teardown, err := fullDummySystem()
+	assert.Nil(t, err)
+	defer teardown()
 	// incorrect namespace
-	r, err := createTODCronReconcilerObject([]runtime.Object{})
+	r, err := createTODCronReconcilerObject([]client.Object{})
 	assert.Nil(t, err)
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
@@ -1130,7 +1138,7 @@ func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
 		},
 	}
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.Nil(t, err)
+	assert.ErrorContains(t, err, "incorrect namespace")
 	// incorrect node
 	req = reconcile.Request{
 		NamespacedName: client.ObjectKey{
@@ -1139,7 +1147,7 @@ func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
 		},
 	}
 	_, err = r.Reconcile(context.TODO(), req)
-	assert.Nil(t, err)
+	assert.ErrorContains(t, err, "wrong-node")
 	// incorrect timezones
 	nodename := "TestNode"
 	t.Setenv("NODE_NAME", nodename)
@@ -1154,7 +1162,7 @@ func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
 		Profile:      &profile,
 		ReservedCPUs: &[]uint{0},
 	}
-	clientObjs := []runtime.Object{
+	clientObjs := []client.Object{
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "TestNode",
@@ -1253,14 +1261,15 @@ func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
 
 // tests positive and negative cases for SetupWithManager function
 func TestTimeOfDayCronJob_Reconcile_SetupPass(t *testing.T) {
-	r, err := createTODCronReconcilerObject([]runtime.Object{})
+	r, err := createTODCronReconcilerObject([]client.Object{})
 	assert.Nil(t, err)
 	mgr := new(mgrMock)
-	mgr.On("GetControllerOptions").Return(v1alpha1.ControllerConfigurationSpec{})
+	mgr.On("GetControllerOptions").Return(config.Controller{})
 	mgr.On("GetScheme").Return(r.Scheme)
 	mgr.On("GetLogger").Return(r.Log)
 	mgr.On("SetFields", mock.Anything).Return(nil)
 	mgr.On("Add", mock.Anything).Return(nil)
+	mgr.On("GetCache").Return(new(cacheMk))
 	err = (&TimeOfDayCronJobReconciler{
 		Client: r.Client,
 		Scheme: r.Scheme,
@@ -1268,13 +1277,14 @@ func TestTimeOfDayCronJob_Reconcile_SetupPass(t *testing.T) {
 	assert.Nil(t, err)
 
 }
-
-func TestTimeOfDayCronJob_Reconcile_SetupFail(t *testing.T) {
-	r, err := createTODCronReconcilerObject([]runtime.Object{})
+func TestCronReconcileSetupFail(t *testing.T) {
+	r, err := createTODCronReconcilerObject([]client.Object{})
 	assert.Nil(t, err)
-	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
-		Scheme: scheme.Scheme,
-	})
+	mgr := new(mgrMock)
+	mgr.On("GetControllerOptions").Return(config.Controller{})
+	mgr.On("GetScheme").Return(r.Scheme)
+	mgr.On("GetLogger").Return(r.Log)
+	mgr.On("Add", mock.Anything).Return(fmt.Errorf("setup fail"))
 
 	err = (&TimeOfDayCronJobReconciler{
 		Client: r.Client,
@@ -1282,4 +1292,86 @@ func TestTimeOfDayCronJob_Reconcile_SetupFail(t *testing.T) {
 	}).SetupWithManager(mgr)
 	assert.Error(t, err)
 
+}
+
+// go test -fuzz FuzzTimeOfDayCronController -run=FuzzTimeOfDayCronController -parallel=1
+func FuzzTimeOfDayCronController(f *testing.F) {
+	f.Add("Eire", 12, 32, 30, "performance", "balance-power", "shared", "power", "bigger", "C4", "25")
+	f.Fuzz(func(t *testing.T, timeZone string, hr int, min int, sec int, prof1 string, prof2 string, prof3 string, label1 string, label2 string, cstate string, corevalue string) {
+		testNode := "TestNode"
+		t.Setenv("NODE_NAME", testNode)
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "test-pod-1",
+				Namespace:   IntelPowerNamespace,
+				UID:         "abcdefg",
+				Labels:      map[string]string{label1: "true"},
+				Annotations: map[string]string{"jibber": "jabber"},
+			},
+			Spec:   podSpec,
+			Status: podStaus,
+		}
+		nodeObj := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   testNode,
+				Labels: map[string]string{"powernode": "selector"},
+			},
+			Status: corev1.NodeStatus{
+				Capacity: map[corev1.ResourceName]resource.Quantity{
+					CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+				},
+			},
+		}
+		todObj := &powerv1.TimeOfDayCronJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      testNode,
+				Namespace: "intel-power",
+			},
+			Spec: powerv1.TimeOfDayCronJobSpec{
+				TimeZone:     &timeZone,
+				ReservedCPUs: &[]uint{0, 1},
+				Hour:         hr,
+				Minute:       min,
+				Second:       sec,
+				Profile:      &prof1,
+				Pods: &[]powerv1.PodInfo{
+					{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label1: "true"}}, Target: prof3},
+					{Labels: metav1.LabelSelector{MatchLabels: map[string]string{label2: "false"}}, Target: prof2},
+				},
+				CState: &powerv1.CStatesSpec{
+					SharedPoolCStates: map[string]bool{cstate: true},
+					ExclusivePoolCStates: map[string]map[string]bool{
+						prof1: {"C1E": false, "C6": false, "C1": false},
+						prof2: {"C1E": true, "C6": false},
+					},
+					IndividualCoreCStates: map[string]map[string]bool{
+						"200":     {"C1E": true, "C6": false},
+						"-4":      {"C1E": false, "C6": false},
+						corevalue: {"C1E": false, "C6": false, "CIE": true},
+					},
+				},
+			},
+		}
+
+		clientObjs := []client.Object{
+			nodeObj, todObj, pod,
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      testNode,
+				Namespace: "intel-power",
+			},
+		}
+		dummyFilesystemHost, teardown, err := fullDummySystem()
+		assert.Nil(t, err)
+		defer teardown()
+		r, err := createTODCronReconcilerObject(clientObjs)
+		r.PowerLibrary = dummyFilesystemHost
+		if err != nil {
+			t.Error(err)
+		}
+		r.Reconcile(context.TODO(), req)
+
+	})
 }
