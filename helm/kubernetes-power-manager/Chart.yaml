@@ -1,5 +1,5 @@
 apiVersion: v2
-name: kubernetes-power-manager-v2.3.1
+name: kubernetes-power-manager
 description: A Helm chart for Intel's Kubernetes Power Manager
 
 # A chart can be either an 'application' or a 'library' chart.
