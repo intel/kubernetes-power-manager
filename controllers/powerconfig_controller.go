@@ -241,7 +241,8 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 		}
 
 		powerNode.Spec.CustomDevices = customDevices
-		err := r.Client.Update(context.TODO(), powerNode)
+		patch := client.MergeFrom(powerNode.DeepCopy())
+		err = r.Client.Status().Patch(context.TODO(), powerNode, patch)
 		if err != nil {
 			logger.Error(err, "failed to update power node with custom devices.")
 			return ctrl.Result{}, err
@@ -251,7 +252,8 @@ func (r *PowerConfigReconciler) Reconcile(c context.Context, req ctrl.Request) (
 	config.Status.Nodes = r.State.PowerNodeList
 	config.Spec.CustomDevices = customDevices
 	logger.V(5).Info("configured power node added to the power node list")
-	err = r.Client.Status().Update(context.TODO(), config)
+	patch := client.MergeFrom(config.DeepCopy())
+	err = r.Client.Status().Patch(context.TODO(), config, patch)
 	if err != nil {
 		logger.Error(err, "failed to update the power config")
 		return ctrl.Result{}, err
