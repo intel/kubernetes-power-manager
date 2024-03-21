@@ -468,7 +468,7 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 			nodeName:    "TestNode",
 			profileName: "user-created",
 			validateErr: func(e error) bool {
-				return assert.ErrorContains(t, e, "max frequency value cannot be lower than the minimum frequency value")
+				return assert.ErrorContains(t, e, "max frequency value cannot be lower than the min frequency value")
 			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
@@ -686,7 +686,7 @@ func TestPowerProfile_Reconcile_SharedProfileDoesNotExistInLibrary(t *testing.T)
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.ErrorContains(t, err, "maximum or minimum frequency value cannot be below 1000")
+		assert.ErrorContains(t, err, "max or min frequency value cannot be below 1000")
 
 		workloads := &powerv1.PowerWorkloadList{}
 		err = r.Client.List(context.TODO(), workloads)
@@ -938,7 +938,7 @@ func TestPowerProfile_Reconcile_MaxValueLowerThanMinValue(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.ErrorContains(t, err, "max frequency value cannot be lower than the minimum frequency value")
+		assert.ErrorContains(t, err, "max frequency value cannot be lower than the min frequency value")
 	}
 }
 
@@ -1000,7 +1000,7 @@ func TestPowerProfile_Reconcile_SharedFrequencyValuesLessThanAbsoluteValue(t *te
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.ErrorContains(t, err, "maximum or minimum frequency value cannot be")
+		assert.ErrorContains(t, err, "max or min frequency value cannot be below")
 	}
 }
 
@@ -1062,7 +1062,7 @@ func TestPowerProfile_Reconcile_MaxValueZeroMinValueGreaterThanZero(t *testing.T
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.ErrorContains(t, err, "max frequency value cannot be lower than the minimum frequency value")
+		assert.ErrorContains(t, err, "max frequency value cannot be lower than the min frequency value")
 	}
 }
 

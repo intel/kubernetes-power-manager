@@ -183,13 +183,13 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 
 	logger.V(5).Info("making sure max value is higher than the min value")
 	if profile.Spec.Max < profile.Spec.Min {
-		maxLowerThanMaxError := errors.NewServiceUnavailable("max frequency value cannot be lower than the minimum frequency value")
+		maxLowerThanMaxError := errors.NewServiceUnavailable("max frequency value cannot be lower than the min frequency value")
 		logger.Error(maxLowerThanMaxError, fmt.Sprintf("error creating the profile '%s'", profile.Spec.Name))
 		return ctrl.Result{Requeue: false}, maxLowerThanMaxError
 	}
 
 	absoluteMaximumFrequency, absoluteMinimumFrequency, err := getMaxMinFrequencyValues()
-	logger.V(5).Info("retrieving the maximum possible frequency and minimum possible frequency from the system")
+	logger.V(5).Info("retrieving the max possible frequency and min possible frequency from the system")
 	if err != nil {
 		logger.Error(err, "error retrieving the frequency values from the node")
 		return ctrl.Result{Requeue: false}, err
@@ -198,7 +198,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 	// If the profile is shared then the associated pool will not be created in the power library
 	if profile.Spec.Shared {
 		if profile.Spec.Max < absoluteMinimumFrequency || profile.Spec.Min < absoluteMinimumFrequency {
-			frequencyTooLowError := errors.NewServiceUnavailable(fmt.Sprintf("maximum or minimum frequency value cannot be below %d", absoluteMinimumFrequency))
+			frequencyTooLowError := errors.NewServiceUnavailable(fmt.Sprintf("max or min frequency value cannot be below %d", absoluteMinimumFrequency))
 			logger.Error(frequencyTooLowError, "error creating the shared power profile")
 			return ctrl.Result{Requeue: false}, frequencyTooLowError
 		}

@@ -160,7 +160,7 @@ func (r *CStatesReconciler) verifyCSStatesExist(cStatesSpec *powerv1.CStatesSpec
 		}
 	}
 	for coreID, coreCStates := range cStatesSpec.IndividualCoreCStates {
-		logger.V(5).Info("checking the power library to confirm that C-States are on individual core", "coreID", coreID)
+		logger.V(5).Info("checking the power library to confirm that C-States are on individual cores", "coreID", coreID)
 		err := r.PowerLibrary.ValidateCStates(coreCStates)
 		if err != nil {
 			results = multierror.Append(results, fmt.Errorf("error reconciling C-States on node %s: %w", nodeName, err))
@@ -227,7 +227,7 @@ func (r *CStatesReconciler) restoreCStates(ctx context.Context, logger *logr.Log
 	return results.ErrorOrNil()
 }
 
-//removes extra tabs and newlines from multi error
+// removes extra tabs and newlines from multi error
 func stripMultiError(err error) error {
 	stripped := strings.Replace(err.Error(), "\n", "", -1)
 	stripped = strings.Replace(stripped, "\t", "", -1)
