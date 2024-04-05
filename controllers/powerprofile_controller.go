@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -40,6 +41,7 @@ import (
 const (
 	MaxFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"
 	MinFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"
+	MinFreqOffset = 200
 )
 
 // performance          ===>  priority level 0
@@ -110,6 +112,17 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 				err := r.PowerLibrary.GetSharedPool().SetPowerProfile(nil)
 				if err != nil {
 					logger.Error(err, "error setting nil profile")
+					return ctrl.Result{}, err
+				}
+				pool := r.PowerLibrary.GetExclusivePool(req.Name)
+				if pool == nil {
+					notFoundErr := fmt.Errorf("pool not found")
+					logger.Error(notFoundErr, fmt.Sprintf("attempted to remove the non existing pool %s", req.Name))
+					return ctrl.Result{Requeue: false}, notFoundErr
+				}
+				err = pool.Remove()
+				if err != nil {
+					logger.Error(err, "error deleting the power profile from the library")
 					return ctrl.Result{}, err
 				}
 				return ctrl.Result{}, nil
@@ -195,99 +208,95 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		return ctrl.Result{Requeue: false}, err
 	}
 
-	// If the profile is shared then the associated pool will not be created in the power library
-	if profile.Spec.Shared {
-		if profile.Spec.Max < absoluteMinimumFrequency || profile.Spec.Min < absoluteMinimumFrequency {
-			frequencyTooLowError := errors.NewServiceUnavailable(fmt.Sprintf("max or min frequency value cannot be below %d", absoluteMinimumFrequency))
-			logger.Error(frequencyTooLowError, "error creating the shared power profile")
-			return ctrl.Result{Requeue: false}, frequencyTooLowError
-		}
-		actualEpp := profile.Spec.Epp
-		if !power.IsFeatureSupported(power.EPPFeature) && actualEpp != "" {
-			err = fmt.Errorf("EPP is not supported but %s provides one, setting EPP to ''", profile.Name)
-			logger.Error(err, "invalid EPP")
-			actualEpp = ""
-		}
-		if !checkGovs(profile.Spec.Governor) {
-			err = fmt.Errorf("governor %s is not supported, please use one of the following %v''", profile.Spec.Governor, power.GetAvailableGovernors())
-			logger.Error(err, "invalid governor")
-			return ctrl.Result{Requeue: false}, err
-		}
-		powerProfile, err := power.NewPowerProfile(profile.Spec.Name, uint(profile.Spec.Min), uint(profile.Spec.Max), profile.Spec.Governor, actualEpp)
-		if err != nil {
-			logger.Error(err, "could not set the power profile for the shared pool")
-			return ctrl.Result{Requeue: false}, err
-		}
-		err = r.PowerLibrary.GetSharedPool().SetPowerProfile(powerProfile)
-		if err != nil {
-			logger.Error(err, "could not set the power profile for the shared pool")
-			return ctrl.Result{Requeue: false}, err
-		}
-
-		logger.V(5).Info(fmt.Sprintf("shared power profile successfully created: name - %s max - %d min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp))
-		return ctrl.Result{}, nil
+	var profileMaxFreq int
+	var profileMinFreq int
+	// check if profile is a default one
+	if profile.Spec.Epp != "" && profile.Spec.Max == 0 && profile.Spec.Min == 0 {
+		profileMaxFreq = int(float64(absoluteMaximumFrequency) - (float64((absoluteMaximumFrequency - absoluteMinimumFrequency)) * profilePercentages[profile.Spec.Epp]["difference"]))
+		profileMinFreq = int(profileMaxFreq) - MinFreqOffset
 	} else {
-		var profileMaxFreq int
-		var profileMinFreq int
-		if profile.Spec.Epp != "" && profile.Spec.Max == 0 && profile.Spec.Min == 0 {
-			profileMaxFreq = int(float64(absoluteMaximumFrequency) - (float64((absoluteMaximumFrequency - absoluteMinimumFrequency)) * profilePercentages[profile.Spec.Epp]["difference"]))
-			profileMinFreq = int(profileMaxFreq) - 200
-		} else {
-			profileMaxFreq = profile.Spec.Max
-			profileMinFreq = profile.Spec.Min
-		}
-		if profileMaxFreq == 0 || profileMinFreq == 0 {
-			cannotBeZeroError := errors.NewServiceUnavailable("max or min frequency cannot be zero")
-			logger.Error(cannotBeZeroError, fmt.Sprintf("error creating the profile '%s'", profile.Spec.Name))
-			return ctrl.Result{Requeue: false}, cannotBeZeroError
-		}
-
-		profileFromLibrary := r.PowerLibrary.GetExclusivePool(profile.Spec.Name)
-		actualEpp := profile.Spec.Epp
-		if !power.IsFeatureSupported(power.EPPFeature) && actualEpp != "" {
-			err = fmt.Errorf("EPP is not supported but %s provides one, setting EPP to ''", profile.Name)
-			logger.Error(err, "invalid EPP")
-			actualEpp = ""
-		}
-		if !checkGovs(profile.Spec.Governor) {
-			err = fmt.Errorf("governor %s is not supported, please use one of the following %v''", profile.Spec.Governor, power.GetAvailableGovernors())
-			logger.Error(err, "invalid governor")
-			return ctrl.Result{Requeue: false}, err
-		}
-		powerProfile, err := power.NewPowerProfile(profile.Spec.Name, uint(profileMinFreq), uint(profileMaxFreq), profile.Spec.Governor, actualEpp)
-		if err != nil {
-			logger.Error(err, "could not create the power profile")
-			return ctrl.Result{Requeue: false}, err
-		}
-		if profileFromLibrary == nil {
-			pool, err := r.PowerLibrary.AddExclusivePool(profile.Spec.Name)
-			if err != nil {
-				logger.Error(err, "failed to create the power profile")
-				return ctrl.Result{}, err
-			}
-			err = pool.SetPowerProfile(powerProfile)
-			if err != nil {
-				logger.Error(err, fmt.Sprintf("error adding the profile '%s' to the power library for host '%s'", profile.Spec.Name, nodeName))
-				return ctrl.Result{}, err
-			}
-
-			// Create the extended resources for the profile
-			err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp, &logger)
-			if err != nil {
-				logger.Error(err, "error creating the extended resources for the base profile")
-				return ctrl.Result{}, err
-			}
-		} else {
-			err = r.PowerLibrary.GetExclusivePool(profile.Spec.Name).SetPowerProfile(powerProfile)
-			logger.V(5).Info(fmt.Sprintf("updating the power profile '%s' to the power library for node '%s'", profile.Spec.Name, nodeName))
-			if err != nil {
-				logger.Error(err, fmt.Sprintf("error updating the profile '%s' to the power library for node '%s'", profile.Spec.Name, nodeName))
-				return ctrl.Result{}, err
-			}
-		}
-
-		logger.V(5).Info(fmt.Sprintf("power profile successfully created: name - %s max - %d min - %d EPP - %s", profile.Spec.Name, profileMaxFreq, profileMinFreq, profile.Spec.Epp))
+		profileMaxFreq = profile.Spec.Max
+		profileMinFreq = profile.Spec.Min
 	}
+	if profileMaxFreq > absoluteMaximumFrequency || profileMinFreq < absoluteMinimumFrequency {
+		InvalidRangeError := fmt.Errorf("max and min frequency must be within the range %d-%d", absoluteMinimumFrequency, absoluteMaximumFrequency)
+		logger.Error(InvalidRangeError, fmt.Sprintf("error creating the profile '%s'", profile.Spec.Name))
+		return ctrl.Result{Requeue: false}, InvalidRangeError
+	}
+	actualEpp := profile.Spec.Epp
+	if !power.IsFeatureSupported(power.EPPFeature) && actualEpp != "" {
+		err = fmt.Errorf("EPP is not supported but %s provides one, setting EPP to ''", profile.Name)
+		logger.Error(err, "invalid EPP")
+		actualEpp = ""
+	}
+	if !checkGovs(profile.Spec.Governor) {
+		err = fmt.Errorf("governor %s is not supported, please use one of the following %v''", profile.Spec.Governor, power.GetAvailableGovernors())
+		logger.Error(err, "invalid governor")
+		return ctrl.Result{Requeue: false}, err
+	}
+	powerProfile, err := power.NewPowerProfile(profile.Spec.Name, uint(profileMinFreq), uint(profileMaxFreq), profile.Spec.Governor, actualEpp)
+	if err != nil {
+		logger.Error(err, "could not create the power profile")
+		return ctrl.Result{Requeue: false}, err
+	}
+	// check if profile has an associated pool
+	profileFromLibrary := r.PowerLibrary.GetExclusivePool(profile.Spec.Name)
+	// if not create one
+	if profileFromLibrary == nil {
+		pool, err := r.PowerLibrary.AddExclusivePool(profile.Spec.Name)
+		if err != nil {
+			logger.Error(err, "failed to create the power profile")
+			return ctrl.Result{}, err
+		}
+		err = pool.SetPowerProfile(powerProfile)
+		if err != nil {
+			logger.Error(err, fmt.Sprintf("error adding the profile '%s' to the power library for host '%s'", profile.Spec.Name, nodeName))
+			return ctrl.Result{}, err
+		}
+		if profile.Spec.Shared {
+			logger.V(5).Info(fmt.Sprintf("shared power profile successfully created: name - %s max - %d min - %d EPP - %s", profile.Spec.Name, profile.Spec.Max, profile.Spec.Min, profile.Spec.Epp))
+			workloadName := fmt.Sprintf("shared-%s-workload", nodeName)
+			// check if the current node has a shared workload
+			workload := &powerv1.PowerWorkload{}
+			err = r.Client.Get(context.TODO(), client.ObjectKey{
+				Name:      workloadName,
+				Namespace: req.NamespacedName.Namespace,
+			}, workload)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					return ctrl.Result{}, nil
+				}
+				logger.Error(err, "client error")
+				return ctrl.Result{}, err
+			}
+			// check if the shared workload uses this profile
+			if workload.Spec.PowerProfile == profile.Spec.Name {
+				// if workload uses this profile, update it to use the latest info
+				workload.ObjectMeta.Annotations = map[string]string{"PM-updated": fmt.Sprint(time.Now().Unix())}
+				err = r.Client.Update(context.TODO(), workload)
+				if err != nil {
+					logger.Error(err, "error updating workload attached to profile")
+					return ctrl.Result{}, err
+				}
+			}
+			return ctrl.Result{}, nil
+		}
+		// Create the extended resources for the profile
+		err = r.createExtendedResources(nodeName, profile.Spec.Name, profile.Spec.Epp, &logger)
+		if err != nil {
+			logger.Error(err, "error creating the extended resources for the base profile")
+			return ctrl.Result{}, err
+		}
+	} else {
+		err = r.PowerLibrary.GetExclusivePool(profile.Spec.Name).SetPowerProfile(powerProfile)
+		logger.V(5).Info(fmt.Sprintf("updating the power profile '%s' to the power library for node '%s'", profile.Spec.Name, nodeName))
+		if err != nil {
+			logger.Error(err, fmt.Sprintf("error updating the profile '%s' to the power library for node '%s'", profile.Spec.Name, nodeName))
+			return ctrl.Result{}, err
+		}
+	}
+
+	logger.V(5).Info(fmt.Sprintf("power profile successfully created: name - %s max - %d min - %d EPP - %s", profile.Spec.Name, profileMaxFreq, profileMinFreq, profile.Spec.Epp))
 
 	workloadName := fmt.Sprintf("%s-%s", profile.Spec.Name, nodeName)
 	logger.V(5).Info(fmt.Sprintf("configuring the workload name: %s", workloadName))

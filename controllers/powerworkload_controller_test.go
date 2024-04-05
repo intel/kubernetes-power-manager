@@ -87,6 +87,7 @@ func mocktemplate() reservedPoolMocks {
 	sharedPoolmk.On("Cpus").Return(&power.CpuList{})
 	sharedPoolmk.On("MoveCpuIDs", mock.Anything).Return(nil)
 	sharedPoolmk.On("SetCpuIDs", mock.Anything).Return(nil)
+	sharedPoolmk.On("SetPowerProfile", mock.Anything).Return(nil)
 	reservedmk.On("MoveCpuIDs", mock.Anything).Return(nil)
 	reservedmk.On("SetCpuIDs", mock.Anything).Return(nil)
 	exclusiveReservedmk.On("Name").Return("TestNode-reserved-[0]")
@@ -276,7 +277,14 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
 				poolmk := new(poolMock)
+				sharedPoolmk := new(poolMock)
+				dummyPoolmk := new(poolMock)
+				profmk := new(profMock)
 				nodemk.On("GetReservedPool").Return(poolmk)
+				nodemk.On("GetExclusivePool", mock.Anything).Return(dummyPoolmk)
+				nodemk.On("GetSharedPool").Return(sharedPoolmk)
+				dummyPoolmk.On("GetPowerProfile").Return(profmk)
+				sharedPoolmk.On("SetPowerProfile", mock.Anything).Return(nil)
 				poolmk.On("SetCpuIDs", mock.Anything).Return(fmt.Errorf("set cpu error"))
 				sharedPowerWorkloadName = ""
 				return nodemk
@@ -323,7 +331,6 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 				template := mocktemplate()
 				template.exclusiveRserved.ExpectedCalls = popCall(template.exclusiveRserved.ExpectedCalls, "SetCpuIDs")
 				template.reserved.ExpectedCalls = popCall(template.reserved.ExpectedCalls, "MoveCpuIDs")
-				template.node.ExpectedCalls = popCall(template.node.ExpectedCalls, "GetExclusivePool")
 				template.exclusiveRserved.On("SetCpuIDs", mock.Anything).Return(fmt.Errorf("set profile err"))
 				template.reserved.On("MoveCpuIDs", mock.Anything).Return(fmt.Errorf("recovery failed"))
 				return template.node
@@ -340,7 +347,6 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 				template := mocktemplate()
 				template.exclusiveRserved.ExpectedCalls = popCall(template.exclusiveRserved.ExpectedCalls, "SetCpuIDs")
 				template.reserved.ExpectedCalls = popCall(template.reserved.ExpectedCalls, "MoveCpuIDs")
-				template.node.ExpectedCalls = popCall(template.node.ExpectedCalls, "GetExclusivePool")
 				template.exclusiveRserved.On("SetCpuIDs", mock.Anything).Return(fmt.Errorf("set profile err"))
 				template.exclusiveRserved.On("Remove", mock.Anything).Return(fmt.Errorf("remove pool error"))
 				template.reserved.On("MoveCpuIDs", mock.Anything).Return(fmt.Errorf("recovery failed"))
@@ -419,6 +425,7 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 				template.node.On("AddExclusivePool", "TestNode-reserved-[0 1]").Return(template.exclusiveRserved, nil)
 				template.node.On("GetExclusivePool", "performance").Return(template.performance).Once()
 				template.node.On("GetExclusivePool", "performance").Return(nil).Once()
+				template.node.On("GetExclusivePool", "").Return(template.performance).Once()
 
 				exclusiveReservedmk2.On("Name").Return("TestNode-reserved-[2]")
 				exclusiveReservedmk2.On("Remove").Return(nil).Once()
@@ -451,6 +458,9 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 			assert.Nil(t, err)
 			assert.Nil(t, host.GetSharedPool().SetPowerProfile(sharedProf))
 			perf, err := host.AddExclusivePool("performance")
+			assert.Nil(t, err)
+			pool, err := host.AddExclusivePool("shared")
+			pool.SetPowerProfile(sharedProf)
 			assert.Nil(t, err)
 			assert.Nil(t, host.GetSharedPool().SetCpuIDs([]uint{2, 3, 4, 5, 6, 7}))
 			assert.Nil(t, perf.SetCpuIDs([]uint{2, 3}))

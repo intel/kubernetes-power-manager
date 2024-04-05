@@ -152,9 +152,15 @@ func TestPowerProfile_Reconcile_SharedPoolCreation(t *testing.T) {
 	}
 	nodemk := new(hostMock)
 	poolmk := new(poolMock)
+	exPoolmmk := new(poolMock)
+	_, teardown, err := fullDummySystem()
+	assert.Nil(t, err)
+	defer teardown()
 	poolmk.On("SetPowerProfile", mock.Anything).Return(nil)
 	nodemk.On("GetSharedPool").Return(poolmk)
-
+	nodemk.On("GetExclusivePool", mock.Anything).Return(nil)
+	nodemk.On("AddExclusivePool", mock.Anything).Return(exPoolmmk, nil)
+	exPoolmmk.On("SetPowerProfile", mock.Anything).Return(nil)
 	t.Setenv("NODE_NAME", "TestNode")
 	r, err := createProfileReconcilerObject(clientObjs)
 	assert.Nil(t, err)
@@ -490,7 +496,7 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 			nodeName:    "TestNode",
 			profileName: "user-created",
 			validateErr: func(e error) bool {
-				return assert.ErrorContains(t, e, "max or min frequency cannot be zero")
+				return assert.ErrorContains(t, e, "max and min frequency must be within the range")
 			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
@@ -512,7 +518,7 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 			nodeName:    "TestNode",
 			profileName: "user-created",
 			validateErr: func(e error) bool {
-				return assert.ErrorContains(t, e, "max or min frequency cannot be zero")
+				return assert.ErrorContains(t, e, "max and min frequency must be within the range")
 			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
@@ -686,7 +692,7 @@ func TestPowerProfile_Reconcile_SharedProfileDoesNotExistInLibrary(t *testing.T)
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.ErrorContains(t, err, "max or min frequency value cannot be below 1000")
+		assert.ErrorContains(t, err, "max and min frequency must be within the range")
 
 		workloads := &powerv1.PowerWorkloadList{}
 		err = r.Client.List(context.TODO(), workloads)
@@ -1000,7 +1006,7 @@ func TestPowerProfile_Reconcile_SharedFrequencyValuesLessThanAbsoluteValue(t *te
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.ErrorContains(t, err, "max or min frequency value cannot be below")
+		assert.ErrorContains(t, err, "max and min frequency must be within the range")
 	}
 }
 
@@ -1041,7 +1047,9 @@ func TestPowerProfile_Reconcile_MaxValueZeroMinValueGreaterThanZero(t *testing.T
 			},
 		},
 	}
-
+	_, teardown, err := fullDummySystem()
+	assert.Nil(t, err)
+	defer teardown()
 	for _, tc := range tcases {
 		t.Setenv("NODE_NAME", tc.nodeName)
 
@@ -1238,54 +1246,7 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 			clientObjs: []runtime.Object{},
 		},
 		{
-			testCase:      "Test Case 2 -error setting profile",
-			profileName:   "shared",
-			powerNodeName: "TestNode",
-			getNodemk: func() *hostMock {
-				nodemk := new(hostMock)
-				poolmk := new(poolMock)
-				poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("unit test set profile error"))
-				nodemk.On("GetSharedPool").Return(poolmk)
-				return nodemk
-			},
-			validateErr: func(e error) bool {
-				return assert.ErrorContains(t, e, "unit test set profile error")
-			},
-			clientObjs: []runtime.Object{
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "shared-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{},
-				},
-				&powerv1.PowerProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "shared",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerProfileSpec{
-						Name:   "shared",
-						Max:    3600,
-						Min:    3200,
-						Shared: true,
-						Epp:    "",
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "TestNode",
-					},
-					Status: corev1.NodeStatus{
-						Capacity: map[corev1.ResourceName]resource.Quantity{
-							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-						},
-					},
-				},
-			},
-		},
-		{
-			testCase:    "Test Case 3 - Pool creation error",
+			testCase:    "Test Case 2 - Pool creation error",
 			profileName: "performance",
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
@@ -1322,7 +1283,7 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 			},
 		},
 		{
-			testCase:    "Test Case 4 - Set power profile error",
+			testCase:    "Test Case 3 - Set power profile error",
 			profileName: "performance",
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
@@ -1361,7 +1322,7 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 			},
 		},
 		{
-			testCase:    "Test Case 5 - reset shared profile error",
+			testCase:    "Test Case 4 - reset shared profile error",
 			profileName: "shared",
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
@@ -1375,6 +1336,46 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 			},
 			validateErr: func(e error) bool {
 				return assert.ErrorContains(t, e, "Set profile err")
+			},
+			clientObjs: []runtime.Object{},
+		},
+		{
+			testCase:    "Test Case 5 - dummy pool retrieval error",
+			profileName: "shared",
+			getNodemk: func() *hostMock {
+				nodemk := new(hostMock)
+				poolmk := new(poolMock)
+				profmk := new(profMock)
+				nodemk.On("GetSharedPool").Return(poolmk)
+				poolmk.On("GetPowerProfile").Return(profmk)
+				profmk.On("Name").Return("shared")
+				poolmk.On("SetPowerProfile", mock.Anything).Return(nil)
+				nodemk.On("GetExclusivePool", mock.Anything).Return(nil)
+				return nodemk
+			},
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "pool not found")
+			},
+			clientObjs: []runtime.Object{},
+		},
+		{
+			testCase:    "Test Case 6 - dummy pool removal error",
+			profileName: "shared",
+			getNodemk: func() *hostMock {
+				nodemk := new(hostMock)
+				poolmk := new(poolMock)
+				dummyPoolmk := new(poolMock)
+				profmk := new(profMock)
+				nodemk.On("GetSharedPool").Return(poolmk)
+				poolmk.On("GetPowerProfile").Return(profmk)
+				profmk.On("Name").Return("shared")
+				poolmk.On("SetPowerProfile", mock.Anything).Return(nil)
+				nodemk.On("GetExclusivePool", mock.Anything).Return(dummyPoolmk)
+				dummyPoolmk.On("Remove").Return(fmt.Errorf("pool removal err"))
+				return nodemk
+			},
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "pool removal err")
 			},
 			clientObjs: []runtime.Object{},
 		},
@@ -1675,8 +1676,8 @@ func TestPowerProfile_Reconcile_UnsupportedGovernor(t *testing.T) {
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name:     "shared",
-						Max:      10000,
-						Min:      10000,
+						Max:      1000,
+						Min:      1000,
 						Shared:   true,
 						Governor: "made up",
 					},
