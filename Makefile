@@ -127,7 +127,7 @@ else
 	sed -i 's/- .*\/rbac\.yaml/- \.\/ocp\/rbac.yaml/' config/rbac/kustomization.yaml
 	sed -i 's/- .*\/role\.yaml/- \.\/ocp\/role.yaml/' config/rbac/kustomization.yaml
 endif
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook crd paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
 fmt:
@@ -169,7 +169,7 @@ push:
 # download controller-gen if necessary
 controller-gen:
 ifeq (, $(shell which controller-gen))
-	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.14.0
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
