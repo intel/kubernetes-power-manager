@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+	"github.com/intel/power-optimization-library/pkg/power"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap/zapcore"
@@ -150,17 +151,22 @@ func TestPowerProfile_Reconcile_SharedPoolCreation(t *testing.T) {
 			},
 		},
 	}
-	nodemk := new(hostMock)
-	poolmk := new(poolMock)
-	exPoolmmk := new(poolMock)
+	// needed to create library using a dummy sysfs as it will call functions that can't be mocked
 	_, teardown, err := fullDummySystem()
 	assert.Nil(t, err)
 	defer teardown()
+	nodemk := new(hostMock)
+	poolmk := new(poolMock)
+	exPoolmmk := new(poolMock)
+	freqSetmk := new(frequencySetMock)
 	poolmk.On("SetPowerProfile", mock.Anything).Return(nil)
 	nodemk.On("GetSharedPool").Return(poolmk)
 	nodemk.On("GetExclusivePool", mock.Anything).Return(nil)
 	nodemk.On("AddExclusivePool", mock.Anything).Return(exPoolmmk, nil)
 	exPoolmmk.On("SetPowerProfile", mock.Anything).Return(nil)
+	nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+	freqSetmk.On("GetMax").Return(uint(9000000))
+	freqSetmk.On("GetMin").Return(uint(100000))
 	t.Setenv("NODE_NAME", "TestNode")
 	r, err := createProfileReconcilerObject(clientObjs)
 	assert.Nil(t, err)
@@ -546,6 +552,10 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 		}
 
 		nodemk := new(hostMock)
+		freqSetmk := new(frequencySetMock)
+		nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+		freqSetmk.On("GetMax").Return(uint(9000000))
+		freqSetmk.On("GetMin").Return(uint(100000))
 		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
@@ -985,7 +995,10 @@ func TestPowerProfile_Reconcile_SharedFrequencyValuesLessThanAbsoluteValue(t *te
 			},
 		},
 	}
-
+	// needed to create library using a dummy sysfs as it will call functions that can't be mocked
+	_, teardown, err := fullDummySystem()
+	assert.Nil(t, err)
+	defer teardown()
 	for _, tc := range tcases {
 		t.Setenv("NODE_NAME", tc.nodeName)
 
@@ -996,6 +1009,10 @@ func TestPowerProfile_Reconcile_SharedFrequencyValuesLessThanAbsoluteValue(t *te
 		}
 
 		nodemk := new(hostMock)
+		freqSetmk := new(frequencySetMock)
+		nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+		freqSetmk.On("GetMax").Return(uint(9000000))
+		freqSetmk.On("GetMin").Return(uint(1000000))
 		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
@@ -1180,7 +1197,7 @@ func TestPowerProfile_Reconcile_AcpiDriver(t *testing.T) {
 		}
 
 		host, teardown, err := setupDummyFiles(86, 1, 2, map[string]string{
-			"driver": "acpi-cpufreq", "max": "3700", "min": "1000",
+			"driver": "acpi-cpufreq", "max": "3700000", "min": "1000000",
 			"epp": "performance", "governor": "performance",
 			"package": "0", "die": "0", "available_governors": "powersave performance",
 			"uncore_max": "2400000", "uncore_min": "1200000",
@@ -1252,6 +1269,10 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 				nodemk := new(hostMock)
 				nodemk.On("GetExclusivePool", mock.Anything).Return(nil)
 				nodemk.On("AddExclusivePool", mock.Anything).Return(nil, fmt.Errorf("Pool creation err"))
+				freqSetmk := new(frequencySetMock)
+				nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+				freqSetmk.On("GetMax").Return(uint(9000000))
+				freqSetmk.On("GetMin").Return(uint(100000))
 				return nodemk
 			},
 			validateErr: func(e error) bool {
@@ -1289,6 +1310,10 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 				nodemk := new(hostMock)
 				poolmk := new(poolMock)
 				nodemk.On("GetExclusivePool", mock.Anything).Return(nil)
+				freqSetmk := new(frequencySetMock)
+				nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+				freqSetmk.On("GetMax").Return(uint(9000000))
+				freqSetmk.On("GetMin").Return(uint(100000))
 				nodemk.On("AddExclusivePool", mock.Anything).Return(poolmk, nil)
 				poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("Set profile err"))
 				return nodemk
@@ -1503,6 +1528,10 @@ func TestPowerProfile_Reconcile_FeatureNotSupportedErr(t *testing.T) {
 		r, err := createProfileReconcilerObject(tc.clientObjs)
 		assert.Nil(t, err)
 		nodemk := new(hostMock)
+		freqSetmk := new(frequencySetMock)
+		nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+		freqSetmk.On("GetMax").Return(uint(9000000))
+		freqSetmk.On("GetMin").Return(uint(100000))		
 		poolmk := new(poolMock)
 		nodemk.On("GetExclusivePool", mock.Anything).Return(poolmk)
 		r.PowerLibrary = nodemk
@@ -1513,7 +1542,6 @@ func TestPowerProfile_Reconcile_FeatureNotSupportedErr(t *testing.T) {
 				Namespace: IntelPowerNamespace,
 			},
 		}
-
 		_, err = r.Reconcile(context.TODO(), req)
 		assert.ErrorContains(t, err, "Frequency-Scaling - failed to determine driver")
 	}

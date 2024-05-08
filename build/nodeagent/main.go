@@ -55,7 +55,6 @@ func init() {
 func main() {
 	var metricsAddr string
 	flag.StringVar(&metricsAddr, "metrics-addr", ":10001", "The address the metric endpoint binds to.")
-
 	logOpts := zap.Options{}
 	logOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -103,8 +102,8 @@ func main() {
 		setupLog.Error(err, "unable to create internal state")
 		os.Exit(1)
 	}
+	podResourcesClient, err := podresourcesclient.NewDualSocketPodClient()
 
-	podResourcesClient, err := podresourcesclient.NewPodResourcesClient()
 	if err != nil {
 		setupLog.Error(err, "unable to create internal client")
 		os.Exit(1)

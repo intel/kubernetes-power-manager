@@ -454,7 +454,7 @@ func TestPowerWorkload_Reconcile(t *testing.T) {
 			host, teardown, err := fullDummySystem()
 			assert.Nil(t, err)
 			defer teardown()
-			sharedProf, err := power.NewPowerProfile("shared", 10000, 10000, "powersave", "power")
+			sharedProf, err := power.NewPowerProfile("shared", 1000, 1000, "powersave", "power")
 			assert.Nil(t, err)
 			assert.Nil(t, host.GetSharedPool().SetPowerProfile(sharedProf))
 			perf, err := host.AddExclusivePool("performance")

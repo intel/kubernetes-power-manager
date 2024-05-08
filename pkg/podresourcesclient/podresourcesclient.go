@@ -15,22 +15,42 @@ import (
 
 var maxMessage = 1024 * 1024 * 4 // size in bytes => 4MB
 var socket = "unix:///var/lib/kubelet/pod-resources/kubelet.sock"
+var cPlaneSocket = "unix:///var/lib/kubelet/pod-resources/cci-dra-driver-podrsc.sock"
+var cPlaneRetries = 3
 var timeout = 2 * time.Minute
 
 // PodResourcesClient stores a client to the Kubelet PodResources API server
 type PodResourcesClient struct {
 	Client podresourcesapi.PodResourcesListerClient
+	CpuControlPlaneClient podresourcesapi.PodResourcesListerClient
 }
 
 // NewPodResourcesClient returns a new client to the Kubelet PodResources API server
 func NewPodResourcesClient() (*PodResourcesClient, error) {
-	podResourcesClient := &PodResourcesClient{}
+	return newClient(socket)
+}
+
+// NewControlPlaneClient returns a new client to the CPU control plane socket
+func NewControlPlaneClient() (*PodResourcesClient, error) {
+	return newClient(cPlaneSocket)
+}
+
+func NewDualSocketPodClient() (*PodResourcesClient, error) {
+	client, err := NewPodResourcesClient()
+	if err != nil {
+		return client, err
+	}
+	cPlane, err := NewControlPlaneClient()
+	client.CpuControlPlaneClient = cPlane.Client
+	return client, err
+}
+
+func newClient(socket string) (*PodResourcesClient, error) {
 	client, _, err := getV1Client(socket, timeout, maxMessage)
 	if err != nil {
-		return podResourcesClient, errors.NewServiceUnavailable("failed to create podresouces client")
+		return nil, errors.NewServiceUnavailable(fmt.Sprintf("failed to create podresources client: %v", err))
 	}
-	podResourcesClient.Client = client
-	return podResourcesClient, nil
+	return &PodResourcesClient{Client: client}, nil
 }
 
 // GetV1Client returns a client for the PodResourcesLister grpc service
@@ -38,7 +58,7 @@ func NewPodResourcesClient() (*PodResourcesClient, error) {
 func getV1Client(socket string, connectionTimeout time.Duration, maxMsgSize int) (podresourcesapi.PodResourcesListerClient, *grpc.ClientConn, error) {
 	addr, dialer, err := util.GetAddressAndDialer(socket)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("error getting address and dialer for socket %s: %v", socket, err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
 	defer cancel()
@@ -53,23 +73,56 @@ func getV1Client(socket string, connectionTimeout time.Duration, maxMsgSize int)
 	return podresourcesapi.NewPodResourcesListerClient(conn), conn, nil
 }
 
-func (p *PodResourcesClient) listPodResources() (*podresourcesapi.ListPodResourcesResponse, error) {
+func (p *PodResourcesClient) listResources(controlPlaneClient bool) (*podresourcesapi.ListPodResourcesResponse, error) {
+	var client podresourcesapi.PodResourcesListerClient
+	clientType := "default"
+	if controlPlaneClient && p.CpuControlPlaneClient != nil{
+		client = p.CpuControlPlaneClient
+		clientType = "cpuControlPlane"
+	} else {
+		client = p.Client
+	}
+
 	req := podresourcesapi.ListPodResourcesRequest{}
-	resp, err := p.Client.List(context.TODO(), &req)
-	if err != nil {
-		fmt.Println("Can't receive response:", err)
-		return &podresourcesapi.ListPodResourcesResponse{}, err
+	resp, err := client.List(context.TODO(), &req)
+	// only default client errs are logged as controlplane socket isn't guaranteed to be there
+	// otherwise we'd be spamming the logs in static cpu policy deployments
+	if err != nil && clientType == "default" {
+		return nil, fmt.Errorf("can't receive response from %s client: %v", clientType, err)
 	}
 	return resp, nil
 }
 
+
 // GetContainerCPUs returns a string in cpuset format of CPUs allocated to the container
 func (p *PodResourcesClient) GetContainerCPUs(podName, containerName string) (string, error) {
-	podresourcesResponse, err := p.listPodResources()
+	podresourcesResponse, err := p.listResources(false)
 	if err != nil {
 		return "", err
 	}
-	for _, podresource := range podresourcesResponse.PodResources {
+	cpuSetString, err := parseContainers(podresourcesResponse.PodResources, podName, containerName)
+	if err != nil {
+		return "", err
+	}
+	if cpuSetString == "" {
+		// if cplane socket responds but has no resources then retry
+		// to ensure we get up to date info
+		for i := 0; i < cPlaneRetries; i++ {
+			podresourcesResponse, err = p.listResources(true)
+			if err != nil {
+				return "", err
+			}
+			cpuSetString, err = parseContainers(podresourcesResponse.PodResources, podName, containerName)
+			if err == nil && cpuSetString != "" {
+				return cpuSetString, err
+			}
+		}
+	}
+	return cpuSetString, err
+}
+
+func parseContainers(resources []*podresourcesapi.PodResources, podName, containerName string) (string, error) {
+	for _, podresource := range resources {
 		if podresource.Name == podName {
 			for _, container := range podresource.Containers {
 				if container.Name == containerName {
@@ -79,8 +132,10 @@ func (p *PodResourcesClient) GetContainerCPUs(podName, containerName string) (st
 			}
 		}
 	}
-	return "", errors.NewServiceUnavailable(fmt.Sprintf("cpus for Pod:%v Container:%v not found", podName, containerName))
+	return "", errors.NewServiceUnavailable(fmt.Sprintf("resources for Pod:%v Container:%v not found", podName, containerName))
 }
+
+
 
 // cpuIDsToString returns a string in cpuset format
 func cpuIDsToString(cpuIds []int64) string {

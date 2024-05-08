@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -38,11 +36,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	MaxFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"
-	MinFrequencyFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"
-	MinFreqOffset = 200
-)
+// value deducted from the max freq of a default profile
+// this gives the profile a 0.2 Ghz frequency range
+const MinFreqOffset = 200
 
 // performance          ===>  priority level 0
 // balance_performance  ===>  priority level 1
@@ -200,8 +196,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		logger.Error(maxLowerThanMaxError, fmt.Sprintf("error creating the profile '%s'", profile.Spec.Name))
 		return ctrl.Result{Requeue: false}, maxLowerThanMaxError
 	}
-
-	absoluteMaximumFrequency, absoluteMinimumFrequency, err := getMaxMinFrequencyValues()
+	absoluteMinimumFrequency, absoluteMaximumFrequency, err := getMaxMinFrequencyValues(r.PowerLibrary)
 	logger.V(5).Info("retrieving the max possible frequency and min possible frequency from the system")
 	if err != nil {
 		logger.Error(err, "error retrieving the frequency values from the node")
@@ -229,6 +224,7 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 		logger.Error(err, "invalid EPP")
 		actualEpp = ""
 	}
+	
 	if !checkGovs(profile.Spec.Governor) {
 		err = fmt.Errorf("governor %s is not supported, please use one of the following %v''", profile.Spec.Governor, power.GetAvailableGovernors())
 		logger.Error(err, "invalid governor")
@@ -392,31 +388,18 @@ func (r *PowerProfileReconciler) removeExtendedResources(nodeName string, profil
 	return nil
 }
 
-func getMaxMinFrequencyValues() (int, int, error) {
-	absoluteMaximumFrequencyByte, err := os.ReadFile(MaxFrequencyFile)
-	if err != nil {
-		return 0, 0, err
+func getMaxMinFrequencyValues(h power.Host) (int, int, error) {
+	typeList := h.GetFreqRanges()
+	if len(typeList) == 0 {
+		return 0, 0, fmt.Errorf("could not retireve hardware frequency limits")
 	}
-	absoluteMaximumFrequencyString := string(absoluteMaximumFrequencyByte)
-	absoluteMaximumFrequency, err := strconv.Atoi(strings.Split(absoluteMaximumFrequencyString, "\n")[0])
-	if err != nil {
-		return 0, 0, err
-	}
-
-	absoluteMinimumFrequencyByte, err := os.ReadFile(MinFrequencyFile)
-	if err != nil {
-		return 0, 0, err
-	}
-	absoluteMinimumFrequencyString := string(absoluteMinimumFrequencyByte)
-	absoluteMinimumFrequency, err := strconv.Atoi(strings.Split(absoluteMinimumFrequencyString, "\n")[0])
-	if err != nil {
-		return 0, 0, err
-	}
+	absoluteMaximumFrequency := int(typeList[0].GetMax())
+	absoluteMinimumFrequency := int(typeList[0].GetMin())
 
 	absoluteMaximumFrequency = absoluteMaximumFrequency / 1000
 	absoluteMinimumFrequency = absoluteMinimumFrequency / 1000
 
-	return absoluteMaximumFrequency, absoluteMinimumFrequency, nil
+	return absoluteMinimumFrequency, absoluteMaximumFrequency, nil
 }
 
 // SetupWithManager specifies how the controller is built and watch a CR and other resources that are owned and managed by the controller

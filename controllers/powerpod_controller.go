@@ -25,14 +25,18 @@ import (
 	"strconv"
 	"strings"
 
+	e "errors"
+
 	"github.com/go-logr/logr"
+	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	podresourcesapi "k8s.io/kubelet/pkg/apis/podresources/v1"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	e "errors"
-	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
-	corev1 "k8s.io/api/core/v1"
 
 	"github.com/intel/kubernetes-power-manager/pkg/podresourcesclient"
 	"github.com/intel/kubernetes-power-manager/pkg/podstate"
@@ -83,7 +87,6 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 	if pod.Spec.NodeName != nodeName {
 		return ctrl.Result{}, nil
 	}
-
 	if pod.ObjectMeta.Namespace == "kube-system" {
 		return ctrl.Result{}, nil
 	}
@@ -165,7 +168,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 
 	// Get the Containers of the Pod that are requesting exclusive CPUs or custom devices
 	logger.V(5).Info("retrieving the containers requested for the exclusive CPUs or Custom Resources", "Custom Resources", powernode.Spec.CustomDevices)
-	admissibleContainers := getAdmissibleContainers(pod, powernode.Spec.CustomDevices, &logger)
+	admissibleContainers := getAdmissibleContainers(pod, powernode.Spec.CustomDevices, r.PodResourcesClient, &logger)
 	if len(admissibleContainers) == 0 {
 		logger.Info("no containers are requesting exclusive CPUs or Custom Resources")
 		return ctrl.Result{}, nil
@@ -207,7 +210,7 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 		// exists in the workload, we update the node's CPU list, if not we create
 		// the entry for the node
 
-		workload.Spec.Node.CpuIds = appendIfUnique(workload.Spec.Node.CpuIds, cores, &logger)
+		workload.Spec.Node.CpuIds = appendIfUnique(workload.Spec.Node.CpuIds, cores)
 		sort.Slice(workload.Spec.Node.CpuIds, func(i, j int) bool { return workload.Spec.Node.CpuIds[i] < workload.Spec.Node.CpuIds[j] })
 		containerList := make([]powerv1.Container, 0)
 		for i, container := range powerContainers {
@@ -267,7 +270,6 @@ func (r *PowerPodReconciler) Reconcile(c context.Context, req ctrl.Request) (ctr
 }
 
 func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []corev1.Container, profileCRs []powerv1.PowerProfile, customDevices []string, pod *corev1.Pod, logger *logr.Logger) (map[string][]uint, []powerv1.Container, []error) {
-
 	logger.V(5).Info("get the power profiles from the containers")
 	_ = context.Background()
 	var recoverableErrs []error
@@ -275,7 +277,7 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 	powerContainers := make([]powerv1.Container, 0)
 	for _, container := range containers {
 		logger.V(5).Info("retrieving the requested power profile from the container spec")
-		profile, err := getContainerProfileFromRequests(container, customDevices, logger)
+		profile, requestNum, err := getContainerProfileFromRequests(container, customDevices, logger)
 		if err != nil {
 			recoverableErrs = append(recoverableErrs, err)
 			continue
@@ -296,7 +298,6 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 			recoverableErrs = append(recoverableErrs, powerProfileNotFoundError)
 			continue
 		}
-
 		containerID := getContainerID(pod, container.Name)
 		coreIDs, err := r.PodResourcesClient.GetContainerCPUs(pod.GetName(), container.Name)
 		if err != nil {
@@ -306,7 +307,11 @@ func (r *PowerPodReconciler) getPowerProfileRequestsFromContainers(containers []
 		}
 		cleanCoreList := getCleanCoreList(coreIDs)
 		logger.V(5).Info("reserving cores to container.", "ContainerID", containerID, "Cores", cleanCoreList)
-
+		// accounts for case where cores aquired through DRA don't match profile requests
+		if len(cleanCoreList) != requestNum {
+			recoverableErrs = append(recoverableErrs, fmt.Errorf(fmt.Sprintf("assigned cores did not match requested profiles. cores:%d, profiles %d", len(cleanCoreList), requestNum)))
+			continue
+		}
 		logger.V(5).Info("creating the power container")
 		powerContainer := &powerv1.Container{}
 		powerContainer.Name = container.Name
@@ -349,7 +354,7 @@ func getNewWorkloadCPUList(cpuList []uint, nodeCpuIds []uint, logger *logr.Logge
 	return updatedWorkloadCPUList
 }
 
-func appendIfUnique(cpuList []uint, cpus []uint, logger *logr.Logger) []uint {
+func appendIfUnique(cpuList []uint, cpus []uint) []uint {
 	for _, cpu := range cpus {
 		if !util.CPUInCPUList(cpu, cpuList) {
 			cpuList = append(cpuList, cpu)
@@ -383,29 +388,29 @@ func isContainerInList(name string, uid string, containers []powerv1.Container, 
 	return false
 }
 
-func getContainerProfileFromRequests(container corev1.Container, customDevices []string, logger *logr.Logger) (string, error) {
+func getContainerProfileFromRequests(container corev1.Container, customDevices []string, logger *logr.Logger) (string, int, error) {
 	profileName := ""
 	moreThanOneProfileError := errors.NewServiceUnavailable("cannot have more than one power profile per container")
 	resourceRequestsMismatchError := errors.NewServiceUnavailable("mismatch between CPU requests and the power profile requests")
-
 	for resource := range container.Resources.Requests {
 		if strings.HasPrefix(string(resource), ResourcePrefix) {
 			if profileName == "" {
 				profileName = string(resource[len(ResourcePrefix):])
 			} else {
 				// Cannot have more than one profile for a singular container
-				return "", moreThanOneProfileError
+				return "", 0, moreThanOneProfileError
 			}
 		}
 	}
-
+	var intProfileRequests int
 	if profileName != "" {
 		// Check if there is a mismatch in CPU requests and the power profile requests
 		logger.V(5).Info("confirming that CPU requests and the power profiles request match")
 		powerProfileResourceName := corev1.ResourceName(fmt.Sprintf("%s%s", ResourcePrefix, profileName))
 		numRequestsPowerProfile := container.Resources.Requests[powerProfileResourceName]
 		numLimitsPowerProfile := container.Resources.Limits[powerProfileResourceName]
-
+		intProfileRequests = int(numRequestsPowerProfile.Value())
+		intProfileLimits := int(numLimitsPowerProfile.Value())
 		// Selecting resources to search
 		numRequestsCPU := 0
 		numLimitsCPU := 0
@@ -420,31 +425,38 @@ func getContainerProfileFromRequests(container corev1.Container, customDevices [
 			numRequestsCPU, numLimitsCPU = checkResource(container, CPUResource, 0, 0)
 		}
 
-		if numRequestsCPU != int(numRequestsPowerProfile.Value()) ||
-			numLimitsCPU != int(numLimitsPowerProfile.Value()) {
-			return "", resourceRequestsMismatchError
+		// if previous checks fail we need to account for resource claims
+		// if there's a problem with core numbers we'll catch it
+		// before moving cores to pools by comparing intProfileRequests with assigned cores
+		if numRequestsCPU == 0 && len(container.Resources.Claims) > 0 {
+			return profileName, intProfileRequests, nil
+		}
+		if numRequestsCPU != intProfileRequests ||
+			numLimitsCPU != intProfileLimits {
+			return "", 0, resourceRequestsMismatchError
 		}
 	}
 
-	return profileName, nil
+	return profileName, intProfileRequests, nil
 }
 
-func checkResource(container corev1.Container, resource corev1.ResourceName, numRequestsCPU int, numLimitsCPU int) (int, int){
+func checkResource(container corev1.Container, resource corev1.ResourceName, numRequestsCPU int, numLimitsCPU int) (int, int) {
 	numRequestsDevice := container.Resources.Requests[resource]
 	numRequestsCPU += int(numRequestsDevice.Value())
 
 	numLimitsDevice := container.Resources.Limits[resource]
 	numLimitsCPU += int(numLimitsDevice.Value())
 	return numRequestsCPU, numLimitsCPU
-} 
+}
 
-func getAdmissibleContainers(pod *corev1.Pod, customDevices []string, logger *logr.Logger) []corev1.Container {
+func getAdmissibleContainers(pod *corev1.Pod, customDevices []string, resourceClient podresourcesclient.PodResourcesClient, logger *logr.Logger) []corev1.Container {
 
 	logger.V(5).Info("receiving containers requesting exclusive CPUs")
 	admissibleContainers := make([]corev1.Container, 0)
 	containerList := append(pod.Spec.InitContainers, pod.Spec.Containers...)
+	controlPlaneAvailable := pingControlPlane(resourceClient)
 	for _, container := range containerList {
-		if doesContainerRequireExclusiveCPUs(pod, &container, logger) || validateCustomDevices(&container, customDevices) {
+		if doesContainerRequireExclusiveCPUs(pod, &container, logger) || validateCustomDevices(&container, customDevices) || controlPlaneAvailable {
 			admissibleContainers = append(admissibleContainers, container)
 		}
 	}
@@ -455,12 +467,19 @@ func getAdmissibleContainers(pod *corev1.Pod, customDevices []string, logger *lo
 
 func doesContainerRequireExclusiveCPUs(pod *corev1.Pod, container *corev1.Container, logger *logr.Logger) bool {
 	if pod.Status.QOSClass != corev1.PodQOSGuaranteed {
-		logger.V(3).Info(fmt.Sprintf("ignoring pod %s as it is not in guaranteed quality of service class", pod.Name))
+		logger.V(3).Info(fmt.Sprintf("pod %s is not in guaranteed quality of service class", pod.Name))
 		return false
 	}
 
 	cpuQuantity := container.Resources.Requests[corev1.ResourceCPU]
 	return cpuQuantity.Value()*1000 == cpuQuantity.MilliValue()
+}
+
+func pingControlPlane(client podresourcesclient.PodResourcesClient) bool {
+	// see if the socket sends a response
+	req := podresourcesapi.ListPodResourcesRequest{}
+	_, err := client.CpuControlPlaneClient.List(context.TODO(), &req)
+	return err == nil
 }
 
 func validateCustomDevices(container *corev1.Container, customDevices []string) bool {

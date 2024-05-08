@@ -181,8 +181,9 @@ func (r *TimeOfDayCronJobReconciler) Reconcile(c context.Context, req ctrl.Reque
 					logger.Error(err, "cannot retrieve the profile")
 					return ctrl.Result{Requeue: false}, err
 				}
-				var absoluteMaximumFrequency, absoluteMinimumFrequency int
-				if absoluteMaximumFrequency, absoluteMinimumFrequency, err = getMaxMinFrequencyValues(); err != nil {
+
+				absoluteMinimumFrequency, absoluteMaximumFrequency, err := getMaxMinFrequencyValues(r.PowerLibrary)
+				if err != nil {
 					logger.Error(err, "error retrieving the frequency values from the node")
 					return ctrl.Result{Requeue: false}, err
 				}

@@ -574,7 +574,10 @@ func FuzzUncoreReconciler(f *testing.F) {
 	mockpkg.On("Dies").Return(&dielst)
 	mockpkg.On("Die", mock.Anything).Return(mockdie)
 	mockdie.On("SetUncore", mock.Anything).Return(nil)
-	f.Add("node1", "intel-power", true, "node2", true, uint(240000), uint(120000),uint(0))
+	f.Add("node1", "intel-power", true, "node2", true, uint(1400000), uint(2400000), uint(0))
+	_, teardown, err := fullDummySystem()
+	assert.Nil(f, err)
+	defer teardown()
 	f.Fuzz(func(t *testing.T, nodeName string, namespace string, extraNode bool, node2Name string, runningOnTargetNode bool, min uint, max uint, die_and_package uint) {
 
 		r, req := setupUncoreFuzz(t, nodeName, namespace, extraNode, node2Name, runningOnTargetNode, min, max, die_and_package, hostmk)
