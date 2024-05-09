@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -55,7 +56,7 @@ var sharedPowerWorkloadName = ""
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 
 func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
+	var err error
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
 		err := fmt.Errorf("incorrect namespace")
@@ -65,7 +66,9 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 	nodeName := os.Getenv("NODE_NAME")
 
 	workload := &powerv1.PowerWorkload{}
-	err := r.Client.Get(context.TODO(), req.NamespacedName, workload)
+	defer func() { _ = writeUpdatedStatusErrsIfRequired(c, r.Status(), workload, err) }()
+
+	err = r.Client.Get(context.TODO(), req.NamespacedName, workload)
 	logger.V(5).Info("retrieving the power workload instance")
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -313,5 +316,6 @@ func createReservedPool(library power.Host, coreConfig powerv1.ReservedSpec, log
 func (r *PowerWorkloadReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&powerv1.PowerWorkload{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }

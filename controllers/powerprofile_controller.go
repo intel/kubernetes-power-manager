@@ -22,18 +22,18 @@ import (
 	"os"
 	"time"
 
-	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 	"github.com/intel/power-optimization-library/pkg/power"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // value deducted from the max freq of a default profile
@@ -82,7 +82,7 @@ type PowerProfileReconciler struct {
 
 // Reconcile method that implements the reconcile loop
 func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
+	var err error
 	logger := r.Log.WithValues("powerprofile", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
 		err := fmt.Errorf("incorrect namespace")
@@ -95,7 +95,8 @@ func (r *PowerProfileReconciler) Reconcile(c context.Context, req ctrl.Request) 
 	nodeName := os.Getenv("NODE_NAME")
 
 	profile := &powerv1.PowerProfile{}
-	err := r.Client.Get(context.TODO(), req.NamespacedName, profile)
+	defer func() { _ = writeUpdatedStatusErrsIfRequired(c, r.Status(), profile, err) }()
+	err = r.Client.Get(context.TODO(), req.NamespacedName, profile)
 	logger.V(5).Info("retrieving the power profile instances")
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -406,6 +407,7 @@ func getMaxMinFrequencyValues(h power.Host) (int, int, error) {
 func (r *PowerProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&powerv1.PowerProfile{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
 

@@ -40,11 +40,9 @@ type PowerConfigSpec struct {
 
 // PowerConfigStatus defines the observed state of PowerConfig
 type PowerConfigStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// The Nodes that the Node Agent has been deployed to
-	Nodes []string `json:"nodes,omitempty"`
+	Nodes        []string `json:"nodes,omitempty"`
+	StatusErrors `json:",inline,omitempty"`
 }
 
 // +kubebuilder:object:root=true

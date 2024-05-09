@@ -60,11 +60,17 @@ spec:
           status:
             description: PowerConfigStatus defines the observed state of PowerConfig
             properties:
+              errors:
+                items:
+                  type: string
+                type: array
               nodes:
                 description: The Nodes that the Node Agent has been deployed to
                 items:
                   type: string
                 type: array
+            required:
+            - errors
             type: object
         type: object
     served: true

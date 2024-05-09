@@ -58,6 +58,13 @@ spec:
             type: object
           status:
             description: CStatesStatus defines the observed state of CStates
+            properties:
+              errors:
+                items:
+                  type: string
+                type: array
+            required:
+            - errors
             type: object
         type: object
     served: true

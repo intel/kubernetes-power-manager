@@ -57,6 +57,8 @@ type TimeOfDayStatus struct {
 
 	// PowerProfile associated with Time of Day
 	PowerProfile string `json:"powerProfile,omitempty"`
+
+	StatusErrors `json:",inline,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -78,6 +80,14 @@ type TimeOfDayList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []TimeOfDay `json:"items"`
+}
+
+func (tod *TimeOfDay) SetStatusErrors(errs *[]string) {
+	tod.Status.Errors = *errs
+}
+
+func (tod *TimeOfDay) GetStatusErrors() *[]string {
+	return &tod.Status.Errors
 }
 
 func init() {

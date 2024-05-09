@@ -731,6 +731,23 @@ spec:
 - PowerNode CRD
 - C-State CRD
 
+If any error occurs it will be displayed in the status field of the custom resource, eg.
+````yaml
+apiVersion: power.intel.com/v1
+kind: CStates
+  ...
+status:
+  errors:
+  - the C-States CRD name must match name of one of the power nodes
+````
+if no errors occurred or were corrected, the list will be empty
+````yaml
+apiVersion: power.intel.com/v1
+kind: CStates
+  ...
+status:
+  errors: []
+````
 ### Node Agent Pod
 
 The Pod Controller watches for pods. When a pod comes along the Pod Controller checks if the pod is in the guaranteed

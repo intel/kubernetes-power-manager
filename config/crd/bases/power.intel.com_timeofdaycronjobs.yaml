@@ -140,11 +140,9 @@ spec:
             - timeZone
             type: object
           status:
+            description: TimeOfDayCronJobStatus defines the observed state of TimeOfDayCronJob
             properties:
               active:
-                description: |-
-                  INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-                  Important: Run "make" to regenerate code after modifying this file
                 items:
                   description: |-
                     ObjectReference contains enough information to let you inspect or modify the referred object.
@@ -207,12 +205,18 @@ spec:
                   type: object
                   x-kubernetes-map-type: atomic
                 type: array
+              errors:
+                items:
+                  type: string
+                type: array
               lastScheduleTime:
                 format: date-time
                 type: string
               lastSuccessfulTime:
                 format: date-time
                 type: string
+            required:
+            - errors
             type: object
         type: object
     served: true

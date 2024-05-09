@@ -35,8 +35,7 @@ type CStatesSpec struct {
 
 // CStatesStatus defines the observed state of CStates
 type CStatesStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	StatusErrors `json:",inline,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -58,6 +57,14 @@ type CStatesList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []CStates `json:"items"`
+}
+
+func (csts *CStates) SetStatusErrors(errs *[]string) {
+	csts.Status.Errors = *errs
+}
+
+func (csts *CStates) GetStatusErrors() *[]string {
+	return &csts.Status.Errors
 }
 
 func init() {

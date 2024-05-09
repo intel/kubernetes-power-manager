@@ -63,6 +63,13 @@ spec:
             type: object
           status:
             description: UncoreStatus defines the observed state of Uncore
+            properties:
+              errors:
+                items:
+                  type: string
+                type: array
+            required:
+            - errors
             type: object
         type: object
     served: true
