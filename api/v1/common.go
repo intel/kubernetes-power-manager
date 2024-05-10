@@ -25,6 +25,7 @@ type StatusErrors struct {
 	Errors []string `json:"errors"`
 }
 
+// +kubebuilder:object:generate=false
 type PowerCRWithStatusErrors interface {
 	metav1.Object
 	runtime.Object
