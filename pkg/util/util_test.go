@@ -361,7 +361,7 @@ func TestStringInStringList(t *testing.T) {
 }
 
 func TestUnpackErrsToStrings(t *testing.T) {
-	assert.Nil(t, UnpackErrsToStrings(nil))
+	assert.Equal(t, &[]string{}, UnpackErrsToStrings(nil))
 
 	// single error
 	const errString1 = "err1"

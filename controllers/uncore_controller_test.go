@@ -514,8 +514,12 @@ func TestUncore_Reconcile_UnexpectedClientErr(t *testing.T) {
 	assert.Nil(t, err)
 	defer teardown()
 	r.PowerLibrary = host
+
+	mkwriter := new(mockResourceWriter)
+	mkwriter.On("Update", mock.Anything, mock.Anything).Return(nil)
 	mkcl := new(errClient)
 	mkcl.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client get error"))
+	mkcl.On("Status").Return(mkwriter)
 	r.Client = mkcl
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.ErrorContains(t, err, "client get error")

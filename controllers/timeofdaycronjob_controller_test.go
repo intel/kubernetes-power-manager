@@ -247,7 +247,7 @@ func TestTimeOfDayCronJob_Reconcile_CronProfile(t *testing.T) {
 	freqSetmk := new(frequencySetMock)
 	nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
 	freqSetmk.On("GetMax").Return(uint(9000000))
-	freqSetmk.On("GetMin").Return(uint(100000))	
+	freqSetmk.On("GetMin").Return(uint(100000))
 	r, err := createTODCronReconcilerObject(clientObjs)
 	r.PowerLibrary = nodemk
 	assert.NoError(t, err)
@@ -701,7 +701,7 @@ func TestTimeOfDayCronJob_Reconcile_NoExistingWorkload_Lib_Err(t *testing.T) {
 	freqSetmk := new(frequencySetMock)
 	nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
 	freqSetmk.On("GetMax").Return(uint(9000000))
-	freqSetmk.On("GetMin").Return(uint(100000))	
+	freqSetmk.On("GetMin").Return(uint(100000))
 	poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("forced library err"))
 	r, err := createTODCronReconcilerObject(clientObjs)
 	assert.NoError(t, err)
@@ -850,7 +850,7 @@ func TestTimeOfDayCronJob_Reconcile_ErrsSharedPoolExists(t *testing.T) {
 				freqSetmk := new(frequencySetMock)
 				nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
 				freqSetmk.On("GetMax").Return(uint(9000000))
-				freqSetmk.On("GetMin").Return(uint(100000))	
+				freqSetmk.On("GetMin").Return(uint(100000))
 				poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("forced library err"))
 				return nodemk
 			},
@@ -1070,6 +1070,8 @@ func TestTimeOfDayCronJob_Reconcile_ErrsPodTuning(t *testing.T) {
 				return nodemk
 			},
 			convertClient: func(c client.Client, cron powerv1.TimeOfDayCronJob) client.Client {
+				mkwriter := new(mockResourceWriter)
+				mkwriter.On("Update", mock.Anything, mock.Anything).Return(nil)
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.TimeOfDayCronJob")).Return(nil).Run(func(args mock.Arguments) {
 					job := args.Get(2).(*powerv1.TimeOfDayCronJob)
@@ -1077,6 +1079,7 @@ func TestTimeOfDayCronJob_Reconcile_ErrsPodTuning(t *testing.T) {
 					*job = cron
 				})
 				mkcl.On("List", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client list error"))
+				mkcl.On("Status").Return(mkwriter)
 				return mkcl
 			},
 			validateErr: func(e error) bool {
@@ -1091,6 +1094,8 @@ func TestTimeOfDayCronJob_Reconcile_ErrsPodTuning(t *testing.T) {
 				return nodemk
 			},
 			convertClient: func(c client.Client, cron powerv1.TimeOfDayCronJob) client.Client {
+				mkwriter := new(mockResourceWriter)
+				mkwriter.On("Update", mock.Anything, mock.Anything).Return(nil)
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.TimeOfDayCronJob")).Return(nil).Run(func(args mock.Arguments) {
 					job := args.Get(2).(*powerv1.TimeOfDayCronJob)
@@ -1102,6 +1107,8 @@ func TestTimeOfDayCronJob_Reconcile_ErrsPodTuning(t *testing.T) {
 					*list = corev1.PodList{Items: []corev1.Pod{*pod}}
 				})
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerWorkload")).Return(fmt.Errorf("client get error"))
+				mkcl.On("Status").Return(mkwriter)
+
 				return mkcl
 			},
 			validateErr: func(e error) bool {
@@ -1213,7 +1220,7 @@ func TestTimeOfDayCronJob_Reconcile_InvalidRequests(t *testing.T) {
 	freqSetmk := new(frequencySetMock)
 	nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
 	freqSetmk.On("GetMax").Return(uint(9000000))
-	freqSetmk.On("GetMin").Return(uint(100000))	
+	freqSetmk.On("GetMin").Return(uint(100000))
 	r, err = createTODCronReconcilerObject(clientObjs)
 	assert.NoError(t, err)
 	res, err := r.Reconcile(context.TODO(), req)

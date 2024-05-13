@@ -1531,7 +1531,7 @@ func TestPowerProfile_Reconcile_FeatureNotSupportedErr(t *testing.T) {
 		freqSetmk := new(frequencySetMock)
 		nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
 		freqSetmk.On("GetMax").Return(uint(9000000))
-		freqSetmk.On("GetMin").Return(uint(100000))		
+		freqSetmk.On("GetMin").Return(uint(100000))
 		poolmk := new(poolMock)
 		nodemk.On("GetExclusivePool", mock.Anything).Return(poolmk)
 		r.PowerLibrary = nodemk
@@ -1562,8 +1562,12 @@ func TestPowerProfile_Reconcile_ClientErrs(t *testing.T) {
 			profileName:   "",
 			powerNodeName: "TestNode",
 			convertClient: func(c client.Client) client.Client {
+				mkwriter := new(mockResourceWriter)
+				mkwriter.On("Update", mock.Anything, mock.Anything).Return(nil)
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client get error"))
+				// mock status call in defer function call
+				mkcl.On("Status").Return(mkwriter)
 				return mkcl
 			},
 			clientErr: "client get error",
@@ -1573,11 +1577,14 @@ func TestPowerProfile_Reconcile_ClientErrs(t *testing.T) {
 			profileName:   "performance",
 			powerNodeName: "TestNode",
 			convertClient: func(c client.Client) client.Client {
+				mkwriter := new(mockResourceWriter)
+				mkwriter.On("Update", mock.Anything, mock.Anything).Return(nil)
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerProfile")).Return(errors.NewNotFound(schema.GroupResource{}, "profile"))
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerWorkload")).Return(nil)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.CStates")).Return(nil)
 				mkcl.On("Delete", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client delete error"))
+				mkcl.On("Status").Return(mkwriter)
 				return mkcl
 			},
 			clientErr: "client delete error",
@@ -1619,11 +1626,15 @@ func TestPowerProfile_Reconcile_ClientErrs(t *testing.T) {
 			profileName:   "performance",
 			powerNodeName: "TestNode",
 			convertClient: func(c client.Client) client.Client {
+				mkwriter := new(mockResourceWriter)
+				mkwriter.On("Update", mock.Anything, mock.Anything).Return(nil)
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerProfile")).Return(errors.NewNotFound(schema.GroupResource{}, "profile"))
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerWorkload")).Return(nil)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.CStates")).Return(nil)
 				mkcl.On("Delete", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client delete error"))
+				// mock status call in defer function call
+				mkcl.On("Status").Return(mkwriter)
 				return mkcl
 			},
 			clientErr: "client delete error",

@@ -52,7 +52,7 @@ func (m *hostMock) GetName() string {
 	return m.Called().String(0)
 }
 
-func (m *hostMock)GetFreqRanges() power.CoreTypeList {
+func (m *hostMock) GetFreqRanges() power.CoreTypeList {
 	return m.Called().Get(0).(power.CoreTypeList)
 }
 

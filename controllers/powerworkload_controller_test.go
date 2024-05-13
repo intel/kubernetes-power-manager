@@ -562,12 +562,16 @@ func TestPowerWorkload_Reconcile_ClientErrs(t *testing.T) {
 		t.Error(err)
 		t.Fatalf("error creating the reconciler object")
 	}
+
+	mkwriter := new(mockResourceWriter)
+	mkwriter.On("Update", mock.Anything, mock.Anything).Return(nil)
 	mkcl := new(errClient)
 	mkcl.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 		node := args.Get(2).(*powerv1.PowerWorkload)
 		*node = *pwrWorkloadObj
 	})
 	mkcl.On("List", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client list error"))
+	mkcl.On("Status").Return(mkwriter)
 	r.Client = mkcl
 	nodemk := new(hostMock)
 
@@ -597,6 +601,7 @@ func TestPowerWorkload_Reconcile_ClientErrs(t *testing.T) {
 		*node = *nodesObj
 	})
 	mkcl.On("Delete", mock.Anything, mock.Anything).Return(fmt.Errorf("client delete error"))
+	mkcl.On("Status").Return(mkwriter)
 	r.Client = mkcl
 
 	sharedPowerWorkloadName = "shared"
