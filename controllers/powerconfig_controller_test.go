@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"testing"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
@@ -14,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -57,6 +58,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 		clientObjs               []client.Object
 		profileNames             []string
 		expectedNumberOfProfiles int
+		expectedCustomDevices    []string
 	}{
 		{
 			testCase:   "Test Case 1 - profiles: performance",
@@ -96,6 +98,7 @@ func TestPowerConfig_Reconcile_Creation(t *testing.T) {
 				"performance",
 			},
 			expectedNumberOfProfiles: 1,
+			expectedCustomDevices:    []string{"device-plugin"},
 		},
 		{
 			testCase:   "Test Case 2 - profiles: performance, balance-performance",
@@ -337,6 +340,379 @@ func TestPowerConfig_Reconcile_Exists(t *testing.T) {
 
 		if len(profiles.Items) != tc.expectedNumberOfProfiles {
 			t.Errorf("%s failed: expected number of power profile objects to be %v, got %v", tc.testCase, tc.expectedNumberOfProfiles, len(profiles.Items))
+		}
+	}
+}
+
+func TestPowerConfig_Reconcile_CustomDevices_Creation(t *testing.T) {
+	tcases := []struct {
+		testCase                string
+		nodeName                string
+		configName              string
+		clientObjs              []client.Object
+		expectedNumberOfConfigs int
+		expectedCustomDevices   []string
+	}{
+		{
+			testCase:   "custom devices creation - items in list",
+			nodeName:   "TestNode",
+			configName: "test-config",
+			clientObjs: []client.Object{
+				&powerv1.PowerConfig{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-config",
+						Namespace: IntelPowerNamespace,
+					},
+					Spec: powerv1.PowerConfigSpec{
+						PowerNodeSelector: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+						PowerProfiles: []string{
+							"performance",
+						},
+						CustomDevices: []string{"device-plugin"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "TestNode",
+						Namespace: IntelPowerNamespace,
+						Labels: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+			expectedCustomDevices: []string{"device-plugin"},
+		},
+		{
+			testCase:   "custom devices creation - empty array",
+			nodeName:   "TestNode",
+			configName: "test-config",
+			clientObjs: []client.Object{
+				&powerv1.PowerConfig{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-config",
+						Namespace: IntelPowerNamespace,
+					},
+					Spec: powerv1.PowerConfigSpec{
+						PowerNodeSelector: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+						PowerProfiles: []string{
+							"performance",
+						},
+						CustomDevices: []string{},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "TestNode",
+						Namespace: IntelPowerNamespace,
+						Labels: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+			expectedCustomDevices: nil,
+		},
+		{
+			testCase:   "custom devices creation - no devices",
+			nodeName:   "TestNode",
+			configName: "test-config",
+			clientObjs: []client.Object{
+				&powerv1.PowerConfig{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-config",
+						Namespace: IntelPowerNamespace,
+					},
+					Spec: powerv1.PowerConfigSpec{
+						PowerNodeSelector: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+						PowerProfiles: []string{
+							"performance",
+						},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "TestNode",
+						Namespace: IntelPowerNamespace,
+						Labels: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+			expectedCustomDevices: nil,
+		},
+	}
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+
+		r, err := createConfigReconcilerObject(tc.clientObjs)
+		if err != nil {
+			t.Error(err)
+			t.Fatalf("%s - error creating the reconciler object", tc.testCase)
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.configName,
+				Namespace: IntelPowerNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(context.TODO(), req)
+		if err != nil {
+			t.Error(err)
+			t.Fatalf("%s - error reconciling object", tc.testCase)
+		}
+
+		config := &powerv1.PowerConfig{} // needs error handling
+		_ = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name:      tc.configName,
+			Namespace: IntelPowerNamespace,
+		}, config)
+		if config.Name != tc.configName {
+			t.Errorf("%s failed: expected power config object '%s' to have been created successfully", tc.testCase, tc.configName)
+		}
+
+		powerNode := &powerv1.PowerNode{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name:      tc.nodeName,
+			Namespace: IntelPowerNamespace,
+		}, powerNode)
+		if err != nil {
+			t.Error(err)
+			t.Fatalf("%s - error retrieving the power node", tc.testCase)
+		}
+
+		if !reflect.DeepEqual(config.Spec.CustomDevices, tc.expectedCustomDevices) {
+			t.Errorf("%s failed: expected customDevices for the power config object to be %v, got %v", tc.testCase, config.Spec.CustomDevices, tc.expectedCustomDevices)
+		}
+		if !reflect.DeepEqual(powerNode.Spec.CustomDevices, tc.expectedCustomDevices) {
+			t.Errorf("%s failed: expected customDevices for the power node object to be %v, got %v", tc.testCase, powerNode.Spec.CustomDevices, tc.expectedCustomDevices)
+		}
+	}
+}
+
+func TestPowerConfig_Reconcile_CustomDevices_Update(t *testing.T) {
+	tcases := []struct {
+		testCase              string
+		nodeName              string
+		configName            string
+		clientObjs            []client.Object
+		expectedCustomDevices []string
+		updatedCustomDevices  []string
+	}{
+		{
+			testCase:   "custom devices - update with []string",
+			nodeName:   "TestNode",
+			configName: "test-config",
+			clientObjs: []client.Object{
+				&powerv1.PowerConfig{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-config",
+						Namespace: IntelPowerNamespace,
+					},
+					Spec: powerv1.PowerConfigSpec{
+						PowerNodeSelector: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+						PowerProfiles: []string{
+							"performance",
+						},
+						CustomDevices: []string{"device-plugin"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "TestNode",
+						Namespace: IntelPowerNamespace,
+						Labels: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+			expectedCustomDevices: []string{"device-plugin-1", "device-plugin-2", "device-plugin-3"},
+			updatedCustomDevices:  []string{"device-plugin-1", "device-plugin-2", "device-plugin-3"},
+		},
+		{
+			testCase:   "custom devices update - update with empty []string",
+			nodeName:   "TestNode",
+			configName: "test-config",
+			clientObjs: []client.Object{
+				&powerv1.PowerConfig{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-config",
+						Namespace: IntelPowerNamespace,
+					},
+					Spec: powerv1.PowerConfigSpec{
+						PowerNodeSelector: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+						PowerProfiles: []string{
+							"performance",
+						},
+						CustomDevices: []string{"device-plugin-1", "device-plugin-2"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "TestNode",
+						Namespace: IntelPowerNamespace,
+						Labels: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+			expectedCustomDevices: nil,
+			updatedCustomDevices:  []string{},
+		},
+		{
+			testCase:   "custom devices update - empty customDevices, update with []string",
+			nodeName:   "TestNode",
+			configName: "test-config",
+			clientObjs: []client.Object{
+				&powerv1.PowerConfig{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-config",
+						Namespace: IntelPowerNamespace,
+					},
+					Spec: powerv1.PowerConfigSpec{
+						PowerNodeSelector: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+						PowerProfiles: []string{
+							"performance",
+						},
+						CustomDevices: []string{},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "TestNode",
+						Namespace: IntelPowerNamespace,
+						Labels: map[string]string{
+							"feature.node.kubernetes.io/power-node": "true",
+						},
+					},
+					Status: corev1.NodeStatus{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
+						},
+					},
+				},
+			},
+			expectedCustomDevices: []string{"device-plugin-3", "device-plugin-4"},
+			updatedCustomDevices:  []string{"device-plugin-3", "device-plugin-4"},
+		},
+	}
+	for _, tc := range tcases {
+		t.Setenv("NODE_NAME", tc.nodeName)
+		NodeAgentDaemonSetPath = "../build/manifests/power-node-agent-ds.yaml"
+
+		r, err := createConfigReconcilerObject(tc.clientObjs)
+		if err != nil {
+			t.Error(err)
+			t.Fatalf("%s - error creating the reconciler object", tc.testCase)
+		}
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      tc.configName,
+				Namespace: IntelPowerNamespace,
+			},
+		}
+
+		_, err = r.Reconcile(context.TODO(), req)
+		if err != nil {
+			t.Error(err)
+			t.Fatalf("%s - error reconciling object", tc.testCase)
+		}
+
+		config := &powerv1.PowerConfig{} // needs error handling
+		_ = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name:      tc.configName,
+			Namespace: IntelPowerNamespace,
+		}, config)
+		if config.Name != tc.configName {
+			t.Errorf("%s failed: expected power config object '%s' to have been created successfully", tc.testCase, tc.configName)
+		}
+
+		// try to mimic a kubectl apply with updates to the current powerconfig
+		config.Spec.CustomDevices = tc.updatedCustomDevices
+		err = r.Client.Update(context.TODO(), config)
+		_ = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name:      tc.configName,
+			Namespace: IntelPowerNamespace,
+		}, config)
+		if err != nil {
+			t.Error(err)
+			t.Fatalf("%s - error updating config object", tc.testCase)
+		}
+
+		_, err = r.Reconcile(context.TODO(), req)
+		if err != nil {
+			t.Error(err)
+			t.Fatalf("%s - error reconciling object", tc.testCase)
+		}
+
+		config = &powerv1.PowerConfig{} // needs error handling
+		_ = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name:      tc.configName,
+			Namespace: IntelPowerNamespace,
+		}, config)
+		if config.Name != tc.configName {
+			t.Errorf("%s failed: expected power config object '%s' to have been created successfully", tc.testCase, tc.configName)
+		}
+
+		powerNode := &powerv1.PowerNode{}
+		err = r.Client.Get(context.TODO(), client.ObjectKey{
+			Name:      tc.nodeName,
+			Namespace: IntelPowerNamespace,
+		}, powerNode)
+		if err != nil {
+			t.Error(err)
+			t.Fatalf("%s - error retrieving the power node", tc.testCase)
+		}
+
+		if !reflect.DeepEqual(config.Spec.CustomDevices, tc.expectedCustomDevices) {
+			t.Errorf("%s failed: expected customDevices for the power config object to be %v, got %v", tc.testCase, config.Spec.CustomDevices, tc.expectedCustomDevices)
+		}
+		if !reflect.DeepEqual(powerNode.Spec.CustomDevices, tc.expectedCustomDevices) {
+			t.Errorf("%s failed: expected customDevices for the power node object to be %v, got %v", tc.testCase, powerNode.Spec.CustomDevices, tc.expectedCustomDevices)
 		}
 	}
 }
@@ -778,12 +1154,14 @@ func TestPowerConfig_Reconcile_SetupPass(t *testing.T) {
 	assert.Nil(t, err)
 
 }
-func TesPowerConfig_Reconcile_SetupFail(t *testing.T) {
+func TestPowerConfig_Reconcile_SetupFail(t *testing.T) {
 	r, err := createConfigReconcilerObject([]client.Object{})
 	assert.Nil(t, err)
-	mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{
-		Scheme: scheme.Scheme,
-	})
+	mgr := new(mgrMock)
+	mgr.On("GetControllerOptions").Return(config.Controller{})
+	mgr.On("GetScheme").Return(r.Scheme)
+	mgr.On("GetLogger").Return(r.Log)
+	mgr.On("Add", mock.Anything).Return(fmt.Errorf("setup fail"))
 
 	err = (&PowerConfigReconciler{
 		Client: r.Client,
