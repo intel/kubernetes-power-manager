@@ -6,7 +6,7 @@ require (
 	github.com/go-logr/logr v1.4.1
 	github.com/intel/power-optimization-library v1.4.0
 	github.com/stretchr/testify v1.9.0
-	go.uber.org/zap v1.26.0
+	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.61.0
 	k8s.io/api v0.29.3
 	k8s.io/apimachinery v0.29.3
