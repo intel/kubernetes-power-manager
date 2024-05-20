@@ -1,6 +1,6 @@
 module github.com/intel/kubernetes-power-manager
 
-go 1.22
+go 1.22.3
 
 require (
 	github.com/go-logr/logr v1.4.1
