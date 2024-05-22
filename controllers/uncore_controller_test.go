@@ -50,13 +50,14 @@ func createUncoreReconcilerObject(objs []runtime.Object) (*UncoreReconciler, err
 
 // tests setting a system wide uncore
 func TestUncore_Reconcile_SystemUncore(t *testing.T) {
+	nodename := "TestNode"
+	t.Setenv("NODE_NAME", nodename)
 	max := uint(2400000)
 	min := uint(1200000)
-	uncoreName := ""
-	clientObjs := []runtime.Object{
+	 	clientObjs := []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -73,7 +74,7 @@ func TestUncore_Reconcile_SystemUncore(t *testing.T) {
 	r.PowerLibrary = host
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "",
+			Name:      nodename,
 			Namespace: "intel-power",
 		},
 	}
@@ -87,15 +88,16 @@ func TestUncore_Reconcile_SystemUncore(t *testing.T) {
 
 // tests tuning a specific die
 func TestUncore_Reconcile_TestDieTuning(t *testing.T) {
+	nodename := "TestNode"
+	t.Setenv("NODE_NAME", nodename)
 	max := uint(2200000)
 	min := uint(1300000)
 	pkg := uint(0)
 	die := uint(1)
-	uncoreName := ""
 	clientObjs := []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -113,7 +115,7 @@ func TestUncore_Reconcile_TestDieTuning(t *testing.T) {
 	r.PowerLibrary = host
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "",
+			Name:      nodename,
 			Namespace: "intel-power",
 		},
 	}
@@ -128,14 +130,15 @@ func TestUncore_Reconcile_TestDieTuning(t *testing.T) {
 
 // tests tuning a specific package
 func TestUncore_Reconcile_PackageTuning(t *testing.T) {
+	nodename := "TestNode"
+	t.Setenv("NODE_NAME", nodename)
 	max := uint(2200000)
 	min := uint(1400000)
 	pkg := uint(0)
-	uncoreName := ""
 	clientObjs := []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -153,7 +156,7 @@ func TestUncore_Reconcile_PackageTuning(t *testing.T) {
 	r.PowerLibrary = host
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "",
+			Name:      nodename,
 			Namespace: "intel-power",
 		},
 	}
@@ -169,10 +172,12 @@ func TestUncore_Reconcile_PackageTuning(t *testing.T) {
 
 // tests invalid uncore fields
 func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
+	nodename := "TestNode"
+	t.Setenv("NODE_NAME", nodename)
 	// uncore does not exist
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "",
+			Name:      nodename,
 			Namespace: "intel-power",
 		},
 	}
@@ -187,11 +192,10 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	// mising min
 	max := uint(2400000)
 	pkg := uint(0)
-	uncoreName := ""
 	clientObjs := []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -214,7 +218,7 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -236,7 +240,7 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -255,7 +259,7 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{},
@@ -272,7 +276,7 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -291,7 +295,7 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{},
@@ -310,7 +314,7 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -329,7 +333,7 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -352,7 +356,7 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -375,7 +379,7 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -396,7 +400,7 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -419,7 +423,7 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 	clientObjs = []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -438,12 +442,14 @@ func TestUncore_Reconcile_InvalidUncores(t *testing.T) {
 
 // tests requests for the wrong node and namespace
 func TestUncore_Reconcile_InvalidRequests(t *testing.T) {
+	nodename := "TestNode"
+	t.Setenv("NODE_NAME", nodename)
 	// incorrect namespace
 	r, err := createUncoreReconcilerObject([]runtime.Object{})
 	assert.Nil(t, err)
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "",
+			Name:      nodename,
 			Namespace: "somespace",
 		},
 	}
@@ -463,9 +469,11 @@ func TestUncore_Reconcile_InvalidRequests(t *testing.T) {
 
 // test for a file system with missing files (ie. some broken kernel module etc)
 func TestUncore_Reconcile_InvalidFileSystem(t *testing.T) {
+	nodename := "TestNode"
+	t.Setenv("NODE_NAME", nodename)
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "",
+			Name:      nodename,
 			Namespace: "intel-power",
 		},
 	}
@@ -473,11 +481,10 @@ func TestUncore_Reconcile_InvalidFileSystem(t *testing.T) {
 	min := uint(1200000)
 	pkg := uint(0)
 	die := uint(1)
-	uncoreName := ""
 	clientObjs := []runtime.Object{
 		&powerv1.Uncore{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      uncoreName,
+				Name:      nodename,
 				Namespace: "intel-power",
 			},
 			Spec: powerv1.UncoreSpec{
@@ -502,9 +509,11 @@ func TestUncore_Reconcile_InvalidFileSystem(t *testing.T) {
 
 // tests failed client Get function call
 func TestUncore_Reconcile_UnexpectedClientErr(t *testing.T) {
+	nodename := "TestNode"
+	t.Setenv("NODE_NAME", nodename)
 	req := reconcile.Request{
 		NamespacedName: client.ObjectKey{
-			Name:      "",
+			Name:      nodename,
 			Namespace: "intel-power",
 		},
 	}
