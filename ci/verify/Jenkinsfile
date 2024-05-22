@@ -1,0 +1,41 @@
+pipeline {
+    agent {
+     label 'tweedledum'
+    }
+    triggers {
+		cron('@midnight')
+	}
+    tools {
+		go "$GO_VERSION"
+	}
+    environment {
+        GO114MODULE = 'on'
+        CGO_ENABLED = 0 
+        GOPATH = "/home/bakeoff/jobs/${JOB_NAME}/builds/${BUILD_ID}"
+    }
+    stages {
+        stage('Build') {
+            steps {
+                echo 'Building..'
+              //  sh 'make clean'
+                sh 'make build'
+            }
+        }
+        stage('Test') {
+            steps {
+                echo 'Testing..'
+                sh 'make test'
+               // sh 'make race'
+                sh 'make coverage'
+               // sh 'make verify-test'  
+            }
+        }
+        // stage('Style'){
+        //     steps{
+        //         sh 'curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b . v1.53.3'
+        //         //sh 'make golangci'
+        //     }
+	    // }
+    }
+}
+
