@@ -63,8 +63,6 @@ spec:
                 items:
                   type: string
                 type: array
-            required:
-            - errors
             type: object
         type: object
     served: true

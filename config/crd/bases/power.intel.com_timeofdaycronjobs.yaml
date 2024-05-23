@@ -215,8 +215,6 @@ spec:
               lastSuccessfulTime:
                 format: date-time
                 type: string
-            required:
-            - errors
             type: object
         type: object
     served: true

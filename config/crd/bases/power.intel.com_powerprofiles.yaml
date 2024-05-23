@@ -70,8 +70,6 @@ spec:
               id:
                 description: The ID given to the power profile
                 type: integer
-            required:
-            - errors
             type: object
         type: object
     served: true
