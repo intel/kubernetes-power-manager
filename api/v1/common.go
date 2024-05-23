@@ -22,7 +22,7 @@ import (
 )
 
 type StatusErrors struct {
-	Errors []string `json:"errors"`
+	Errors []string `json:"errors,omitempty"`
 }
 
 // +kubebuilder:object:generate=false
