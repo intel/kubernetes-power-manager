@@ -69,7 +69,7 @@ operator:
       name: intel-power-operator
     command: /manager
     args: --enable-leader-election
-    image: intel/power-operator:v5.0
+    image: intel/power-operator:v2.5.0
     name: manager
     cpu:
       limits: 100m
