@@ -1,8 +1,8 @@
 export APP_NAME=intel-kubernetes-power-manager
 # Current Operator version
-VERSION ?= 2.4.0
+VERSION ?= 2.5.0
 # parameter used for helm chart image
-HELM_CHART ?= v2.4.0
+HELM_CHART ?= v2.5.0
 HELM_VERSION := $(shell echo $(HELM_CHART) | cut -d "v" -f2)
 # used to detemine if certain targets should build for openshift
 OCP ?= false
