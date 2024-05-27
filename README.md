@@ -740,7 +740,7 @@ status:
   errors:
   - the C-States CRD name must match name of one of the power nodes
 ````
-if no errors occurred or were corrected, the list will be empty
+If no errors occurred or were corrected, the list will be empty
 ````yaml
 apiVersion: power.intel.com/v1
 kind: CStates
