@@ -9,9 +9,6 @@ pipeline {
 		go "$GO_VERSION"
 	}
     environment {
-        GO114MODULE = 'on'
-        CGO_ENABLED = 0
-        GOPATH = "/home/bakeoff/jobs/${JOB_NAME}/builds/${BUILD_ID}"
         LIBRARY_BRANCH = "main"
         GOLANGCI_LINT_VERSION = "1.58.2"
         GOLANGCI_LINT_URL = credentials("golang-ci-lint-url")
