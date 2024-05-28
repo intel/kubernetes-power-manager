@@ -3,7 +3,7 @@ module github.com/intel/kubernetes-power-manager
 go 1.22.3
 
 require (
-	github.com/go-logr/logr v1.4.1
+	github.com/go-logr/logr v1.4.2
 	github.com/intel/power-optimization-library v1.4.0
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
