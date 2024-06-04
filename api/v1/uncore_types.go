@@ -42,8 +42,7 @@ type DieSelector struct {
 
 // UncoreStatus defines the observed state of Uncore
 type UncoreStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	StatusErrors `json:",inline,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -65,6 +64,14 @@ type UncoreList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Uncore `json:"items"`
+}
+
+func (ucnre *Uncore) SetStatusErrors(err *[]string) {
+	ucnre.Status.Errors = *err
+}
+
+func (ucnre *Uncore) GetStatusErrors() *[]string {
+	return &ucnre.Status.Errors
 }
 
 func init() {

@@ -4,3 +4,5 @@ AVD-KSV-0014
 AVD-KSV-0017
 # complains about wildcard in rbac but we need full privelages for those resources
 AVD-KSV-0045
+# libnghttp2 issue with redhat image. Latest base image not fixed yet
+CVE-2024-27316

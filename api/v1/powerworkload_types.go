@@ -59,16 +59,15 @@ type PowerWorkloadSpec struct {
 }
 
 type ReservedSpec struct {
-	Cores [] uint `json:"cores"`
+	Cores        []uint `json:"cores"`
 	PowerProfile string `json:"powerProfile,omitempty"`
 }
+
 // PowerWorkloadStatus defines the observed state of PowerWorkload
 type PowerWorkloadStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// The Node that this Shared PowerWorkload is associated with
-	Node string `json:"node:,omitempty"`
+	Node         string `json:"node:,omitempty"`
+	StatusErrors `json:",inline,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -90,6 +89,14 @@ type PowerWorkloadList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []PowerWorkload `json:"items"`
+}
+
+func (wrkld *PowerWorkload) SetStatusErrors(errs *[]string) {
+	wrkld.Status.Errors = *errs
+}
+
+func (wrkld *PowerWorkload) GetStatusErrors() *[]string {
+	return &wrkld.Status.Errors
 }
 
 func init() {

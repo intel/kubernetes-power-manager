@@ -31,7 +31,7 @@ func createFakePodResourcesListerClient(fakePodResources []*podresourcesapi.PodR
 
 	podResourcesListerClient := &fakePodResourcesClient{}
 	podResourcesListerClient.listResponse = fakeListResponse
-	return &PodResourcesClient{Client: podResourcesListerClient}
+	return &PodResourcesClient{Client: podResourcesListerClient, CpuControlPlaneClient: podResourcesListerClient}
 }
 
 func TestPodResourcesClient_listPodResources(t *testing.T) {
@@ -48,7 +48,7 @@ func TestPodResourcesClient_listPodResources(t *testing.T) {
 		},
 	}
 	podClient := createFakePodResourcesListerClient(podResources)
-	resp, err := podClient.listPodResources()
+	resp, err := podClient.listResources(false)
 	assert.ElementsMatch(t, resp.PodResources, podResources)
 	assert.NoError(t, err)
 }

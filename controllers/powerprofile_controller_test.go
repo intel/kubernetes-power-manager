@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
+	"github.com/intel/power-optimization-library/pkg/power"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap/zapcore"
@@ -150,11 +151,22 @@ func TestPowerProfile_Reconcile_SharedPoolCreation(t *testing.T) {
 			},
 		},
 	}
+	// needed to create library using a dummy sysfs as it will call functions that can't be mocked
+	_, teardown, err := fullDummySystem()
+	assert.Nil(t, err)
+	defer teardown()
 	nodemk := new(hostMock)
 	poolmk := new(poolMock)
+	exPoolmmk := new(poolMock)
+	freqSetmk := new(frequencySetMock)
 	poolmk.On("SetPowerProfile", mock.Anything).Return(nil)
 	nodemk.On("GetSharedPool").Return(poolmk)
-
+	nodemk.On("GetExclusivePool", mock.Anything).Return(nil)
+	nodemk.On("AddExclusivePool", mock.Anything).Return(exPoolmmk, nil)
+	exPoolmmk.On("SetPowerProfile", mock.Anything).Return(nil)
+	nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+	freqSetmk.On("GetMax").Return(uint(9000000))
+	freqSetmk.On("GetMin").Return(uint(100000))
 	t.Setenv("NODE_NAME", "TestNode")
 	r, err := createProfileReconcilerObject(clientObjs)
 	assert.Nil(t, err)
@@ -468,7 +480,7 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 			nodeName:    "TestNode",
 			profileName: "user-created",
 			validateErr: func(e error) bool {
-				return assert.ErrorContains(t, e, "max frequency value cannot be lower than the minimum frequency value")
+				return assert.ErrorContains(t, e, "max frequency value cannot be lower than the min frequency value")
 			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
@@ -490,7 +502,7 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 			nodeName:    "TestNode",
 			profileName: "user-created",
 			validateErr: func(e error) bool {
-				return assert.ErrorContains(t, e, "max or min frequency cannot be zero")
+				return assert.ErrorContains(t, e, "max and min frequency must be within the range")
 			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
@@ -512,7 +524,7 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 			nodeName:    "TestNode",
 			profileName: "user-created",
 			validateErr: func(e error) bool {
-				return assert.ErrorContains(t, e, "max or min frequency cannot be zero")
+				return assert.ErrorContains(t, e, "max and min frequency must be within the range")
 			},
 			clientObjs: []runtime.Object{
 				&powerv1.PowerProfile{
@@ -540,6 +552,10 @@ func TestPowerProfile_Reconcile_MaxMinValuesZero(t *testing.T) {
 		}
 
 		nodemk := new(hostMock)
+		freqSetmk := new(frequencySetMock)
+		nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+		freqSetmk.On("GetMax").Return(uint(9000000))
+		freqSetmk.On("GetMin").Return(uint(100000))
 		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
@@ -686,7 +702,7 @@ func TestPowerProfile_Reconcile_SharedProfileDoesNotExistInLibrary(t *testing.T)
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.ErrorContains(t, err, "maximum or minimum frequency value cannot be below 1000")
+		assert.ErrorContains(t, err, "max and min frequency must be within the range")
 
 		workloads := &powerv1.PowerWorkloadList{}
 		err = r.Client.List(context.TODO(), workloads)
@@ -938,7 +954,7 @@ func TestPowerProfile_Reconcile_MaxValueLowerThanMinValue(t *testing.T) {
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.ErrorContains(t, err, "max frequency value cannot be lower than the minimum frequency value")
+		assert.ErrorContains(t, err, "max frequency value cannot be lower than the min frequency value")
 	}
 }
 
@@ -979,7 +995,10 @@ func TestPowerProfile_Reconcile_SharedFrequencyValuesLessThanAbsoluteValue(t *te
 			},
 		},
 	}
-
+	// needed to create library using a dummy sysfs as it will call functions that can't be mocked
+	_, teardown, err := fullDummySystem()
+	assert.Nil(t, err)
+	defer teardown()
 	for _, tc := range tcases {
 		t.Setenv("NODE_NAME", tc.nodeName)
 
@@ -990,6 +1009,10 @@ func TestPowerProfile_Reconcile_SharedFrequencyValuesLessThanAbsoluteValue(t *te
 		}
 
 		nodemk := new(hostMock)
+		freqSetmk := new(frequencySetMock)
+		nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+		freqSetmk.On("GetMax").Return(uint(9000000))
+		freqSetmk.On("GetMin").Return(uint(1000000))
 		r.PowerLibrary = nodemk
 
 		req := reconcile.Request{
@@ -1000,7 +1023,7 @@ func TestPowerProfile_Reconcile_SharedFrequencyValuesLessThanAbsoluteValue(t *te
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.ErrorContains(t, err, "maximum or minimum frequency value cannot be")
+		assert.ErrorContains(t, err, "max and min frequency must be within the range")
 	}
 }
 
@@ -1041,7 +1064,9 @@ func TestPowerProfile_Reconcile_MaxValueZeroMinValueGreaterThanZero(t *testing.T
 			},
 		},
 	}
-
+	_, teardown, err := fullDummySystem()
+	assert.Nil(t, err)
+	defer teardown()
 	for _, tc := range tcases {
 		t.Setenv("NODE_NAME", tc.nodeName)
 
@@ -1062,7 +1087,7 @@ func TestPowerProfile_Reconcile_MaxValueZeroMinValueGreaterThanZero(t *testing.T
 		}
 
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.ErrorContains(t, err, "max frequency value cannot be lower than the minimum frequency value")
+		assert.ErrorContains(t, err, "max frequency value cannot be lower than the min frequency value")
 	}
 }
 
@@ -1172,7 +1197,7 @@ func TestPowerProfile_Reconcile_AcpiDriver(t *testing.T) {
 		}
 
 		host, teardown, err := setupDummyFiles(86, 1, 2, map[string]string{
-			"driver": "acpi-cpufreq", "max": "3700", "min": "1000",
+			"driver": "acpi-cpufreq", "max": "3700000", "min": "1000000",
 			"epp": "performance", "governor": "performance",
 			"package": "0", "die": "0", "available_governors": "powersave performance",
 			"uncore_max": "2400000", "uncore_min": "1200000",
@@ -1238,59 +1263,16 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 			clientObjs: []runtime.Object{},
 		},
 		{
-			testCase:      "Test Case 2 -error setting profile",
-			profileName:   "shared",
-			powerNodeName: "TestNode",
-			getNodemk: func() *hostMock {
-				nodemk := new(hostMock)
-				poolmk := new(poolMock)
-				poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("unit test set profile error"))
-				nodemk.On("GetSharedPool").Return(poolmk)
-				return nodemk
-			},
-			validateErr: func(e error) bool {
-				return assert.ErrorContains(t, e, "unit test set profile error")
-			},
-			clientObjs: []runtime.Object{
-				&powerv1.PowerWorkload{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "shared-TestNode",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerWorkloadSpec{},
-				},
-				&powerv1.PowerProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "shared",
-						Namespace: IntelPowerNamespace,
-					},
-					Spec: powerv1.PowerProfileSpec{
-						Name:   "shared",
-						Max:    3600,
-						Min:    3200,
-						Shared: true,
-						Epp:    "",
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "TestNode",
-					},
-					Status: corev1.NodeStatus{
-						Capacity: map[corev1.ResourceName]resource.Quantity{
-							CPUResource: *resource.NewQuantity(42, resource.DecimalSI),
-						},
-					},
-				},
-			},
-		},
-		{
-			testCase:    "Test Case 3 - Pool creation error",
+			testCase:    "Test Case 2 - Pool creation error",
 			profileName: "performance",
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
 				nodemk.On("GetExclusivePool", mock.Anything).Return(nil)
 				nodemk.On("AddExclusivePool", mock.Anything).Return(nil, fmt.Errorf("Pool creation err"))
+				freqSetmk := new(frequencySetMock)
+				nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+				freqSetmk.On("GetMax").Return(uint(9000000))
+				freqSetmk.On("GetMin").Return(uint(100000))
 				return nodemk
 			},
 			validateErr: func(e error) bool {
@@ -1322,12 +1304,16 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 			},
 		},
 		{
-			testCase:    "Test Case 4 - Set power profile error",
+			testCase:    "Test Case 3 - Set power profile error",
 			profileName: "performance",
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
 				poolmk := new(poolMock)
 				nodemk.On("GetExclusivePool", mock.Anything).Return(nil)
+				freqSetmk := new(frequencySetMock)
+				nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+				freqSetmk.On("GetMax").Return(uint(9000000))
+				freqSetmk.On("GetMin").Return(uint(100000))
 				nodemk.On("AddExclusivePool", mock.Anything).Return(poolmk, nil)
 				poolmk.On("SetPowerProfile", mock.Anything).Return(fmt.Errorf("Set profile err"))
 				return nodemk
@@ -1361,7 +1347,7 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 			},
 		},
 		{
-			testCase:    "Test Case 5 - reset shared profile error",
+			testCase:    "Test Case 4 - reset shared profile error",
 			profileName: "shared",
 			getNodemk: func() *hostMock {
 				nodemk := new(hostMock)
@@ -1375,6 +1361,46 @@ func TestPowerProfile_Reconcile_LibraryErrs(t *testing.T) {
 			},
 			validateErr: func(e error) bool {
 				return assert.ErrorContains(t, e, "Set profile err")
+			},
+			clientObjs: []runtime.Object{},
+		},
+		{
+			testCase:    "Test Case 5 - dummy pool retrieval error",
+			profileName: "shared",
+			getNodemk: func() *hostMock {
+				nodemk := new(hostMock)
+				poolmk := new(poolMock)
+				profmk := new(profMock)
+				nodemk.On("GetSharedPool").Return(poolmk)
+				poolmk.On("GetPowerProfile").Return(profmk)
+				profmk.On("Name").Return("shared")
+				poolmk.On("SetPowerProfile", mock.Anything).Return(nil)
+				nodemk.On("GetExclusivePool", mock.Anything).Return(nil)
+				return nodemk
+			},
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "pool not found")
+			},
+			clientObjs: []runtime.Object{},
+		},
+		{
+			testCase:    "Test Case 6 - dummy pool removal error",
+			profileName: "shared",
+			getNodemk: func() *hostMock {
+				nodemk := new(hostMock)
+				poolmk := new(poolMock)
+				dummyPoolmk := new(poolMock)
+				profmk := new(profMock)
+				nodemk.On("GetSharedPool").Return(poolmk)
+				poolmk.On("GetPowerProfile").Return(profmk)
+				profmk.On("Name").Return("shared")
+				poolmk.On("SetPowerProfile", mock.Anything).Return(nil)
+				nodemk.On("GetExclusivePool", mock.Anything).Return(dummyPoolmk)
+				dummyPoolmk.On("Remove").Return(fmt.Errorf("pool removal err"))
+				return nodemk
+			},
+			validateErr: func(e error) bool {
+				return assert.ErrorContains(t, e, "pool removal err")
 			},
 			clientObjs: []runtime.Object{},
 		},
@@ -1502,6 +1528,10 @@ func TestPowerProfile_Reconcile_FeatureNotSupportedErr(t *testing.T) {
 		r, err := createProfileReconcilerObject(tc.clientObjs)
 		assert.Nil(t, err)
 		nodemk := new(hostMock)
+		freqSetmk := new(frequencySetMock)
+		nodemk.On("GetFreqRanges").Return(power.CoreTypeList{freqSetmk})
+		freqSetmk.On("GetMax").Return(uint(9000000))
+		freqSetmk.On("GetMin").Return(uint(100000))
 		poolmk := new(poolMock)
 		nodemk.On("GetExclusivePool", mock.Anything).Return(poolmk)
 		r.PowerLibrary = nodemk
@@ -1512,7 +1542,6 @@ func TestPowerProfile_Reconcile_FeatureNotSupportedErr(t *testing.T) {
 				Namespace: IntelPowerNamespace,
 			},
 		}
-
 		_, err = r.Reconcile(context.TODO(), req)
 		assert.ErrorContains(t, err, "Frequency-Scaling - failed to determine driver")
 	}
@@ -1533,8 +1562,12 @@ func TestPowerProfile_Reconcile_ClientErrs(t *testing.T) {
 			profileName:   "",
 			powerNodeName: "TestNode",
 			convertClient: func(c client.Client) client.Client {
+				mkwriter := new(mockResourceWriter)
+				mkwriter.On("Update", mock.Anything, mock.Anything).Return(nil)
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client get error"))
+				// mock status call in defer function call
+				mkcl.On("Status").Return(mkwriter)
 				return mkcl
 			},
 			clientErr: "client get error",
@@ -1544,11 +1577,14 @@ func TestPowerProfile_Reconcile_ClientErrs(t *testing.T) {
 			profileName:   "performance",
 			powerNodeName: "TestNode",
 			convertClient: func(c client.Client) client.Client {
+				mkwriter := new(mockResourceWriter)
+				mkwriter.On("Update", mock.Anything, mock.Anything).Return(nil)
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerProfile")).Return(errors.NewNotFound(schema.GroupResource{}, "profile"))
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerWorkload")).Return(nil)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.CStates")).Return(nil)
 				mkcl.On("Delete", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client delete error"))
+				mkcl.On("Status").Return(mkwriter)
 				return mkcl
 			},
 			clientErr: "client delete error",
@@ -1590,11 +1626,15 @@ func TestPowerProfile_Reconcile_ClientErrs(t *testing.T) {
 			profileName:   "performance",
 			powerNodeName: "TestNode",
 			convertClient: func(c client.Client) client.Client {
+				mkwriter := new(mockResourceWriter)
+				mkwriter.On("Update", mock.Anything, mock.Anything).Return(nil)
 				mkcl := new(errClient)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerProfile")).Return(errors.NewNotFound(schema.GroupResource{}, "profile"))
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.PowerWorkload")).Return(nil)
 				mkcl.On("Get", mock.Anything, mock.Anything, mock.AnythingOfType("*v1.CStates")).Return(nil)
 				mkcl.On("Delete", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("client delete error"))
+				// mock status call in defer function call
+				mkcl.On("Status").Return(mkwriter)
 				return mkcl
 			},
 			clientErr: "client delete error",
@@ -1675,8 +1715,8 @@ func TestPowerProfile_Reconcile_UnsupportedGovernor(t *testing.T) {
 					},
 					Spec: powerv1.PowerProfileSpec{
 						Name:     "shared",
-						Max:      10000,
-						Min:      10000,
+						Max:      1000,
+						Min:      1000,
 						Shared:   true,
 						Governor: "made up",
 					},

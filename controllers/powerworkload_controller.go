@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	e "errors"
-
 	"github.com/go-logr/logr"
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 	"github.com/intel/kubernetes-power-manager/pkg/util"
@@ -32,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -56,7 +56,7 @@ var sharedPowerWorkloadName = ""
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 
 func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
+	var err error
 	logger := r.Log.WithValues("powerworkload", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
 		err := fmt.Errorf("incorrect namespace")
@@ -66,7 +66,9 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 	nodeName := os.Getenv("NODE_NAME")
 
 	workload := &powerv1.PowerWorkload{}
-	err := r.Client.Get(context.TODO(), req.NamespacedName, workload)
+	defer func() { _ = writeUpdatedStatusErrsIfRequired(c, r.Status(), workload, err) }()
+
+	err = r.Client.Get(context.TODO(), req.NamespacedName, workload)
 	logger.V(5).Info("retrieving the power workload instance")
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -138,6 +140,23 @@ func (r *PowerWorkloadReconciler) Reconcile(c context.Context, req ctrl.Request)
 			sharedPowerWorkloadAlreadyExists := errors.NewServiceUnavailable("a shared power workload already exists for this node")
 			logger.Error(sharedPowerWorkloadAlreadyExists, "error creating the shared power workload")
 			return ctrl.Result{Requeue: false}, sharedPowerWorkloadAlreadyExists
+		}
+		// retrieve pool with the profile we want to attach to the shared pool
+		pool := r.PowerLibrary.GetExclusivePool(workload.Spec.PowerProfile)
+		if pool == nil {
+			logger.Error(fmt.Errorf("pool not found"), fmt.Sprintf("could not retrieve pool for profile %s", workload.Spec.PowerProfile))
+			return ctrl.Result{Requeue: false}, fmt.Errorf("pool not found")
+		}
+		profile := pool.GetPowerProfile()
+		// shouldn't be possible but just in case
+		if profile == nil {
+			logger.Error(fmt.Errorf("pool not found"), fmt.Sprintf("pool  %s did not have the subsequent profile", workload.Spec.PowerProfile))
+			return ctrl.Result{Requeue: false}, fmt.Errorf("profile not found")
+		}
+		err = r.PowerLibrary.GetSharedPool().SetPowerProfile(profile)
+		if err != nil {
+			logger.Error(err, "could not set the power profile for the shared pool")
+			return ctrl.Result{Requeue: false}, err
 		}
 
 		// move all cores to the shared pool,
@@ -283,7 +302,6 @@ func createReservedPool(library power.Host, coreConfig powerv1.ReservedSpec, log
 		logger.Error(err, "error setting retrieving exclusive pool for reserved cores")
 		return fmt.Errorf(fmt.Sprintf("specified profile %s has no existing pool", coreConfig.PowerProfile))
 	}
-
 	if err := pseudoReservedPool.SetPowerProfile(corePool.GetPowerProfile()); err != nil {
 		if removePoolError := pseudoReservedPool.Remove(); removePoolError != nil {
 			logger.Error(removePoolError, fmt.Sprintf("error removing pool %v", pseudoReservedPool.Name()))
@@ -298,5 +316,6 @@ func createReservedPool(library power.Host, coreConfig powerv1.ReservedSpec, log
 func (r *PowerWorkloadReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&powerv1.PowerWorkload{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }

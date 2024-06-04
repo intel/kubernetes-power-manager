@@ -21,10 +21,11 @@ import (
 	"fmt"
 	"os"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/go-logr/logr"
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
@@ -54,7 +55,7 @@ type UncoreReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.1/pkg/reconcile
 func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
+	var err error
 	nodeName := os.Getenv("NODE_NAME")
 	// uncore is not for this node
 	if req.Name != nodeName {
@@ -62,14 +63,15 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 	logger := r.Log.WithValues("uncore", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
-		err := fmt.Errorf("incorrect namespace")
+		err = fmt.Errorf("incorrect namespace")
 		logger.Error(err, "resource is not in the intel-power namespace, ignoring")
 		return ctrl.Result{Requeue: false}, err
 	}
 	logger.Info("Reconciling uncore")
 	uncore := &powerv1.Uncore{}
+	defer func() { _ = writeUpdatedStatusErrsIfRequired(ctx, r.Status(), uncore, err) }()
 	// resets all values to allow for CRD updates
-	err := r.PowerLibrary.Topology().SetUncore(nil)
+	err = r.PowerLibrary.Topology().SetUncore(nil)
 	if err != nil {
 		logger.Error(err, "could not reset uncore for topology")
 		return ctrl.Result{}, err
@@ -89,7 +91,7 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	err = r.Client.Get(context.TODO(), req.NamespacedName, uncore)
 	if err != nil {
 		// uncore deleted so we can ignore here since everything is already reset
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 
 		} else {
@@ -114,9 +116,8 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if uncore.Spec.DieSelectors != nil {
 		for _, dieselect := range *uncore.Spec.DieSelectors {
 			if dieselect.Max == nil || dieselect.Min == nil || dieselect.Package == nil {
-				err = errors.NewServiceUnavailable("die selector max, min and package fields must not be empty")
+				err = apierrors.NewServiceUnavailable("die selector max, min and package fields must not be empty")
 				logger.Error(err, "max, min and package values must be set for die selector")
-
 				return ctrl.Result{Requeue: false}, err
 			}
 			p_uncore, err := power.NewUncore(*dieselect.Min, *dieselect.Max)
@@ -129,7 +130,7 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 				pkg := r.PowerLibrary.Topology().Package(*dieselect.Package)
 				// used to prevent invalid package or die input causing a panic
 				if pkg == nil {
-					err = errors.NewServiceUnavailable(fmt.Sprintf("invalid package: %d", *dieselect.Package))
+					err = apierrors.NewServiceUnavailable(fmt.Sprintf("invalid package: %d", *dieselect.Package))
 					return ctrl.Result{Requeue: false}, err
 				}
 				err = pkg.SetUncore(p_uncore)
@@ -140,12 +141,12 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			} else { // die tuning
 				pkg := r.PowerLibrary.Topology().Package(*dieselect.Package)
 				if pkg == nil {
-					err = errors.NewServiceUnavailable(fmt.Sprintf("invalid package: %d", *dieselect.Package))
+					err = apierrors.NewServiceUnavailable(fmt.Sprintf("invalid package: %d", *dieselect.Package))
 					return ctrl.Result{Requeue: false}, err
 				}
 				die := pkg.Die(*dieselect.Die)
 				if die == nil {
-					err = errors.NewServiceUnavailable(fmt.Sprintf("invalid die: %d", *dieselect.Die))
+					err = apierrors.NewServiceUnavailable(fmt.Sprintf("invalid die: %d", *dieselect.Die))
 					return ctrl.Result{Requeue: false}, err
 				}
 				err = die.SetUncore(p_uncore)
@@ -157,7 +158,7 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}
 	if uncore.Spec.DieSelectors == nil && uncore.Spec.SysMax == nil && uncore.Spec.SysMin == nil {
-		err := errors.NewServiceUnavailable("no system wide or per die min/max values were provided")
+		err = apierrors.NewServiceUnavailable("no system wide or per die min/max values were provided")
 		logger.Error(err, "error setting uncore values")
 		return ctrl.Result{Requeue: false}, err
 	}
@@ -168,5 +169,6 @@ func (r *UncoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 func (r *UncoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&powerv1.Uncore{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }

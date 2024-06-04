@@ -426,6 +426,9 @@ func TestTimeOfDay_Reconcile_ClientErrs(t *testing.T) {
 	// cron job cleanup error
 	r, err = createTimeOfDayReconcilerObject([]runtime.Object{})
 	assert.NoError(t, err)
+
+	mkwriter := new(mockResourceWriter)
+	mkwriter.On("Update", mock.Anything, mock.Anything).Return(nil)
 	mkcl = new(errClient)
 	mkcl.On("List", mock.Anything, mock.AnythingOfType("*v1.TimeOfDayList")).Return(nil).Run(func(args mock.Arguments) {
 		todList := args.Get(1).(*powerv1.TimeOfDayList)
@@ -444,6 +447,7 @@ func TestTimeOfDay_Reconcile_ClientErrs(t *testing.T) {
 		*todCron = powerv1.TimeOfDayCronJob{}
 	})
 	mkcl.On("Delete", mock.Anything, mock.Anything).Return(fmt.Errorf("client delete error"))
+	mkcl.On("Status").Return(mkwriter)
 	r.Client = mkcl
 	_, err = r.Reconcile(context.TODO(), req)
 	assert.ErrorContains(t, err, "client delete error")

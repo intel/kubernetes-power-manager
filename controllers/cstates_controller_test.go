@@ -346,8 +346,8 @@ func TestCStates_Reconcile_WithPartialSetup(t *testing.T) {
 
 	// please make sure to not use the same c-state config for more that one CPUID/exclusive pool name
 	// as the test logic can't handle this well: i.e. "1": {"C1": true}, "2": {"C3": true}, "3": {"C1": true}
-	// CPUs 1,3 have the same C-states. The controller code will handle them correctly, but I wasn't
-	// able to properly mock such calls (have two consecutive calls to the same method return different errors)
+	// CPUs 1,3 have the same C-states. The controller code will handle them correctly, but we are unable
+	// to properly mock such calls (have two consecutive calls to the same method return different errors)
 	cStatesSetup := &powerv1.CStates{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "node1",
@@ -497,7 +497,7 @@ func TestCStates_Reconcile_WithPartialSetup(t *testing.T) {
 			},
 		},
 		{
-			name:                     "Test 9 - verify fails with shared, exclusive and individual pool error2",
+			name:                     "Test 9 - verify fails with shared, exclusive and individual pool errors",
 			cStatesSetup:             cStatesSetup,
 			powerNodesSetup:          twoPowerNodeSetup,
 			powerProfileSetup:        twoProfileSetup,

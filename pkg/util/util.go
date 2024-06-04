@@ -108,3 +108,22 @@ func StringInStringList(item string, itemList []string) bool {
 
 	return false
 }
+
+// UnpackErrsToStrings will try to unpack a multi-error to a list of strings, if possible, if not it will return string
+// representation as a first element
+func UnpackErrsToStrings(err error) *[]string {
+	if err == nil {
+		return &[]string{}
+	}
+
+	switch joinedErr := err.(type) {
+	case interface{ Unwrap() []error }:
+		stringErrs := make([]string, len(joinedErr.Unwrap()))
+		for i, individualErr := range joinedErr.Unwrap() {
+			stringErrs[i] = individualErr.Error()
+		}
+		return &stringErrs
+	default:
+		return &[]string{err.Error()}
+	}
+}

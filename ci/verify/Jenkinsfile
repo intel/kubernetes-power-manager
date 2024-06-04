@@ -1,0 +1,83 @@
+pipeline {
+    agent {
+     label 'tweedledum'
+    }
+    triggers {
+		cron('@midnight')
+	}
+    tools {
+		go "$GO_VERSION"
+	}
+    environment {
+        LIBRARY_BRANCH = "main"
+        GOLANGCI_LINT_VERSION = "1.58.2"
+        GOLANGCI_LINT_URL = credentials("golang-ci-lint-url")
+    }
+    stages {
+        stage('Prerequisites') {
+		    steps {
+				sh '''
+					curl -sSfL ${GOLANGCI_LINT_URL} | sh -s v${GOLANGCI_LINT_VERSION}
+				'''
+            }
+        }
+        stage('Checkout-Library') {
+            environment {
+                LIBRARY_REPO = credentials("power-library-private-repo")
+            }
+            steps {
+                script {
+                    dir('library') {
+                        checkout([$class: 'GitSCM', 
+                            branches: [[name: 'main']],
+                            userRemoteConfigs: [[url: env.LIBRARY_REPO, credentialsId: 'sys_rmcci_github']]
+                        ])
+                        sh 'git checkout origin/${LIBRARY_BRANCH}'
+                    }
+                    sh 'echo "replace github.com/intel/power-optimization-library => ./library" >> go.mod'
+                    sh "sed -i 's/COPY go\\.sum go\\.sum/COPY go\\.sum go\\.sum\\nCOPY \\.\\/library \\.\\/library/' build/Dockerfile"
+                    sh "sed -i 's/COPY go\\.sum go\\.sum/COPY go\\.sum go\\.sum\\nCOPY \\.\\/library \\.\\/library/' build/Dockerfile.nodeagent"
+                }
+            }
+        }
+        stage('Static analysis') {
+			steps {
+				sh '''
+					./bin/golangci-lint run
+				'''
+			}
+		}
+        stage('Build') {
+            steps {
+                echo 'Building..'
+                sh 'go mod tidy'
+                sh 'make build'
+            }
+        }
+        stage('Coverage') {
+            steps {
+                echo 'Testing..'
+                sh 'make coverage'
+            }
+        }
+        stage('Race Test') {
+            steps {
+                echo 'Testing..'
+                sh 'make race'
+            }
+        }
+    }
+	post {
+		always {
+			cleanWs(
+				cleanWhenAborted: true,
+				cleanWhenFailure: true,
+				cleanWhenNotBuilt: true,
+				cleanWhenSuccess: true,
+				cleanWhenUnstable: true,
+				deleteDirs: true,
+				disableDeferredWipeout: true
+			)
+		}
+	}
+}

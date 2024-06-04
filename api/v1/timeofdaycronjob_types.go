@@ -45,13 +45,12 @@ type PodInfo struct {
 }
 
 // TimeOfDayCronJobStatus defines the observed state of TimeOfDayCronJob
-
 type TimeOfDayCronJobStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 	Active             []v1.ObjectReference `json:"active,omitempty"`
 	LastScheduleTime   *metav1.Time         `json:"lastScheduleTime,omitempty"`
 	LastSuccessfulTime *metav1.Time         `json:"lastSuccessfulTime,omitempty"`
+
+	StatusErrors `json:",inline,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -72,6 +71,13 @@ type TimeOfDayCronJobList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []TimeOfDayCronJob `json:"items"`
+}
+
+func (todcr *TimeOfDayCronJob) SetStatusErrors(errs *[]string) {
+	todcr.Status.Errors = *errs
+}
+func (todcr *TimeOfDayCronJob) GetStatusErrors() *[]string {
+	return &todcr.Status.Errors
 }
 
 func init() {

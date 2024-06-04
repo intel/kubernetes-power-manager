@@ -28,6 +28,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 	"github.com/intel/kubernetes-power-manager/pkg/podresourcesclient"
@@ -54,7 +55,6 @@ func init() {
 func main() {
 	var metricsAddr string
 	flag.StringVar(&metricsAddr, "metrics-addr", ":10001", "The address the metric endpoint binds to.")
-
 	logOpts := zap.Options{}
 	logOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -70,9 +70,8 @@ func main() {
 	nodeName := os.Getenv("NODE_NAME")
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		Port:               9443,
+		Scheme:  scheme,
+		Metrics: server.Options{BindAddress: metricsAddr},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -103,8 +102,8 @@ func main() {
 		setupLog.Error(err, "unable to create internal state")
 		os.Exit(1)
 	}
+	podResourcesClient, err := podresourcesclient.NewDualSocketPodClient()
 
-	podResourcesClient, err := podresourcesclient.NewPodResourcesClient()
 	if err != nil {
 		setupLog.Error(err, "unable to create internal client")
 		os.Exit(1)

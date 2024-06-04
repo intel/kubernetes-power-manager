@@ -1,8 +1,8 @@
 export APP_NAME=intel-kubernetes-power-manager
 # Current Operator version
-VERSION ?= 2.4.0
+VERSION ?= 2.5.0
 # parameter used for helm chart image
-HELM_CHART ?= v2.4.0
+HELM_CHART ?= v2.5.0
 HELM_VERSION := $(shell echo $(HELM_CHART) | cut -d "v" -f2)
 # used to detemine if certain targets should build for openshift
 OCP ?= false
@@ -127,7 +127,7 @@ else
 	sed -i 's/- .*\/rbac\.yaml/- \.\/ocp\/rbac.yaml/' config/rbac/kustomization.yaml
 	sed -i 's/- .*\/role\.yaml/- \.\/ocp\/role.yaml/' config/rbac/kustomization.yaml
 endif
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook crd paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
 fmt:
@@ -169,7 +169,7 @@ push:
 # download controller-gen if necessary
 controller-gen:
 ifeq (, $(shell which controller-gen))
-	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.14.0
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
@@ -246,7 +246,7 @@ verify-test: tidy
 	go test -count=1 -v ./...
 
 race: tidy
-        CGO_ENABLED=1 go test -count=1 -race -v ./...
+	CGO_ENABLED=1 go test -count=1 -race -v ./...
 
 clean:
 	go clean --cache

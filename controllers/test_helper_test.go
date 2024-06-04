@@ -52,6 +52,10 @@ func (m *hostMock) GetName() string {
 	return m.Called().String(0)
 }
 
+func (m *hostMock) GetFreqRanges() power.CoreTypeList {
+	return m.Called().Get(0).(power.CoreTypeList)
+}
+
 func (m *hostMock) GetFeaturesInfo() power.FeatureSet {
 	ret := m.Called().Get(0)
 	if ret == nil {
@@ -432,6 +436,19 @@ func (m *mockCpuDie) Core(id uint) power.Core {
 	return r0
 }
 
+type frequencySetMock struct {
+	mock.Mock
+	power.CpuFrequencySet
+}
+
+func (m *frequencySetMock) GetMax() uint {
+	return m.Called().Get(0).(uint)
+}
+
+func (m *frequencySetMock) GetMin() uint {
+	return m.Called().Get(0).(uint)
+}
+
 func setupDummyFiles(cores int, packages int, diesPerPackage int, cpufiles map[string]string) (power.Host, func(), error) {
 	//variables for various files
 	path := "testing/cpus"
@@ -544,7 +561,7 @@ func setupDummyFiles(cores int, packages int, diesPerPackage int, cpufiles map[s
 // default dummy file system to be used in standard tests
 func fullDummySystem() (power.Host, func(), error) {
 	return setupDummyFiles(86, 1, 2, map[string]string{
-		"driver": "intel_pstate", "max": "3700", "min": "1000",
+		"driver": "intel_pstate", "max": "3700000", "min": "1000000",
 		"epp": "performance", "governor": "performance",
 		"available_governors": "powersave performance",
 		"uncore_max":          "2400000", "uncore_min": "1200000",

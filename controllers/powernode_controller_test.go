@@ -191,7 +191,7 @@ func TestPowerNode_Reconcile(t *testing.T) {
 	defer teardown()
 	pool, err := dummyFilesystemHost.AddExclusivePool("performance-TestNode")
 	assert.Nil(t, err)
-	prof, err := power.NewPowerProfile("performance", 10000, 10000, "powersave", "")
+	prof, err := power.NewPowerProfile("performance", 1000, 1000, "powersave", "")
 	assert.Nil(t, err)
 	err = dummyFilesystemHost.GetSharedPool().SetPowerProfile(prof)
 	assert.Nil(t, err)

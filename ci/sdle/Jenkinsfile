@@ -16,12 +16,15 @@ pipeline {
       }
     }
     stage('Checkout-Library') {
+      environment {
+          LIBRARY_REPO = credentials("power-library-private-repo")
+        }
       steps {
         script {
             dir('library') {
                 checkout([$class: 'GitSCM', 
                     branches: [[name: 'main']],
-                    userRemoteConfigs: [[url: 'https://github.com/intel-innersource/libraries.orchestrators.resourcemanagement.power.powerlibrary.git', credentialsId: 'sys_rmcci_github']]
+                    userRemoteConfigs: [[url: env.LIBRARY_REPO, credentialsId: 'sys_rmcci_github']]
                 ])
                  sh 'git checkout ${LIBRARY_BRANCH}'
             }
@@ -32,27 +35,30 @@ pipeline {
        }
     }
     stage('Build container images'){
+      environment {
+        PROXY = credentials("pm-container-proxy")
+      }
       steps{
         script{
           container(name: 'kaniko-env', shell: '/busybox/sh') {
             sh '''
               /kaniko/executor --dockerfile build/Dockerfile --context . \
               --destination "localhost:5000/power-operator:latest" \
-              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+              --build-arg="https_proxy=${PROXY}" --build-arg="http_proxy=${PROXY}" --build-arg="no_proxy=localhost" --insecure-registry localhost
 
               /kaniko/executor --dockerfile build/Dockerfile.nodeagent --context . \
               --destination "localhost:5000/power-node-agent:latest" \
-              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+              --build-arg="https_proxy=${PROXY}" --build-arg="http_proxy=${PROXY}" --build-arg="no_proxy=localhost" --insecure-registry localhost
 
               OCP_BASE_IMAGE=$(sed -n 's/OCP_IMAGE=//p' Makefile)
 
               /kaniko/executor --dockerfile build/Dockerfile.nodeagent --context .  --build-arg="BASE_IMAGE=$OCP_BASE_IMAGE"\
               --destination "localhost:5000/power-node-agent-ocp:latest" \
-              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+              --build-arg="https_proxy=${PROXY}" --build-arg="http_proxy=${PROXY}" --build-arg="no_proxy=localhost" --insecure-registry localhost
 
               /kaniko/executor --dockerfile build/Dockerfile --context . --build-arg="BASE_IMAGE=$OCP_BASE_IMAGE" \
               --destination "localhost:5000/power-operator-ocp:latest" \
-              --build-arg="https_proxy=proxy-ir.intel.com:912" --build-arg="http_proxy=proxy-ir.intel.com:912" --build-arg="no_proxy=localhost" --insecure-registry localhost
+              --build-arg="https_proxy=${PROXY}" --build-arg="http_proxy=${PROXY}" --build-arg="no_proxy=localhost" --insecure-registry localhost
             '''
           }
         }

@@ -27,10 +27,11 @@ import (
 	_ "time/tzdata"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	powerv1 "github.com/intel/kubernetes-power-manager/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -45,14 +46,12 @@ type TimeOfDayReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-
 //+kubebuilder:rbac:groups=power.intel.com,resources=timeofdays,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=power.intel.com,resources=timeofdays/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 
-
 func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
+	var err error
 	logger := r.Log.WithValues("timeofday", req.NamespacedName)
 	if req.Namespace != IntelPowerNamespace {
 		err := fmt.Errorf("incorrect namespace")
@@ -68,7 +67,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 
 	timeOfDayList := &powerv1.TimeOfDayList{}
 	logger.V(5).Info("retrieving time-of-day objects from the lists")
-	err := r.Client.List(c, timeOfDayList)
+	err = r.Client.List(c, timeOfDayList)
 	if err != nil {
 		logger.Error(err, "error retrieving the time-of-day list")
 		return ctrl.Result{}, err
@@ -76,15 +75,17 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 
 	logger.V(5).Info("confirming that there can only be one time-of-day object")
 	if len(timeOfDayList.Items) > 1 {
-		err := errors.NewServiceUnavailable("cannot have more than one time-of-day")
+		err = apierrors.NewServiceUnavailable("cannot have more than one time-of-day")
 		logger.Error(err, "error reconciling time-of-day")
 		return ctrl.Result{}, err
 	}
 
 	timeOfDay := &powerv1.TimeOfDay{}
+	defer func() { _ = writeUpdatedStatusErrsIfRequired(c, r.Status(), timeOfDay, err) }()
+
 	err = r.Client.Get(c, req.NamespacedName, timeOfDay)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			logger.V(5).Info("deleting time-of-day cron jobs from cluster")
 			err = r.Client.DeleteAllOf(c, &powerv1.TimeOfDayCronJob{}, client.InNamespace(IntelPowerNamespace))
 			if err != nil {
@@ -101,10 +102,10 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	logger.V(5).Info(fmt.Sprintf("validated timezone for time-of-day, values are: %s", timeZone))
 
 	if timeZone != "" {
-		_, err := time.LoadLocation(timeZone)
+		_, err = time.LoadLocation(timeZone)
 		logger.Info(fmt.Sprintf("timezone is %s\n", timeZone))
 		if err != nil {
-			err := errors.NewServiceUnavailable("invalid timezone, refer to the IANA timezone database for a list of valid timezones")
+			err = apierrors.NewServiceUnavailable("invalid timezone, refer to the IANA timezone database for a list of valid timezones")
 			logger.Error(err, "error creating time-of-day")
 			return ctrl.Result{}, err
 		}
@@ -114,7 +115,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 	logger.V(5).Info("creating time-of-day Cronjobs")
 	for _, scheduleInfo := range timeOfDay.Spec.Schedule {
 		if !timeRegex.MatchString(scheduleInfo.Time) {
-			err := errors.NewServiceUnavailable("the time filed must be in format HH:MM:SS or HH:MM and cannot be empty")
+			err = apierrors.NewServiceUnavailable("the time filed must be in format HH:MM:SS or HH:MM and cannot be empty")
 			logger.Error(err, "error creating the time-of-day schedule")
 			return ctrl.Result{}, err
 		}
@@ -128,7 +129,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 		min, _ := strconv.Atoi(scheduledTime[1])
 		sec, _ := strconv.Atoi(scheduledTime[2])
 		if scheduleInfo.PowerProfile != nil && timeOfDay.Spec.ReservedCPUs == nil {
-			err := errors.NewServiceUnavailable("profile detected with no reserved CPUs set")
+			err = apierrors.NewServiceUnavailable("profile detected with no reserved CPUs set")
 			logger.Error(err, "error creating the time-of-day schedule")
 			return ctrl.Result{}, err
 		}
@@ -144,7 +145,7 @@ func (r *TimeOfDayReconciler) Reconcile(c context.Context, req ctrl.Request) (ct
 		logger.V(5).Info("creating the cron job if one doesn't exist")
 		if err != nil {
 
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				// passing spec values from timeofday object to cronjob
 				cronJobSpec := &powerv1.TimeOfDayCronJobSpec{
 					Hour:         hr,
@@ -211,5 +212,6 @@ func (r *TimeOfDayReconciler) cleanUpCronJobs(cronJobs []powerv1.TimeOfDayCronJo
 func (r *TimeOfDayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&powerv1.TimeOfDay{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
